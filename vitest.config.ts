@@ -9,6 +9,13 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
     css: true,
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: [
+      "node_modules/",
+      "e2e/",
+      "**/*.e2e.{ts,tsx}",
+      "**/e2e/**",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -18,6 +25,7 @@ export default defineConfig({
         "**/*.d.ts",
         "*.config.*",
         "src/types/database.types.ts",
+        "e2e/",
       ],
     },
     typecheck: {

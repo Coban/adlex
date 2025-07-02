@@ -7,37 +7,7 @@ const mockSupabase = {
   auth: {
     getUser: vi.fn(),
   },
-  from: vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        order: vi.fn(() => ({
-          data: [
-            {
-              id: 1,
-              phrase: "テスト表現",
-              category: "NG",
-              notes: "テスト用",
-              organization_id: 1,
-            },
-          ],
-          error: null,
-        })),
-      })),
-    })),
-    insert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn(() => ({
-          data: {
-            id: 2,
-            phrase: "新しい表現",
-            category: "ALLOW",
-            notes: "追加されました",
-          },
-          error: null,
-        })),
-      })),
-    })),
-  })),
+  from: vi.fn(),
 };
 
 // Mock createClient
@@ -123,8 +93,8 @@ describe("/api/dictionaries", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toHaveLength(1);
-      expect(data[0]).toEqual({
+      expect(data.dictionaries).toHaveLength(1);
+      expect(data.dictionaries[0]).toEqual({
         id: 1,
         phrase: "テスト表現",
         category: "NG",
@@ -163,24 +133,38 @@ describe("/api/dictionaries", () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.phrase).toBe("新しい表現");
-      expect(data.category).toBe("ALLOW");
+      expect(data.dictionary.phrase).toBe("新しい表現");
+      expect(data.dictionary.category).toBe("ALLOW");
     });
 
     it("should return 403 for non-admin user", async () => {
       // Mock non-admin user
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            single: vi.fn(() => ({
-              data: {
-                organization_id: 1,
-                role: "user", // Non-admin role
-              },
-              error: null,
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "users") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(() => ({
+                  data: {
+                    organization_id: 1,
+                    role: "user", // Non-admin role
+                  },
+                  error: null,
+                })),
+              })),
+            })),
+          };
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() => ({
+                data: [],
+                error: null,
+              })),
             })),
           })),
-        })),
+        };
       });
 
       const requestBody = {
