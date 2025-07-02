@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,17 +23,7 @@ function InvitationContent() {
     role: string
   } | null>(null)
 
-  useEffect(() => {
-    if (!token) {
-      setError('招待トークンが見つかりません')
-      return
-    }
-
-    // 招待情報を取得（実装を簡略化）
-    fetchInvitationInfo()
-  }, [token])
-
-  const fetchInvitationInfo = async () => {
+  const fetchInvitationInfo = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/invitation-info?token=${token}`)
       if (response.ok) {
@@ -45,7 +35,17 @@ function InvitationContent() {
     } catch {
       setError('招待情報の取得に失敗しました')
     }
-  }
+  }, [token])
+
+  useEffect(() => {
+    if (!token) {
+      setError('招待トークンが見つかりません')
+      return
+    }
+
+    // 招待情報を取得（実装を簡略化）
+    fetchInvitationInfo()
+  }, [token, fetchInvitationInfo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
