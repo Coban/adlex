@@ -119,8 +119,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create check' }, { status: 500 })
     }
 
-    // Start background processing
-    processCheck(checkData.id, text, userData.organization_id)
+    // Start background processing with timeout protection
+    const processingPromise = processCheck(checkData.id, text, userData.organization_id)
+    
+    // Don't await - let it run in background, but set up timeout protection
+    processingPromise.catch((error) => {
+      console.error('Background processing failed for check:', checkData.id, error)
+    })
 
     return NextResponse.json({
       id: checkData.id,
@@ -135,7 +140,57 @@ export async function POST(request: NextRequest) {
 
 async function processCheck(checkId: number, text: string, organizationId: number) {
   const supabase = await createClient()
+  
+  // Set up timeout protection (30 seconds)
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('処理がタイムアウトしました（30秒）'))
+    }, 30000)
+  })
 
+  try {
+    // Wrap the entire processing in a timeout
+    await Promise.race([
+      performActualCheck(checkId, text, organizationId, supabase),
+      timeoutPromise
+    ])
+  } catch (error) {
+    console.error('Error processing check:', error)
+
+    // Get a more descriptive error message
+    let errorMessage = 'チェック処理中にエラーが発生しました'
+    if (error instanceof Error) {
+      if (error.message.includes('処理がタイムアウトしました')) {
+        errorMessage = 'チェック処理がタイムアウトしました。もう一度お試しください。'
+      } else if (error.message.includes('Failed to create embedding')) {
+        errorMessage = 'テキスト解析エラー: 埋め込みベクトルの生成に失敗しました'
+      } else if (error.message.includes('Failed to create chat completion')) {
+        errorMessage = 'AI分析エラー: テキスト処理に失敗しました'
+      } else if (error.message.includes('OpenAI did not return expected function call')) {
+        errorMessage = 'AI分析エラー: OpenAI応答形式が期待と異なります'
+      } else if (error.message.includes('LM Studio did not return content')) {
+        errorMessage = 'AI分析エラー: LM Studio応答が空です'
+      } else if (error.message.includes('No JSON found in LM Studio response')) {
+        errorMessage = 'AI分析エラー: LM Studio応答にJSON形式が見つかりません'
+      } else if (error.message.includes('Invalid modified field') || error.message.includes('Invalid violations field')) {
+        errorMessage = 'AI分析エラー: LM Studio応答形式が無効です'
+      } else {
+        errorMessage = `処理エラー: ${error.message}`
+      }
+    }
+
+    // Update status to failed with error message
+    await supabase
+      .from('checks')
+      .update({ 
+        status: 'failed',
+        error_message: errorMessage
+      })
+      .eq('id', checkId)
+  }
+}
+
+async function performActualCheck(checkId: number, text: string, organizationId: number, supabase: any) {
   try {
     // Update status to processing
     await supabase
@@ -143,51 +198,97 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
       .update({ status: 'processing' })
       .eq('id', checkId)
 
-    // Step 1: Pre-filter using pg_trgm similarity (for reference, actual filtering done in step 2)
-    // const { data: preFilteredDictionary } = await supabase
-    //   .rpc('get_similar_phrases', {
-    //     input_text: text,
-    //     similarity_threshold: 0.3,
-    //     org_id: organizationId
-    //   })
+    // Step 1: Pre-filter using pg_trgm similarity (≥0.3)
+    // This is the fastest filter to reduce the dataset
+    const { data: preFilteredDictionary, error: preFilterError } = await supabase
+      .rpc('get_similar_phrases', {
+        input_text: text,
+        similarity_threshold: 0.3,
+        org_id: organizationId
+      })
 
-    // Step 2: Semantic filtering using vector similarity (optional)
-    let filteredDictionary = null
-    
-    try {
-      // Get embeddings for input text
-      const inputEmbedding = await createEmbedding(text)
-
-      // Filter by vector similarity
-      const { data } = await supabase
-        .rpc('get_vector_similar_phrases', {
-          query_embedding: JSON.stringify(inputEmbedding),
-          similarity_threshold: 0.75, // cosine similarity > 0.75 (distance < 0.25)
-          org_id: organizationId
-        })
-      
-      filteredDictionary = data
-      console.log('Vector similarity filtering successful, found entries:', data?.length || 0)
-    } catch (embeddingError) {
-      console.warn('Embedding generation failed, proceeding without vector filtering:', embeddingError)
-      // Continue without embedding-based filtering
+    if (preFilterError) {
+      console.warn('Pre-filter failed, continuing without pre-filtering:', preFilterError)
     }
 
-    // Step 3: LLM processing
-    const systemPrompt = `あなたは薬機法（医薬品医療機器等法）の専門家です。以下のルールに違反する表現を検出し、安全な表現に修正してください。
+    let filteredDictionary = preFilteredDictionary || []
+    console.log('Pre-filter results:', filteredDictionary.length, 'entries found')
+
+    // Step 2: Semantic filtering using vector similarity (distance < 0.25, similarity > 0.75)
+    // Only if we have pre-filtered results and they're manageable (< 1000 entries)
+    if (filteredDictionary.length > 0 && filteredDictionary.length < 1000) {
+      try {
+        // Get embeddings for input text
+        const inputEmbedding = await createEmbedding(text)
+
+        // Filter by vector similarity using pre-filtered entries
+        const { data: vectorFiltered, error: vectorError } = await supabase
+          .rpc('get_vector_similar_phrases', {
+            query_embedding: JSON.stringify(inputEmbedding),
+            similarity_threshold: 0.75, // cosine similarity > 0.75 (distance < 0.25)
+            org_id: organizationId
+          })
+
+        if (vectorError) {
+          console.warn('Vector similarity filtering failed, using pre-filtered results:', vectorError)
+        } else {
+          // Merge and deduplicate results from both filters
+          const preFilterIds = new Set(filteredDictionary.map((item: any) => item.id))
+          const vectorFilterIds = new Set(vectorFiltered.map((item: any) => item.id))
+          
+          // Take union of both sets, prioritizing higher similarity scores
+          const mergedResults = [
+            ...filteredDictionary.filter((item: any) => vectorFilterIds.has(item.id)),
+            ...vectorFiltered.filter((item: any) => !preFilterIds.has(item.id))
+          ]
+          
+          filteredDictionary = mergedResults
+          console.log('Vector similarity filtering successful, merged to:', filteredDictionary.length, 'entries')
+        }
+      } catch (embeddingError) {
+        console.warn('Embedding generation failed, using pre-filtered results:', embeddingError)
+      }
+    } else if (filteredDictionary.length >= 1000) {
+      // If too many pre-filtered entries, just use vector search directly
+      try {
+        const inputEmbedding = await createEmbedding(text)
+        const { data: vectorFiltered } = await supabase
+          .rpc('get_vector_similar_phrases', {
+            query_embedding: JSON.stringify(inputEmbedding),
+            similarity_threshold: 0.75,
+            org_id: organizationId
+          })
+        
+        if (vectorFiltered) {
+          filteredDictionary = vectorFiltered
+          console.log('Using vector search only due to large pre-filter set:', filteredDictionary.length, 'entries')
+        }
+      } catch (embeddingError) {
+        console.warn('Vector search failed, truncating pre-filtered results:', embeddingError)
+        filteredDictionary = filteredDictionary.slice(0, 100)
+      }
+    }
+
+    // Step 3: Optimized LLM processing with improved system prompt
+    const systemPrompt = `あなたは薬機法（医薬品医療機器等法）の専門家です。テキストを効率的に分析し、違反表現を検出して安全な表現に修正してください。
 
 ### 主要な違反パターン：
-1. 医薬品や医療機器でない商品への医療効果の標榜
-2. 化粧品への医薬品的効果の標榜
-3. 健康食品への病気治療効果の標榜
-4. 誇大な効果効能の表現
-5. 安全性を保証する表現
+1. **医薬品的効果効能**: 「治る」「効く」「改善」「予防」等の医療効果表現
+2. **身体の構造機能への影響**: 「血圧が下がる」「コレステロール値を下げる」等
+3. **疾患名の治療効果**: 「がんが治る」「糖尿病が改善」等の疾患治療表現
+4. **化粧品範囲逸脱**: 「シワが消える」「ニキビが治る」等の医薬品的効果
+5. **誇大・断定表現**: 「必ず」「100%」「奇跡の」等の保証表現
 
 ### 修正方針：
-- 具体的な効果効能は削除または一般的な表現に変更
-- 「〜に効く」「治る」「治療」等は削除
-- 体験談風の表現も適切に修正
-- 薬機法に準拠した表現に変更
+- 医薬品的効果→一般的な表現（「サポート」「維持」「バランス」等）
+- 治療効果→体感表現（「すっきり」「爽快」等）
+- 断定表現→推量表現（「期待できる」「と言われる」等）
+- 疾患名→削除または一般的な健康状態表現
+
+### 分析効率化：
+- 提供された辞書の違反パターンを優先的にチェック
+- 文脈を考慮した適切な修正提案
+- 過度な修正は避け、自然な文章を維持
 
 提供された辞書を参考に、違反箇所を特定し修正してください。`
 
@@ -227,19 +328,11 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
           { role: 'system', content: plainTextPrompt },
           {
             role: 'user',
-            content: `以下のテキストをチェックしてください：\n\n${text}\n\n辞書データ：\n${JSON.stringify(filteredDictionary || [])}`
+            content: `以下のテキストをチェックしてください：\n\n${text}\n\n${filteredDictionary.length > 0 ? `参考辞書データ：\n${JSON.stringify(filteredDictionary.slice(0, 50))}` : '辞書データ：なし'}`
           }
         ],
-        temperature: 0.1
-      })
-
-      console.log('LM Studio LLM Response:', {
-        hasChoices: !!llmResponse.choices,
-        choicesLength: llmResponse.choices?.length,
-        firstChoice: llmResponse.choices?.[0] ? {
-          hasMessage: !!llmResponse.choices[0].message,
-          content: llmResponse.choices[0].message?.content?.substring(0, 200) + '...'
-        } : null
+        temperature: 0.1,
+        max_tokens: 2000
       })
 
       const responseContent = llmResponse.choices?.[0]?.message?.content
@@ -279,12 +372,11 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
         }
         console.log('Using fallback response for LM Studio')
       }
-
     } else {
       // OpenAI: Function calling を使用
       const functionSchema = {
         name: "apply_yakukiho_rules",
-        description: "Apply pharmaceutical law rules to check and modify text",
+        description: "Apply pharmaceutical law rules to check and modify text efficiently",
         parameters: {
           type: "object",
           properties: {
@@ -318,22 +410,13 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `以下のテキストをチェックしてください：\n\n${text}\n\n辞書データ：\n${JSON.stringify(filteredDictionary || [])}`
+            content: `以下のテキストをチェックしてください：\n\n${text}\n\n${filteredDictionary.length > 0 ? `参考辞書データ：\n${JSON.stringify(filteredDictionary.slice(0, 50))}` : '辞書データ：なし'}`
           }
         ],
         tools: [{ type: 'function', function: functionSchema }],
-        tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } }
-      })
-
-      console.log('OpenAI LLM Response structure:', {
-        hasChoices: !!llmResponse.choices,
-        choicesLength: llmResponse.choices?.length,
-        firstChoice: llmResponse.choices?.[0] ? {
-          hasMessage: !!llmResponse.choices[0].message,
-          messageKeys: llmResponse.choices[0].message ? Object.keys(llmResponse.choices[0].message) : [],
-          hasToolCalls: !!llmResponse.choices[0].message?.tool_calls,
-          toolCallsLength: llmResponse.choices[0].message?.tool_calls?.length
-        } : null
+        tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
+        temperature: 0.1,
+        max_tokens: 2000
       })
 
       const toolCall = llmResponse.choices?.[0]?.message?.tool_calls?.[0]
@@ -384,35 +467,7 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
       .rpc('increment_organization_usage', { org_id: organizationId })
 
   } catch (error) {
-    console.error('Error processing check:', error)
-
-    // Get a more descriptive error message
-    let errorMessage = 'チェック処理中にエラーが発生しました'
-    if (error instanceof Error) {
-      if (error.message.includes('Failed to create embedding')) {
-        errorMessage = 'テキスト解析エラー: 埋め込みベクトルの生成に失敗しました'
-      } else if (error.message.includes('Failed to create chat completion')) {
-        errorMessage = 'AI分析エラー: テキスト処理に失敗しました'
-      } else if (error.message.includes('OpenAI did not return expected function call')) {
-        errorMessage = 'AI分析エラー: OpenAI応答形式が期待と異なります'
-      } else if (error.message.includes('LM Studio did not return content')) {
-        errorMessage = 'AI分析エラー: LM Studio応答が空です'
-      } else if (error.message.includes('No JSON found in LM Studio response')) {
-        errorMessage = 'AI分析エラー: LM Studio応答にJSON形式が見つかりません'
-      } else if (error.message.includes('Invalid modified field') || error.message.includes('Invalid violations field')) {
-        errorMessage = 'AI分析エラー: LM Studio応答形式が無効です'
-      } else {
-        errorMessage = `処理エラー: ${error.message}`
-      }
-    }
-
-    // Update status to failed with error message
-    await supabase
-      .from('checks')
-      .update({ 
-        status: 'failed',
-        error_message: errorMessage
-      })
-      .eq('id', checkId)
+    console.error('Error in performActualCheck:', error)
+    throw error // Re-throw to be handled by processCheck
   }
 }

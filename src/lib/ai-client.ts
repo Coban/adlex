@@ -49,6 +49,7 @@ export async function createChatCompletion(params: {
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[]
   tool_choice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption
   temperature?: number
+  max_tokens?: number
 }) {
   if (!aiClient) {
     throw new Error('AI client is not available. Please check your configuration.')
@@ -64,6 +65,7 @@ export async function createChatCompletion(params: {
         model: AI_MODELS.chat,
         messages: params.messages,
         temperature: params.temperature ?? 0.7,
+        max_tokens: params.max_tokens,
         // LM Studio may not support tools/tool_choice, so omit them
       }
       
