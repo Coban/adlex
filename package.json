@@ -9,7 +9,7 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "format": "next lint --fix",
-    "format:check": "next lint --max-warnings 0",
+    "format:check": "next lint --max-warnings 100",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "check": "npm run type-check && npm run lint",

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
+import { createEmbedding } from "@/lib/ai-client";
 import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/types/database.types";
-import { createEmbedding } from "@/lib/ai-client";
 
 type DictionaryInsert = Database["public"]["Tables"]["dictionaries"]["Insert"];
 type DictionaryRow = Database["public"]["Tables"]["dictionaries"]["Row"];
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     const { phrase, category, notes } = body;
 
     // バリデーション
-    if (!phrase || !phrase.trim()) {
+    if (!phrase?.trim()) {
       return NextResponse.json({ error: "フレーズは必須です" }, {
         status: 400,
       });

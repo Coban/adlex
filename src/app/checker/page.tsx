@@ -1,12 +1,14 @@
 'use client'
 
-import { useAuth } from '@/contexts/AuthContext'
-import TextChecker from '@/components/TextChecker'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+
+import TextChecker from '@/components/TextChecker'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/AuthContext'
+import { createClient } from '@/lib/supabase/client'
+
 
 export default function CheckerPage() {
   const { user, loading } = useAuth()

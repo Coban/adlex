@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { User, Session } from '@supabase/supabase-js'
+import React, { useState, useEffect } from 'react'
+
+import { createClient } from '@/lib/supabase/client'
 
 export default function AuthDebugPage(): React.JSX.Element {
   const [supabase] = useState(() => createClient())

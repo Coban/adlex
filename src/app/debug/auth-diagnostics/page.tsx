@@ -1,7 +1,8 @@
 'use client'
 
-import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+
+import { createClient } from '@/lib/supabase/client'
 
 export default function AuthDiagnosticsPage() {
   const [output, setOutput] = useState('')

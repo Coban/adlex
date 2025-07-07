@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Copy, Download } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { createClient } from '@/lib/supabase/client'
 
 interface CheckItem {
   id: string
@@ -301,7 +302,7 @@ export default function TextChecker() {
 
   // アクティブなチェック結果を取得
   const activeCheck = activeCheckId ? checks.find(check => check.id === activeCheckId) : null
-  const hasActiveCheck = activeCheck && activeCheck.result
+  const hasActiveCheck = activeCheck?.result
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">

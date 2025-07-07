@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+
 import { createEmbedding, createChatCompletion } from '@/lib/ai-client'
 
 export async function POST(request: NextRequest) {

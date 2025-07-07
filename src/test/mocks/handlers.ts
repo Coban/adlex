@@ -31,7 +31,7 @@ export const handlers = [
     const body = await request.json() as { text: string };
     
     // E2Eテスト用の予測可能なレスポンス
-    const hasViolation = body.text.includes("がんが治る") || body.text.includes("血圧が下がる");
+    // const _hasViolation = body.text.includes("がんが治る") || body.text.includes("血圧が下がる");
     
     return HttpResponse.json({
       id: Date.now(), // ユニークなID

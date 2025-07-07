@@ -1,9 +1,5 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/contexts/AuthContext'
 import { 
   Home, 
   FileText, 
@@ -16,7 +12,12 @@ import {
   Menu,
   X
 } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface NavigationItem {
   name: string

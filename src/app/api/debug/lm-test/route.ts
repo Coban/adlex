@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+
 import { createChatCompletion, isUsingLMStudio } from '@/lib/ai-client'
 
 export async function GET() {

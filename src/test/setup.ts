@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom";
-import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll } from "vitest";
+
 import { server } from "./mocks/server";
 
 // Start server before all tests
@@ -44,14 +45,14 @@ global.IntersectionObserver = class MockIntersectionObserver {
   readonly thresholds: ReadonlyArray<number> = [];
 
   constructor(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _callback: IntersectionObserverCallback,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _options?: IntersectionObserverInit,
   ) {}
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   observe(_target: Element): void {}
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   unobserve(_target: Element): void {}
   disconnect(): void {}
   takeRecords(): IntersectionObserverEntry[] {
