@@ -34,15 +34,9 @@ export async function createClient() {
         },
       },
       auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      },
-      global: {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
+        persistSession: false, // Don't persist on server
+        autoRefreshToken: false, // Don't auto-refresh on server
+        detectSessionInUrl: false // Don't detect URL on server
       }
     }
   )

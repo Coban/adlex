@@ -103,6 +103,7 @@ export default function TextChecker() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
+        credentials: 'same-origin', // Include cookies in the request
         body: JSON.stringify({ text: newCheckItem.originalText }),
       })
 

@@ -6,7 +6,17 @@
       "Bash(npx eslint:*)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm run supabase:status:*)",
+      "Bash(npm run seed:*)",
+      "Bash(npm run dev:*)",
+      "Bash(pkill:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(npx supabase db reset:*)",
+      "Bash(npx supabase db execute:*)",
+      "Bash(docker exec:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   }

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -70,6 +70,12 @@ export default function GlobalNavigation() {
   const { user, userProfile, organization, loading, signOut } = useAuth()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -79,6 +85,10 @@ export default function GlobalNavigation() {
   }
 
   const shouldShowItem = (item: NavigationItem) => {
+    // During initial mount, show all non-auth items
+    if (!mounted) {
+      return !item.requireAuth
+    }
     if (item.requireAuth && !user) return false
     if (item.requireRole && userProfile?.role !== item.requireRole) return false
     return true
@@ -126,12 +136,12 @@ export default function GlobalNavigation() {
           {/* 右側のユーザー情報とメニュー */}
           <div className="flex items-center space-x-4">
             {/* ローディング中の表示 */}
-            {loading && (
+            {(!mounted || loading) && (
               <div className="text-sm text-gray-500">読み込み中...</div>
             )}
 
             {/* 認証済みユーザーの表示 */}
-            {!loading && user && (
+            {mounted && !loading && user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">{user.email}</div>
@@ -154,7 +164,7 @@ export default function GlobalNavigation() {
             )}
 
             {/* 未認証ユーザーの表示 */}
-            {!loading && !user && (
+            {mounted && !loading && !user && (
               <div className="hidden md:flex items-center space-x-2">
                 <Link href="/auth/signin">
                   <Button variant="outline" size="sm" className="flex items-center space-x-2">

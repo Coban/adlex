@@ -25,19 +25,53 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Get user session - try both cookie and header authentication
+    let user, authError
+    
+    // First try getting user from cookies (SSR approach)
+    const authResult = await supabase.auth.getUser()
+    user = authResult.data.user
+    authError = authResult.error
+    
+    // If no user found from cookies, try Authorization header
+    if (!user) {
+      const authHeader = request.headers.get('Authorization')
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7)
+        console.log('Attempting Bearer token authentication...')
+        
+        try {
+          // Use service role client to verify token
+          const { createClient: createServiceClient } = await import('@supabase/supabase-js')
+          const supabaseService = createServiceClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          )
+          
+          const { data: { user: tokenUser }, error: tokenError } = await supabaseService.auth.getUser(token)
+          if (tokenUser) {
+            user = tokenUser
+            authError = tokenError
+            console.log('Bearer token authentication successful:', tokenUser.email)
+          }
+        } catch (error) {
+          console.error('Bearer token authentication failed:', error)
+        }
+      }
+    }
     if (authError || !user) {
       console.error('Auth error:', authError)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     console.log('User ID:', user.id)
+    console.log('User email:', user.email)
+    console.log('User metadata:', user.user_metadata)
 
     // Get user's organization with a safer query method
     const { data: initialUserData, error: userError } = await supabase
       .from('users')
-      .select('id, organization_id')
+      .select('id, email, organization_id, role')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -49,6 +83,33 @@ export async function POST(request: NextRequest) {
     }
 
     let userData = initialUserData
+
+    // If user not found by ID, check if there's an existing user with the same email
+    if (!userData) {
+      console.log('Checking for user by email...')
+      const { data: emailUserData, error: emailError } = await supabase
+        .from('users')
+        .select('id, email, organization_id, role')
+        .eq('email', user.email ?? '')
+        .maybeSingle()
+      
+      console.log('Email-based user query result:', emailUserData, 'Error:', emailError)
+      
+      if (emailUserData) {
+        // User exists with this email but different ID - this is a UUID mismatch
+        // For now, use the existing user data but log the mismatch
+        console.log('UUID mismatch detected - using existing user data')
+        console.log('Auth UUID:', user.id)
+        console.log('DB UUID:', emailUserData.id)
+        console.log('Email user data:', {
+          id: emailUserData.id,
+          email: emailUserData.email,
+          organization_id: emailUserData.organization_id,
+          role: emailUserData.role
+        })
+        userData = emailUserData
+      }
+    }
 
     if (!userData) {
       // User doesn't exist in users table, create one
@@ -74,7 +135,7 @@ export async function POST(request: NextRequest) {
           organization_id: orgData.id,
           role: 'user'
         })
-        .select('id, organization_id')
+        .select('id, email, organization_id, role')
         .single()
       
       if (createUserError) {
@@ -86,8 +147,17 @@ export async function POST(request: NextRequest) {
       userData = newUserData
     }
 
+    console.log('Final userData check:', {
+      hasUserData: !!userData,
+      userId: userData?.id,
+      email: userData?.email,
+      organizationId: userData?.organization_id,
+      role: userData?.role
+    })
+
     if (!userData?.organization_id) {
       console.error('User has no organization_id')
+      console.error('Current userData:', userData)
       return NextResponse.json({ error: 'User not assigned to organization' }, { status: 400 })
     }
 
@@ -125,7 +195,7 @@ export async function POST(request: NextRequest) {
     const { data: checkData, error: checkError } = await supabase
       .from('checks')
       .insert({
-        user_id: user.id,
+        user_id: userData.id, // Use the userData.id (which might be different from user.id)
         organization_id: userData.organization_id,
         original_text: text,
         status: 'pending'

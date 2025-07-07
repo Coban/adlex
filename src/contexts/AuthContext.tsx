@@ -24,7 +24,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const supabase = createClient()
+
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
@@ -72,7 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   useEffect(() => {
-    let mounted = true
+    if (!mounted) return
+    
+    let isMounted = true
     
     // Get initial session
     const getSession = async () => {
@@ -86,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('AuthContext: Initial session:', session?.user?.id ?? 'no user')
         }
         
-        if (mounted) {
+        if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
             console.log('AuthContext: User found, fetching profile...')
@@ -101,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to get session:', error)
-        if (mounted) {
+        if (isMounted) {
           console.log('AuthContext: Error occurred, setting loading to false')
           setUser(null)
           setUserProfile(null)
@@ -115,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Fallback timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
-      if (mounted) {
+      if (isMounted) {
         console.warn('AuthContext: Timeout reached, forcing loading to false')
         setLoading(false)
       }
@@ -131,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           timestamp: new Date().toISOString()
         })
         
-        if (mounted) {
+        if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
             console.log('AuthContext: Auth change - fetching profile...')
@@ -149,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_IN' && session) {
           console.log('AuthContext: SIGNED_IN event detected, double-checking...')
           setTimeout(async () => {
-            if (mounted) {
+            if (isMounted) {
               try {
                 const { data: { session: currentSession }, error } = await supabase.auth.getSession()
                 console.log('AuthContext: Double-check result:', {
@@ -176,16 +184,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
 
     return () => {
-      mounted = false
+      isMounted = false
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [supabase.auth, fetchUserProfile])
+  }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
     await supabase.auth.signOut()
     setUserProfile(null)
     setOrganization(null)
+  }
+
+  // Show loading state during SSR and initial mount to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <AuthContext.Provider value={{ user: null, userProfile: null, organization: null, loading: true, signOut }}>
+        {children}
+      </AuthContext.Provider>
+    )
   }
 
   return (
