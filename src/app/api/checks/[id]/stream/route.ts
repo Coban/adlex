@@ -60,7 +60,7 @@ export async function GET(
         sendFinalData(controller, checkId, supabase)
         return
       } else if (checkData.status === 'failed') {
-        const errorMessage = checkData.error_message || 'チェック処理が失敗しました'
+        const errorMessage = checkData.error_message ?? 'チェック処理が失敗しました'
         const errorData = JSON.stringify({
           id: checkId,
           status: 'failed',
@@ -90,7 +90,7 @@ export async function GET(
             controller.close()
             clearInterval(interval)
           } else if (updatedCheck.status === 'failed') {
-            const errorMessage = updatedCheck.error_message || 'チェック処理が失敗しました'
+            const errorMessage = updatedCheck.error_message ?? 'チェック処理が失敗しました'
             const errorData = JSON.stringify({
               id: checkId,
               status: 'failed',
@@ -149,7 +149,7 @@ async function sendFinalData(
 
     if (checkData) {
       if (checkData.status === 'failed') {
-        const errorMessage = checkData.error_message || 'チェック処理が失敗しました'
+        const errorMessage = checkData.error_message ?? 'チェック処理が失敗しました'
         const errorData = JSON.stringify({
           id: checkData.id,
           status: 'failed',

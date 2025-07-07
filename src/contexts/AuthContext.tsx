@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           console.error('Auth session error:', error)
         } else {
-          console.log('AuthContext: Initial session:', session?.user?.id || 'no user')
+          console.log('AuthContext: Initial session:', session?.user?.id ?? 'no user')
         }
         
         if (mounted) {
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         console.log('AuthContext: Auth state change:', {
           event,
-          userId: session?.user?.id || 'no user',
+          userId: session?.user?.id ?? 'no user',
           hasSession: !!session,
           timestamp: new Date().toISOString()
         })
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const { data: { session: currentSession }, error } = await supabase.auth.getSession()
                 console.log('AuthContext: Double-check result:', {
                   hasSession: !!currentSession,
-                  userId: currentSession?.user?.id || 'no user',
+                  userId: currentSession?.user?.id ?? 'no user',
                   error: error?.message
                 })
                 setUser(currentSession?.user ?? null)

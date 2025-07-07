@@ -101,7 +101,7 @@ export default function DictionariesPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || '辞書項目の作成に失敗しました')
+        throw new Error(result.error ?? '辞書項目の作成に失敗しました')
       }
 
       if (result.warning) {
@@ -138,7 +138,7 @@ export default function DictionariesPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || '辞書項目の更新に失敗しました')
+        throw new Error(result.error ?? '辞書項目の更新に失敗しました')
       }
 
       if (result.warning) {
@@ -188,7 +188,7 @@ export default function DictionariesPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Embedding再生成に失敗しました')
+        throw new Error(result.error ?? 'Embedding再生成に失敗しました')
       }
 
       alert(result.message)
@@ -211,7 +211,7 @@ export default function DictionariesPage() {
     setFormData({
       phrase: dictionary.phrase,
       category: dictionary.category,
-      notes: dictionary.notes || ''
+      notes: dictionary.notes ?? ''
     })
     setShowAddForm(false)
   }

@@ -26,8 +26,8 @@ const openaiClient = hasValidOpenAIKey ? new OpenAI({
 
 // LM Studio client (for local development)
 const lmStudioClient = new OpenAI({
-  baseURL: process.env.LM_STUDIO_BASE_URL || 'http://localhost:1234/v1',
-  apiKey: process.env.LM_STUDIO_API_KEY || 'lm-studio',
+  baseURL: process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234/v1',
+  apiKey: process.env.LM_STUDIO_API_KEY ?? 'lm-studio',
 })
 
 // Select the appropriate client
@@ -36,10 +36,10 @@ export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
 // Model configurations
 export const AI_MODELS = {
   chat: USE_LM_STUDIO 
-    ? (process.env.LM_STUDIO_CHAT_MODEL || 'gemma-3-27b-it')
+    ? (process.env.LM_STUDIO_CHAT_MODEL ?? 'gemma-3-27b-it')
     : 'gpt-4o',
   embedding: USE_LM_STUDIO 
-    ? (process.env.LM_STUDIO_EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5')
+    ? (process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5')
     : 'text-embedding-3-small'
 }
 
@@ -108,11 +108,11 @@ export async function createEmbedding(input: string): Promise<number[]> {
     
     // For LM Studio, use direct fetch to avoid OpenAI SDK parsing issues
     if (USE_LM_STUDIO) {
-      const response = await fetch(`${process.env.LM_STUDIO_BASE_URL || 'http://127.0.0.1:1234/v1'}/embeddings`, {
+      const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY || 'lm-studio'}`
+          'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY ?? 'lm-studio'}`
         },
         body: JSON.stringify({
           model: AI_MODELS.embedding,

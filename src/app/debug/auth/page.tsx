@@ -138,7 +138,7 @@ export default function AuthDebugPage(): React.JSX.Element {
                   <span style={{ fontWeight: '500', color: '#1f2937' }}>ユーザーID:</span> {user.id}
                 </div>
                 <div>
-                  <span style={{ fontWeight: '500', color: '#1f2937' }}>メール:</span> {user.email || '匿名'}
+                  <span style={{ fontWeight: '500', color: '#1f2937' }}>メール:</span> {user.email ?? '匿名'}
                 </div>
                 <div>
                   <span style={{ fontWeight: '500', color: '#1f2937' }}>作成日:</span> {new Date(user.created_at).toLocaleString('ja-JP')}

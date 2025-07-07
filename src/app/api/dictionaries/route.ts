@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
 
     // 検索クエリパラメータを取得
     const url = new URL(request.url);
-    const searchTerm = url.searchParams.get("search") || "";
-    const category = url.searchParams.get("category") || "ALL";
+    const searchTerm = url.searchParams.get("search") ?? "";
+    const category = url.searchParams.get("category") ?? "ALL";
 
     // 基本クエリ
     let query = supabase
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       organization_id: userProfile.organization_id,
       phrase: phrase.trim(),
       category,
-      notes: notes?.trim() || null,
+      notes: notes?.trim() ?? null,
       vector: vector ? JSON.stringify(vector) : null,
     };
 

@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     // 招待メールを送信（実装は簡略化）
     const invitationUrl = `${
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
     }/auth/invitation?token=${token}`;
 
     // TODO: 実際のメール送信サービスを統合

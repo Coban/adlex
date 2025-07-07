@@ -45,14 +45,12 @@ global.IntersectionObserver = class MockIntersectionObserver {
   readonly thresholds: ReadonlyArray<number> = [];
 
   constructor(
-     
     _callback: IntersectionObserverCallback,
-     
     _options?: IntersectionObserverInit,
   ) {}
-   
+  
   observe(_target: Element): void {}
-   
+  
   unobserve(_target: Element): void {}
   disconnect(): void {}
   takeRecords(): IntersectionObserverEntry[] {

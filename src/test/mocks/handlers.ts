@@ -1,5 +1,30 @@
 import { http, HttpResponse } from "msw";
 
+// Type definitions for request bodies
+interface CheckRequestBody {
+  text: string;
+}
+
+interface OpenAIRequestBody {
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+  tools?: unknown[];
+  tool_choice?: unknown;
+  temperature?: number;
+  max_tokens?: number;
+}
+
+interface LMStudioRequestBody {
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+  temperature?: number;
+  max_tokens?: number;
+}
+
 export const handlers = [
   // Mock Supabase Auth
   http.post("*/auth/v1/token", () => {
@@ -28,7 +53,7 @@ export const handlers = [
 
   // Mock API endpoints
   http.post("/api/checks", async ({ request }) => {
-    const body = await request.json() as { text: string };
+    const body = await request.json() as CheckRequestBody;
     
     // E2Eテスト用の予測可能なレスポンス
     // const _hasViolation = body.text.includes("がんが治る") || body.text.includes("血圧が下がる");
@@ -121,8 +146,8 @@ export const handlers = [
 
   // Mock OpenAI API with more realistic responses
   http.post("https://api.openai.com/v1/chat/completions", async ({ request }) => {
-    const body = await request.json() as any;
-    const userMessage = body.messages?.[body.messages.length - 1]?.content || "";
+    const body = await request.json() as OpenAIRequestBody;
+    const userMessage = body.messages?.[body.messages.length - 1]?.content ?? "";
     
     // テキスト内容に基づいてレスポンスを変更
     const hasViolation = userMessage.includes("がんが治る") || userMessage.includes("血圧が下がる");
@@ -166,8 +191,8 @@ export const handlers = [
 
   // Mock LM Studio API (if needed for local development)
   http.post("http://localhost:1234/v1/chat/completions", async ({ request }) => {
-    const body = await request.json() as any;
-    const userMessage = body.messages?.[body.messages.length - 1]?.content || "";
+    const body = await request.json() as LMStudioRequestBody;
+    const userMessage = body.messages?.[body.messages.length - 1]?.content ?? "";
     
     return HttpResponse.json({
       choices: [{

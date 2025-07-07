@@ -29,17 +29,17 @@ export default function AuthTestPage() {
           <div className="text-gray-900">レンダー回数: {renderCount}</div>
           <div className="text-gray-900">Loading: {loading ? 'true' : 'false'}</div>
           <div className="text-gray-900">User: {user ? 'あり' : 'なし'}</div>
-          <div className="text-gray-900">User ID: {user?.id || 'N/A'}</div>
-          <div className="text-gray-900">User Email: {user?.email || 'N/A'}</div>
+          <div className="text-gray-900">User ID: {user?.id ?? 'N/A'}</div>
+          <div className="text-gray-900">User Email: {user?.email ?? 'N/A'}</div>
           <div className="text-gray-900">Is Anonymous: {user?.is_anonymous ? 'true' : 'false'}</div>
         </div>
 
         <div className="border p-4 rounded bg-white">
           <h2 className="font-semibold mb-2 text-gray-900">プロファイル</h2>
           <div className="text-gray-900">Profile: {userProfile ? 'あり' : 'なし'}</div>
-          <div className="text-gray-900">Profile Email: {userProfile?.email || 'N/A'}</div>
-          <div className="text-gray-900">Role: {userProfile?.role || 'N/A'}</div>
-          <div className="text-gray-900">Organization ID: {userProfile?.organization_id || 'N/A'}</div>
+          <div className="text-gray-900">Profile Email: {userProfile?.email ?? 'N/A'}</div>
+          <div className="text-gray-900">Role: {userProfile?.role ?? 'N/A'}</div>
+          <div className="text-gray-900">Organization ID: {userProfile?.organization_id ?? 'N/A'}</div>
         </div>
 
         {loading && (

@@ -86,9 +86,9 @@ export function useOrganization() {
         setOrganization({
           id: org.id,
           name: org.name,
-          plan: org.plan || 'trial',
-          max_checks: org.max_checks || 0,
-          used_checks: org.used_checks || 0,
+          plan: org.plan ?? 'trial',
+          max_checks: org.max_checks ?? 0,
+          used_checks: org.used_checks ?? 0,
           trial_ends_at: org.trial_ends_at,
           role: userData.role ?? 'user'
         })

@@ -41,7 +41,7 @@ export default function UsersAdminPage() {
   const fetchUsers = async () => {
     try {
       const data = await fetchOrganizationUsers()
-      setOrganizationUsers(data.users || [])
+      setOrganizationUsers(data.users ?? [])
     } catch (err) {
       console.error('ユーザー一覧の取得に失敗しました:', err)
     }
@@ -52,7 +52,7 @@ export default function UsersAdminPage() {
       const response = await fetch('/api/users/invitations')
       if (response.ok) {
         const data = await response.json()
-        setInvitations(data.invitations || [])
+        setInvitations(data.invitations ?? [])
       }
     } catch (err) {
       console.error('招待リストの取得に失敗しました:', err)

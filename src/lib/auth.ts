@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from '@/lib/supabase/client'
 
 export interface AuthError {
   message: string;
@@ -147,7 +147,7 @@ export async function inviteUser({ email, role }: InviteUserData) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || "ユーザー招待に失敗しました");
+      throw new Error(errorData.error ?? "ユーザー招待に失敗しました");
     }
 
     return await response.json();
@@ -171,7 +171,7 @@ export async function fetchOrganizationUsers() {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || "ユーザー一覧の取得に失敗しました");
+      throw new Error(errorData.error ?? "ユーザー一覧の取得に失敗しました");
     }
 
     return await response.json();
@@ -196,7 +196,7 @@ export async function updateUserRole(userId: string, role: "admin" | "user") {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || "ユーザー権限の変更に失敗しました");
+      throw new Error(errorData.error ?? "ユーザー権限の変更に失敗しました");
     }
 
     return await response.json();
@@ -233,7 +233,7 @@ export async function signUpWithInvitation(
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || "招待の承認に失敗しました");
+      throw new Error(errorData.error ?? "招待の承認に失敗しました");
     }
 
     return await response.json();

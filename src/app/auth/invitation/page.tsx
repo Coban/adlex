@@ -12,7 +12,7 @@ import { signUpWithInvitation } from '@/lib/auth'
 function InvitationContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [token] = useState(searchParams.get('token') || '')
+  const [token] = useState(searchParams.get('token') ?? '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)

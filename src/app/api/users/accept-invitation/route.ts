@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       password,
       options: {
         emailRedirectTo: `${
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
         }/auth/callback`,
         data: {
           invitationToken: token,

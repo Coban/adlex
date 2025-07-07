@@ -24,7 +24,7 @@ export default function CheckerPage() {
         if (error) {
           console.error('CheckerPage: Session check error:', error)
         } else {
-          console.log('CheckerPage: Session check result:', session?.user?.id || 'no user')
+          console.log('CheckerPage: Session check result:', session?.user?.id ?? 'no user')
           setDoubleCheckedUser(session?.user ?? null)
         }
       } catch (error) {
@@ -43,7 +43,7 @@ export default function CheckerPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  const finalUser = doubleCheckedUser !== null ? doubleCheckedUser : user
+  const finalUser = doubleCheckedUser ?? user
   const finalLoading = loading || doubleChecking
 
   if (finalLoading) {
@@ -107,7 +107,7 @@ export default function CheckerPage() {
         <div className="bg-green-50 border border-green-200 rounded p-2 mb-4">
           <div className="text-xs text-green-700">
             <div>認証済み - User ID: {finalUser?.id}</div>
-            <div>Context User: {user?.id || 'null'}, Double-checked: {doubleCheckedUser?.id || 'null'}</div>
+            <div>Context User: {user?.id ?? 'null'}, Double-checked: {doubleCheckedUser?.id ?? 'null'}</div>
           </div>
         </div>
       )}

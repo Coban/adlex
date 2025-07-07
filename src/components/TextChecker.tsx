@@ -108,7 +108,7 @@ export default function TextChecker() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.error || `HTTPエラー: ${response.status}`
+        const errorMessage = errorData.error ?? `HTTPエラー: ${response.status}`
         throw new Error(errorMessage)
       }
 
@@ -166,7 +166,7 @@ export default function TextChecker() {
             eventSource.close()
           } else if (data.status === 'failed') {
             clearTimeout(timeout)
-            const errorMessage = data.error || 'チェック処理が失敗しました'
+            const errorMessage = data.error ?? 'チェック処理が失敗しました'
             console.error('Check failed:', errorMessage)
             setChecks(prev => prev.map(check => 
               check.id === checkId 

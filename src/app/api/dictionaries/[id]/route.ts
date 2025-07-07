@@ -19,12 +19,13 @@ interface DictionaryUpdateWithVector extends DictionaryUpdate {
 }
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }, { status: 404 });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -104,7 +106,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }
@@ -158,7 +160,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const updates: DictionaryUpdateWithVector = {
       phrase: phrase.trim(),
       category,
-      notes: notes?.trim() || null,
+      notes: notes?.trim() ?? null,
       updated_at: new Date().toISOString(),
     };
 
@@ -198,6 +200,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -227,7 +230,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }

@@ -1,7 +1,25 @@
+import { SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createChatCompletion, createEmbedding, isUsingLMStudio } from '@/lib/ai-client'
 import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database.types'
+
+// Type definitions for the API
+interface DictionaryEntry {
+  id: number
+  phrase: string
+  category: Database['public']['Enums']['dictionary_category']
+  similarity?: number
+  notes?: string
+}
+
+interface ViolationData {
+  start: number
+  end: number
+  reason: string
+  dictionaryId?: number
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -191,7 +209,7 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
   }
 }
 
-async function performActualCheck(checkId: number, text: string, organizationId: number, supabase: any) {
+async function performActualCheck(checkId: number, text: string, organizationId: number, supabase: SupabaseClient<Database>) {
   try {
     // Update status to processing
     await supabase
@@ -212,7 +230,7 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       console.warn('Pre-filter failed, continuing without pre-filtering:', preFilterError)
     }
 
-    let filteredDictionary = preFilteredDictionary || []
+    let filteredDictionary = preFilteredDictionary ?? []
     console.log('Pre-filter results:', filteredDictionary.length, 'entries found')
 
     // Step 2: Semantic filtering using vector similarity (distance < 0.25, similarity > 0.75)
@@ -234,13 +252,13 @@ async function performActualCheck(checkId: number, text: string, organizationId:
           console.warn('Vector similarity filtering failed, using pre-filtered results:', vectorError)
         } else {
           // Merge and deduplicate results from both filters
-          const preFilterIds = new Set(filteredDictionary.map((item: any) => item.id))
-          const vectorFilterIds = new Set(vectorFiltered.map((item: any) => item.id))
+          const preFilterIds = new Set(filteredDictionary.map((item: DictionaryEntry) => item.id))
+          const vectorFilterIds = new Set(vectorFiltered.map((item: DictionaryEntry) => item.id))
           
           // Take union of both sets, prioritizing higher similarity scores
           const mergedResults = [
-            ...filteredDictionary.filter((item: any) => vectorFilterIds.has(item.id)),
-            ...vectorFiltered.filter((item: any) => !preFilterIds.has(item.id))
+            ...filteredDictionary.filter((item: DictionaryEntry) => vectorFilterIds.has(item.id)),
+            ...vectorFiltered.filter((item: DictionaryEntry) => !preFilterIds.has(item.id))
           ]
           
           filteredDictionary = mergedResults
@@ -435,17 +453,12 @@ async function performActualCheck(checkId: number, text: string, organizationId:
 
     // Save violations
     if (result.violations && result.violations.length > 0) {
-      const violationsToInsert = result.violations.map((v: {
-        start: number
-        end: number
-        reason: string
-        dictionaryId?: number
-      }) => ({
+      const violationsToInsert = result.violations.map((v: ViolationData) => ({
         check_id: checkId,
         start_pos: v.start,
         end_pos: v.end,
         reason: v.reason,
-        dictionary_id: v.dictionaryId || null
+        dictionary_id: v.dictionaryId ?? null
       }))
 
       await supabase
