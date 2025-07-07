@@ -181,7 +181,6 @@ EC 事業者やインフルエンサーが公開前の日本語文章を入力�
        "required":["modified","violations"]
      }
    }
- }
  ```  
 4. **assistant**: function call で JSON 返却
 

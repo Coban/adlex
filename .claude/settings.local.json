@@ -16,7 +16,11 @@
       "Bash(npx supabase db reset:*)",
       "Bash(npx supabase db execute:*)",
       "Bash(docker exec:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run test:coverage:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(ls:*)",
+      "Bash(npm run format:*)"
     ],
     "deny": []
   }
