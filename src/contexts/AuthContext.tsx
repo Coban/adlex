@@ -191,9 +191,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUserProfile(null)
-    setOrganization(null)
+    try {
+      console.log('AuthContext: Starting signOut process')
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('AuthContext: SignOut error:', error)
+        throw error
+      }
+      console.log('AuthContext: SignOut successful')
+      setUserProfile(null)
+      setOrganization(null)
+    } catch (error) {
+      console.error('AuthContext: SignOut failed:', error)
+      // エラーが発生してもUIの状態は更新する
+      setUserProfile(null)
+      setOrganization(null)
+      throw error
+    }
   }
 
   // Show loading state during SSR and initial mount to prevent hydration mismatch

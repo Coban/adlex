@@ -25,6 +25,12 @@ export function createClient() {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
+      },
+      // CORSの問題を回避するための設定
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
       }
     }
   )

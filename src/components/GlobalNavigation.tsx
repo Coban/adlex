@@ -162,7 +162,17 @@ export default function GlobalNavigation() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => signOut()}
+                  onClick={async () => {
+                    try {
+                      console.log('GlobalNavigation: Starting signOut')
+                      await signOut()
+                      console.log('GlobalNavigation: SignOut successful')
+                    } catch (error) {
+                      console.error('GlobalNavigation: SignOut failed:', error)
+                      // エラーメッセージを表示（必要に応じて）
+                      alert('サインアウトに失敗しました。もう一度お試しください。')
+                    }
+                  }}
                   className="flex items-center space-x-2"
                 >
                   <LogOut className="w-4 h-4" />
@@ -246,9 +256,18 @@ export default function GlobalNavigation() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => {
-                      signOut()
-                      setMobileMenuOpen(false)
+                    onClick={async () => {
+                      try {
+                        console.log('GlobalNavigation Mobile: Starting signOut')
+                        await signOut()
+                        console.log('GlobalNavigation Mobile: SignOut successful')
+                        setMobileMenuOpen(false)
+                      } catch (error) {
+                        console.error('GlobalNavigation Mobile: SignOut failed:', error)
+                        setMobileMenuOpen(false)
+                        // エラーメッセージを表示（必要に応じて）
+                        alert('サインアウトに失敗しました。もう一度お試しください。')
+                      }
                     }}
                     className="w-full flex items-center justify-center space-x-2"
                   >

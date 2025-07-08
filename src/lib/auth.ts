@@ -284,17 +284,33 @@ export async function signOut() {
   const supabase = createClient();
 
   try {
+    console.log('lib/auth: Starting signOut process');
+    
+    // 現在のセッションを確認
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('lib/auth: Current session:', { 
+      hasSession: !!session, 
+      sessionError: sessionError 
+    });
+
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      console.error("Signout error:", error);
+      console.error('lib/auth: SignOut error:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        details: error
+      });
       throw new Error(`サインアウトエラー: ${error.message}`);
     }
+    
+    console.log('lib/auth: SignOut successful');
   } catch (err) {
-    console.error("Signout exception:", err);
+    console.error('lib/auth: SignOut exception:', err);
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw new Error('予期しないエラーが発生しました');
   }
 }
