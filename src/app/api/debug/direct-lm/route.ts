@@ -10,7 +10,7 @@ export async function GET() {
         'Authorization': 'Bearer lm-studio'
       },
       body: JSON.stringify({
-        model: 'gemma-3-27b-it',
+        model: 'gemma-3-12b',
         messages: [
           {
             role: 'system',

@@ -20,7 +20,11 @@
       "Bash(npm run test:coverage:*)",
       "Bash(npm run test:e2e:*)",
       "Bash(ls:*)",
-      "Bash(npm run format:*)"
+      "Bash(npm run format:*)",
+      "Bash(mv:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }

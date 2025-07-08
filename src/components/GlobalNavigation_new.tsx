@@ -144,7 +144,7 @@ export default function GlobalNavigation() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={signOut}
+                  onClick={() => signOut()}
                   className="flex items-center space-x-2"
                 >
                   <LogOut className="w-4 h-4" />

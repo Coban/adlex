@@ -36,7 +36,7 @@ export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
 // Model configurations
 export const AI_MODELS = {
   chat: USE_LM_STUDIO 
-    ? (process.env.LM_STUDIO_CHAT_MODEL ?? 'gemma-3-27b-it')
+    ? (process.env.LM_STUDIO_CHAT_MODEL ?? 'google/gemma-3-12b')
     : 'gpt-4o',
   embedding: USE_LM_STUDIO 
     ? (process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5')

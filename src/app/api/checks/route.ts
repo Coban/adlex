@@ -396,7 +396,8 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       const plainTextPrompt = `${systemPrompt}
 
 ### 応答形式：
-以下のJSON形式で厳密に応答してください：
+以下のJSON形式で厳密に応答してください。
+- "start"と"end"は、元のテキストにおける違反箇所の開始位置と終了位置を、0から始まる文字数（バイト数ではなく、改行文字も1文字としてカウント）で正確に指定してください。
 
 {
   "modified": "修正されたテキスト",
@@ -478,8 +479,8 @@ async function performActualCheck(checkId: number, text: string, organizationId:
               items: {
                 type: "object",
                 properties: {
-                  start: { type: "integer", description: "Start position of violation" },
-                  end: { type: "integer", description: "End position of violation" },
+                  start: { type: "integer", description: "Start position (0-indexed character count) of the violation in the original text. Newlines count as one character." },
+                  end: { type: "integer", description: "End position (0-indexed character count) of the violation in the original text. Newlines count as one character." },
                   reason: { type: "string", description: "Reason for violation" },
                   dictionaryId: {
                     type: "integer",

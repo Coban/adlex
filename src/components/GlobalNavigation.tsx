@@ -8,6 +8,7 @@ import {
   Bug,
   LogIn,
   UserPlus,
+  Clock,
   LogOut,
   Menu,
   X
@@ -39,6 +40,13 @@ const navigationItems: NavigationItem[] = [
     name: 'テキストチェック',
     href: '/checker',
     icon: FileText,
+    requireAuth: true,
+    showInMobile: true
+  },
+  {
+    name: 'チェック履歴',
+    href: '/history',
+    icon: Clock,
     requireAuth: true,
     showInMobile: true
   },
@@ -154,7 +162,7 @@ export default function GlobalNavigation() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={signOut}
+                  onClick={() => signOut()}
                   className="flex items-center space-x-2"
                 >
                   <LogOut className="w-4 h-4" />
