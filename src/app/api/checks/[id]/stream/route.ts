@@ -54,6 +54,8 @@ export async function GET(
   // Create a readable stream
   const stream = new ReadableStream({
     start(controller) {
+      console.log(`[SSE] Starting stream for check ${checkId}`)
+      
       const channel = supabase.channel(`check-updates-${checkId}`)
 
       channel
@@ -63,13 +65,18 @@ export async function GET(
             table: 'checks', 
             filter: `id=eq.${checkId}` 
         }, async (payload) => {
+            console.log(`[SSE] Received update for check ${checkId}:`, payload)
+            
             const updatedCheck = payload.new as Database['public']['Tables']['checks']['Row']
+            console.log(`[SSE] Check status: ${updatedCheck.status}`)
             
             if (updatedCheck.status === 'completed' || updatedCheck.status === 'failed') {
+                console.log(`[SSE] Sending final data for check ${checkId}`)
                 await sendFinalData(controller, checkId, supabase)
                 controller.close()
                 channel.unsubscribe()
             } else {
+                console.log(`[SSE] Sending progress update for check ${checkId}`)
                 const progressData = JSON.stringify({
                     id: checkId,
                     status: updatedCheck.status
@@ -78,20 +85,21 @@ export async function GET(
             }
         })
         .subscribe((status, err) => {
+            console.log(`[SSE] Subscription status for check ${checkId}:`, status)
             if (status === 'SUBSCRIBED') {
-                console.log(`Subscribed to channel for check ${checkId}`)
+                console.log(`[SSE] Successfully subscribed to channel for check ${checkId}`)
             }
             if (err) {
-                console.error(`Subscription error for check ${checkId}:`, err)
+                console.error(`[SSE] Subscription error for check ${checkId}:`, err)
                 controller.close()
             }
         })
 
       // Clean up on client disconnect
       request.signal.addEventListener('abort', () => {
+        console.log(`[SSE] Client disconnected for check ${checkId}, unsubscribing`)
         channel.unsubscribe()
         controller.close()
-        console.log(`Client disconnected for check ${checkId}, unsubscribed.`)
       })
     }
   })
@@ -105,6 +113,8 @@ async function sendFinalData(
   supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
 ) {
   try {
+    console.log(`[SSE] Getting final data for check ${checkId}`)
+    
     // Get complete check data with violations
     const { data: checkData, error } = await supabase
       .from('checks')
@@ -122,8 +132,16 @@ async function sendFinalData(
       .single()
 
     if (error || !checkData) {
+        console.error(`[SSE] Error getting final data for check ${checkId}:`, error)
         throw new Error(error?.message ?? 'Failed to retrieve final check data')
     }
+
+    console.log(`[SSE] Final check data for ${checkId}:`, {
+      status: checkData.status,
+      hasModifiedText: !!checkData.modified_text,
+      violationsCount: checkData.violations?.length || 0,
+      errorMessage: checkData.error_message
+    })
 
     if (checkData.status === 'failed') {
       const errorMessage = checkData.error_message ?? 'チェック処理が失敗しました'
@@ -132,6 +150,7 @@ async function sendFinalData(
         status: 'failed',
         error: errorMessage
       })
+      console.log(`[SSE] Sending error data for check ${checkId}:`, errorData)
       controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
     } else {
       const finalData = JSON.stringify({
@@ -141,10 +160,15 @@ async function sendFinalData(
         modified_text: checkData.modified_text,
         violations: checkData.violations || []
       })
+      console.log(`[SSE] Sending success data for check ${checkId}:`, {
+        dataLength: finalData.length,
+        hasModifiedText: !!checkData.modified_text,
+        violationsCount: checkData.violations?.length || 0
+      })
       controller.enqueue(new TextEncoder().encode(`data: ${finalData}\n\n`))
     }
   } catch (error) {
-    console.error('Error sending final data:', error)
+    console.error(`[SSE] Error sending final data for check ${checkId}:`, error)
     const errorData = JSON.stringify({
       id: checkId,
       status: 'failed',

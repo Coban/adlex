@@ -133,8 +133,105 @@ export default function TextChecker() {
       // SSEで結果を待機
       const eventSource = new EventSource(`/api/checks/${checkData.id}/stream`)
       
+      // ポーリングによるフォールバック機能
+      let pollCount = 0
+      const maxPolls = 30 // 30秒
+      
+      const pollInterval = setInterval(async () => {
+        pollCount++
+        console.log(`Polling attempt ${pollCount} for check ${checkData.id}`)
+        
+        try {
+          const { data: currentCheck, error: pollError } = await supabase
+            .from('checks')
+            .select('*')
+            .eq('id', checkData.id)
+            .single()
+          
+          if (pollError) {
+            console.error('Polling error:', pollError)
+            return
+          }
+          
+          if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
+            console.log('Check completed via polling, closing SSE')
+            clearInterval(pollInterval)
+            clearTimeout(timeout)
+            eventSource.close()
+            
+            if (currentCheck.status === 'completed') {
+              // Get violations
+              const { data: violations } = await supabase
+                .from('violations')
+                .select('*')
+                .eq('check_id', checkData.id)
+              
+              setChecks(prev => prev.map(check => 
+                check.id === checkId 
+                  ? { 
+                      ...check, 
+                      result: {
+                        id: currentCheck.id,
+                        original_text: currentCheck.original_text,
+                        modified_text: currentCheck.modified_text ?? '',
+                        status: currentCheck.status ?? 'failed',
+                        violations: violations ?? []
+                      } as CheckResult,
+                      status: 'completed',
+                      statusMessage: 'チェック完了' 
+                    }
+                  : check
+              ))
+            } else {
+              const errorMessage = currentCheck.error_message ?? 'チェック処理が失敗しました'
+              setChecks(prev => prev.map(check => 
+                check.id === checkId 
+                  ? { 
+                      ...check, 
+                      status: 'failed',
+                      statusMessage: `エラー: ${errorMessage}` 
+                    }
+                  : check
+              ))
+              alert(`エラー: ${errorMessage}`)
+            }
+          } else if (currentCheck.status === 'processing') {
+            setChecks(prev => prev.map(check => 
+              check.id === checkId 
+                ? { 
+                    ...check, 
+                    status: 'processing',
+                    statusMessage: '薬機法違反の検出と修正を実行中...' 
+                  }
+                : check
+            ))
+          }
+          
+        } catch (error) {
+          console.error('Polling exception:', error)
+        }
+        
+        if (pollCount >= maxPolls) {
+          console.log('Polling timeout reached')
+          clearInterval(pollInterval)
+          clearTimeout(timeout)
+          eventSource.close()
+          setChecks(prev => prev.map(check => 
+            check.id === checkId 
+              ? { 
+                  ...check, 
+                  status: 'failed',
+                  statusMessage: '処理がタイムアウトしました' 
+                }
+              : check
+          ))
+          alert('処理がタイムアウトしました。もう一度お試しください。')
+        }
+      }, 1000) // 1秒ごとにポーリング
+      
       // タイムアウト設定（30秒）
       const timeout = setTimeout(() => {
+        clearInterval(pollInterval)
         eventSource.close()
         setChecks(prev => prev.map(check => 
           check.id === checkId 
@@ -153,6 +250,7 @@ export default function TextChecker() {
           const data: CheckStreamData = JSON.parse(event.data)
           
           if (data.status === 'completed') {
+            clearInterval(pollInterval)
             clearTimeout(timeout)
             setChecks(prev => prev.map(check => 
               check.id === checkId 
@@ -166,6 +264,7 @@ export default function TextChecker() {
             ))
             eventSource.close()
           } else if (data.status === 'failed') {
+            clearInterval(pollInterval)
             clearTimeout(timeout)
             const errorMessage = data.error ?? 'チェック処理が失敗しました'
             console.error('Check failed:', errorMessage)
@@ -193,6 +292,7 @@ export default function TextChecker() {
             console.log('Processing...')
           }
         } catch (parseError) {
+          clearInterval(pollInterval)
           clearTimeout(timeout)
           console.error('Failed to parse SSE data:', parseError, 'Raw data:', event.data)
           setChecks(prev => prev.map(check => 
@@ -209,6 +309,7 @@ export default function TextChecker() {
       }
 
       eventSource.onerror = (error) => {
+        clearInterval(pollInterval)
         clearTimeout(timeout)
         console.error('SSE connection error:', error)
         setChecks(prev => prev.map(check => 
