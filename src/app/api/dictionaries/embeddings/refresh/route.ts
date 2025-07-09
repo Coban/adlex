@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`${dictionaries.length}個の辞書項目のembedding再生成を開始`);
+    // 辞書項目のembedding再生成を開始
 
     let successCount = 0;
     let failureCount = 0;
@@ -89,9 +89,7 @@ export async function POST(request: NextRequest) {
     // 各辞書項目のembeddingを順次生成
     for (const dictionary of dictionaries) {
       try {
-        console.log(
-          `辞書項目 ${dictionary.id} のembedding生成中: "${dictionary.phrase}"`,
-        );
+        // 辞書項目のembedding生成中
 
         const vector = await createEmbedding(dictionary.phrase);
 
@@ -109,7 +107,7 @@ export async function POST(request: NextRequest) {
         }
 
         successCount++;
-        console.log(`辞書項目 ${dictionary.id} のembedding生成完了`);
+                  // 辞書項目のembedding生成完了
       } catch (error) {
         failureCount++;
         const errorMessage = error instanceof Error
@@ -139,7 +137,7 @@ export async function POST(request: NextRequest) {
       response.failures = failures;
     }
 
-    console.log("Embedding再生成処理完了:", response);
+          // Embedding再生成処理完了
 
     return NextResponse.json(response);
   } catch (error) {

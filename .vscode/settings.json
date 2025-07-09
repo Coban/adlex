@@ -40,5 +40,6 @@
   },
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"
-  }
+  },
+  "chat.agent.maxRequests": 1000
 }

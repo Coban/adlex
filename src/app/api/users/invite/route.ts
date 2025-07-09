@@ -124,11 +124,10 @@ export async function POST(request: NextRequest) {
     }/auth/invitation?token=${token}`;
 
     // TODO: 実際のメール送信サービスを統合
-    console.log(`招待メール送信:
-      宛先: ${email}
-      招待URL: ${invitationUrl}
-      ロール: ${role}
-    `);
+    // 招待メール送信予定:
+    // 宛先: ${email}
+    // 招待URL: ${invitationUrl}
+    // ロール: ${role}
 
     return NextResponse.json({
       message: "招待を送信しました",

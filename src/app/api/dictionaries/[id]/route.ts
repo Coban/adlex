@@ -147,10 +147,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (phraseChanged) {
       try {
-        console.log("フレーズが変更されたためembedding再生成を開始:", phrase);
         const newVector = await createEmbedding(phrase.trim());
         vector = JSON.stringify(newVector);
-        console.log("Embedding再生成成功, 次元数:", newVector.length);
       } catch (embeddingError) {
         console.warn("Embedding再生成に失敗しました:", embeddingError);
         // Embedding生成に失敗してもアイテム更新は続行

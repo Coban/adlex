@@ -16,7 +16,7 @@ export default function MSWInit() {
         worker.start({
           onUnhandledRequest: 'bypass',
         });
-        console.log('MSW: モックワーカーが開始されました');
+        // MSW worker started
       }).catch((error) => {
         console.warn('MSW: モックワーカーの開始に失敗しました', error);
       });

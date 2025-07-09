@@ -76,7 +76,7 @@ export default function UsersAdminPage() {
       
       // 招待URLをコンソールに表示（デバッグ用）
       if (result.invitation?.invitation_url) {
-        console.log('招待URL:', result.invitation.invitation_url)
+        // 招待URL生成完了
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました')

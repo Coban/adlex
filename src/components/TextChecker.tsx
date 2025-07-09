@@ -139,8 +139,6 @@ export default function TextChecker() {
       
       const pollInterval = setInterval(async () => {
         pollCount++
-        console.log(`Polling attempt ${pollCount} for check ${checkData.id}`)
-        
         try {
           const { data: currentCheck, error: pollError } = await supabase
             .from('checks')
@@ -154,7 +152,6 @@ export default function TextChecker() {
           }
           
           if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
-            console.log('Check completed via polling, closing SSE')
             clearInterval(pollInterval)
             clearTimeout(timeout)
             eventSource.close()
@@ -212,7 +209,6 @@ export default function TextChecker() {
         }
         
         if (pollCount >= maxPolls) {
-          console.log('Polling timeout reached')
           clearInterval(pollInterval)
           clearTimeout(timeout)
           eventSource.close()
@@ -289,7 +285,6 @@ export default function TextChecker() {
                   }
                 : check
             ))
-            console.log('Processing...')
           }
         } catch (parseError) {
           clearInterval(pollInterval)

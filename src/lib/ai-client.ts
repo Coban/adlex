@@ -10,14 +10,17 @@ const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_K
 const USE_LM_STUDIO = !isProduction && process.env.USE_LM_STUDIO === 'true'
 const USE_MOCK = isMockMode || (!hasValidOpenAIKey && !USE_LM_STUDIO)
 
-console.log('AI Client Configuration:', {
-  isProduction,
-  hasValidOpenAIKey,
-  USE_LM_STUDIO,
-  USE_MOCK,
-  isMockMode,
-  environment: process.env.NODE_ENV
-})
+// AI Client Configuration logged only in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('AI Client Configuration:', {
+    isProduction,
+    hasValidOpenAIKey,
+    USE_LM_STUDIO,
+    USE_MOCK,
+    isMockMode,
+    environment: process.env.NODE_ENV
+  })
+}
 
 // OpenAI client (for production)
 const openaiClient = hasValidOpenAIKey ? new OpenAI({
@@ -56,9 +59,6 @@ export async function createChatCompletion(params: {
   }
 
   try {
-    console.log(`Creating chat completion with model: ${AI_MODELS.chat}`)
-    console.log(`Using ${USE_LM_STUDIO ? 'LM Studio' : 'OpenAI'} client`)
-    
     // For LM Studio, simplify parameters and avoid unsupported features
     if (USE_LM_STUDIO) {
       const lmParams = {
@@ -70,7 +70,6 @@ export async function createChatCompletion(params: {
       }
       
       const response = await aiClient.chat.completions.create(lmParams)
-      console.log('LM Studio chat completion successful')
       return response
     }
     
@@ -78,15 +77,6 @@ export async function createChatCompletion(params: {
     const response = await aiClient.chat.completions.create({
       model: AI_MODELS.chat,
       ...params,
-    })
-    console.log('OpenAI chat completion successful')
-    console.log('Response structure:', {
-      hasChoices: !!response.choices,
-      choicesLength: response.choices?.length,
-      firstChoice: response.choices?.[0] ? {
-        hasMessage: !!response.choices[0].message,
-        messageKeys: response.choices[0].message ? Object.keys(response.choices[0].message) : []
-      } : null
     })
     return response
   } catch (error) {
@@ -102,10 +92,6 @@ export async function createEmbedding(input: string): Promise<number[]> {
   }
 
   try {
-    console.log(`Creating embedding with model: ${AI_MODELS.embedding}`)
-    console.log(`Input length: ${input.length} characters`)
-    console.log(`Using ${USE_LM_STUDIO ? 'LM Studio' : 'OpenAI'} client`)
-    
     // For LM Studio, use direct fetch to avoid OpenAI SDK parsing issues
     if (USE_LM_STUDIO) {
       const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
@@ -125,16 +111,8 @@ export async function createEmbedding(input: string): Promise<number[]> {
       }
       
       const data = await response.json()
-      console.log('LM Studio embedding response:', {
-        object: data.object,
-        model: data.model,
-        dataLength: data.data?.length,
-        hasEmbedding: data.data?.[0]?.embedding ? 'yes' : 'no',
-        embeddingLength: data.data?.[0]?.embedding?.length
-      })
       
       if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
-        console.log('LM Studio embedding successful, vector length:', data.data[0].embedding.length)
         return data.data[0].embedding
       }
       
@@ -145,14 +123,6 @@ export async function createEmbedding(input: string): Promise<number[]> {
     const response = await aiClient.embeddings.create({
       model: AI_MODELS.embedding,
       input,
-    })
-    
-    console.log('OpenAI embedding response:', {
-      object: response.object,
-      model: response.model,
-      dataLength: response.data?.length,
-      hasEmbedding: response.data?.[0]?.embedding ? 'yes' : 'no',
-      embeddingLength: response.data?.[0]?.embedding?.length
     })
 
     if (!response.data || response.data.length === 0) {
@@ -170,7 +140,6 @@ export async function createEmbedding(input: string): Promise<number[]> {
       throw new Error('Embedding data is missing from response')
     }
     
-    console.log('OpenAI embedding creation successful, vector length:', response.data[0].embedding.length)
     return response.data[0].embedding
   } catch (error) {
     console.error('Error in createEmbedding:', error)

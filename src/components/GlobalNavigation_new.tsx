@@ -146,9 +146,7 @@ export default function GlobalNavigation() {
                   size="sm" 
                   onClick={async () => {
                     try {
-                      console.log('GlobalNavigation_new: Starting signOut')
-                      await signOut()
-                      console.log('GlobalNavigation_new: SignOut successful')
+                              await signOut()
                     } catch (error) {
                       console.error('GlobalNavigation_new: SignOut failed:', error)
                       // エラーメッセージを表示（必要に応じて）
@@ -240,9 +238,7 @@ export default function GlobalNavigation() {
                     size="sm" 
                     onClick={async () => {
                       try {
-                        console.log('GlobalNavigation_new Mobile: Starting signOut')
-                        await signOut()
-                        console.log('GlobalNavigation_new Mobile: SignOut successful')
+                                            await signOut()
                         setMobileMenuOpen(false)
                       } catch (error) {
                         console.error('GlobalNavigation_new Mobile: SignOut failed:', error)

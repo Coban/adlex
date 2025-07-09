@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
       const authHeader = request.headers.get('Authorization')
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.substring(7)
-        console.log('Attempting Bearer token authentication...')
         
         try {
           // Use service role client to verify token
@@ -52,7 +51,6 @@ export async function POST(request: NextRequest) {
           if (tokenUser) {
             user = tokenUser
             authError = tokenError
-            console.log('Bearer token authentication successful:', tokenUser.email)
           }
         } catch (error) {
           console.error('Bearer token authentication failed:', error)
@@ -61,7 +59,6 @@ export async function POST(request: NextRequest) {
     }
     // TEMPORARY: Skip authentication for development testing
     if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === 'true') {
-      console.log('Development mode: Skipping authentication')
       // Use an existing user for testing
       user = {
         id: '11111111-1111-1111-1111-111111111111',
@@ -74,18 +71,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('User ID:', user.id)
-    console.log('User email:', user.email)
-    console.log('User metadata:', 'user_metadata' in user ? user.user_metadata : 'N/A')
-
     // Get user's organization with a safer query method
     const { data: initialUserData, error: userError } = await supabase
       .from('users')
       .select('id, email, organization_id, role')
       .eq('id', user.id)
       .maybeSingle()
-
-    console.log('User data query result:', initialUserData, 'Error:', userError)
 
     if (userError) {
       console.error('Error fetching user data:', userError)
@@ -96,35 +87,26 @@ export async function POST(request: NextRequest) {
 
     // If user not found by ID, check if there's an existing user with the same email
     if (!userData) {
-      console.log('Checking for user by email...')
-      const { data: emailUserData, error: emailError } = await supabase
+      const { data: emailUserData } = await supabase
         .from('users')
         .select('id, email, organization_id, role')
         .eq('email', user.email ?? '')
         .maybeSingle()
       
-      console.log('Email-based user query result:', emailUserData, 'Error:', emailError)
-      
       if (emailUserData) {
         // User exists with this email but different ID - this is a UUID mismatch
         // For now, use the existing user data but log the mismatch
-        console.log('UUID mismatch detected - using existing user data')
-        console.log('Auth UUID:', user.id)
-        console.log('DB UUID:', emailUserData.id)
-        console.log('Email user data:', {
-          id: emailUserData.id,
-          email: emailUserData.email,
-          organization_id: emailUserData.organization_id,
-          role: emailUserData.role
-        })
+        if (process.env.NODE_ENV === 'development') {
+          console.log('UUID mismatch detected - using existing user data')
+          console.log('Auth UUID:', user.id)
+          console.log('DB UUID:', emailUserData.id)
+        }
         userData = emailUserData
       }
     }
 
     if (!userData) {
       // User doesn't exist in users table, create one
-      console.log('User not found in users table, creating...')
-      
       // Get default organization
       const { data: orgData } = await supabase
         .from('organizations')
@@ -157,14 +139,6 @@ export async function POST(request: NextRequest) {
       userData = newUserData
     }
 
-    console.log('Final userData check:', {
-      hasUserData: !!userData,
-      userId: userData?.id,
-      email: userData?.email,
-      organizationId: userData?.organization_id,
-      role: userData?.role
-    })
-
     if (!userData?.organization_id) {
       console.error('User has no organization_id')
       console.error('Current userData:', userData)
@@ -177,8 +151,6 @@ export async function POST(request: NextRequest) {
       .select('id, name, used_checks, max_checks')
       .eq('id', userData.organization_id)
       .single()
-
-    console.log('Organization data:', organizationData, 'Error:', orgError)
 
     if (orgError || !organizationData) {
       console.error('Error fetching organization data:', orgError)
@@ -240,8 +212,6 @@ export async function POST(request: NextRequest) {
 async function processCheck(checkId: number, text: string, organizationId: number) {
   const supabase = await createClient()
   
-  console.log(`[CHECK] Starting processCheck for ID ${checkId}`)
-  
   // Set up timeout protection (30 seconds)
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -250,24 +220,17 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
   })
 
   try {
-    console.log(`[CHECK] About to call performActualCheck for ID ${checkId}`)
     // Wrap the entire processing in a timeout
     await Promise.race([
       performActualCheck(checkId, text, organizationId, supabase),
       timeoutPromise
     ])
-    console.log(`[CHECK] performActualCheck completed successfully for ID ${checkId}`)
   } catch (error) {
     console.error(`[CHECK] Error processing check ${checkId}:`, error)
 
     // Get a more descriptive error message
     let errorMessage = 'チェック処理中にエラーが発生しました'
     if (error instanceof Error) {
-      console.log(`[CHECK] Error details for ${checkId}:`, {
-        message: error.message,
-        stack: error.stack
-      })
-      
       if (error.message.includes('処理がタイムアウトしました')) {
         errorMessage = 'チェック処理がタイムアウトしました。もう一度お試しください。'
       } else if (error.message.includes('Failed to create embedding')) {
@@ -287,8 +250,6 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
       }
     }
 
-    console.log(`[CHECK] Updating check ${checkId} status to failed with message: ${errorMessage}`)
-    
     // Update status to failed with error message
     const { error: updateError } = await supabase
       .from('checks')
@@ -300,18 +261,13 @@ async function processCheck(checkId: number, text: string, organizationId: numbe
     
     if (updateError) {
       console.error(`[CHECK] Failed to update check ${checkId} status:`, updateError)
-    } else {
-      console.log(`[CHECK] Successfully updated check ${checkId} status to failed`)
     }
   }
 }
 
 async function performActualCheck(checkId: number, text: string, organizationId: number, supabase: SupabaseClient<Database>) {
   try {
-    console.log(`[CHECK] performActualCheck starting for ID ${checkId}`)
-    
     // Update status to processing
-    console.log(`[CHECK] Updating status to processing for ID ${checkId}`)
     const { error: statusError } = await supabase
       .from('checks')
       .update({ status: 'processing' })
@@ -321,11 +277,8 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       console.error(`[CHECK] Failed to update status to processing for ID ${checkId}:`, statusError)
       throw new Error(`Failed to update status: ${statusError.message}`)
     }
-    
-    console.log(`[CHECK] Status updated to processing for ID ${checkId}`)
 
     // Step 1: Pre-filter using pg_trgm similarity (≥0.3)
-    console.log(`[CHECK] Starting pre-filter for ID ${checkId}`)
     const { data: preFilteredDictionary, error: preFilterError } = await supabase
       .rpc('get_similar_phrases', {
         input_text: text,
@@ -338,7 +291,6 @@ async function performActualCheck(checkId: number, text: string, organizationId:
     }
 
     let filteredDictionary = preFilteredDictionary ?? []
-    console.log(`[CHECK] Pre-filter results for ID ${checkId}:`, filteredDictionary.length, 'entries found')
 
     // Step 2: Semantic filtering using vector similarity (distance < 0.25, similarity > 0.75)
     // Only if we have pre-filtered results and they're manageable (< 1000 entries)
@@ -369,7 +321,6 @@ async function performActualCheck(checkId: number, text: string, organizationId:
           ]
           
           filteredDictionary = mergedResults
-          console.log('Vector similarity filtering successful, merged to:', filteredDictionary.length, 'entries')
         }
       } catch (embeddingError) {
         console.warn('Embedding generation failed, using pre-filtered results:', embeddingError)
@@ -387,7 +338,6 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         
         if (vectorFiltered) {
           filteredDictionary = vectorFiltered
-          console.log('Using vector search only due to large pre-filter set:', filteredDictionary.length, 'entries')
         }
       } catch (embeddingError) {
         console.warn('Vector search failed, truncating pre-filtered results:', embeddingError)
@@ -429,8 +379,6 @@ async function performActualCheck(checkId: number, text: string, organizationId:
     }
 
     if (isUsingLMStudio()) {
-      console.log(`[CHECK] Using LM Studio for ID ${checkId}`)
-      
       // LM Studio: プレーンテキスト応答を使用
       const plainTextPrompt = `${systemPrompt}
 
@@ -450,7 +398,6 @@ async function performActualCheck(checkId: number, text: string, organizationId:
 
 違反が見つからない場合は、violationsを空配列[]にしてください。JSONのみを返してください。`
 
-      console.log(`[CHECK] Calling LM Studio for ID ${checkId}`)
       const llmResponse = await createChatCompletion({
         messages: [
           { role: 'system', content: plainTextPrompt },
@@ -462,24 +409,13 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         temperature: 0.1,
         max_tokens: 2000
       })
-      
-      console.log(`[CHECK] LM Studio response received for ID ${checkId}:`, {
-        hasChoices: !!llmResponse.choices,
-        choicesLength: llmResponse.choices?.length,
-        hasContent: !!llmResponse.choices?.[0]?.message?.content
-      })
 
       const responseContent = llmResponse.choices?.[0]?.message?.content
       if (!responseContent) {
-        console.error(`[CHECK] LM Studio did not return content for ID ${checkId}`)
         throw new Error('LM Studio did not return content')
       }
-      
-      console.log(`[CHECK] LM Studio response content for ID ${checkId} (first 200 chars):`, responseContent.substring(0, 200))
 
       try {
-        console.log(`[CHECK] Processing LM Studio response for ID ${checkId}`)
-        
         // First, try to extract JSON from code blocks
         let jsonContent = responseContent
         
@@ -487,17 +423,14 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         const codeBlockMatch = responseContent.match(/```json\n([\s\S]*?)\n```/)
         if (codeBlockMatch) {
           jsonContent = codeBlockMatch[1]
-          console.log(`[CHECK] Found JSON in code block for ID ${checkId}`)
         } else {
           // Try to find JSON object in response
           const jsonMatch = responseContent.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             jsonContent = jsonMatch[0]
-            console.log(`[CHECK] Found JSON object for ID ${checkId}`)
           }
         }
         
-        console.log(`[CHECK] Parsing JSON for ID ${checkId}:`, jsonContent.substring(0, 200))
         const parsedResult = JSON.parse(jsonContent)
         
         // LM Studio may return different format, normalize it
@@ -514,17 +447,11 @@ async function performActualCheck(checkId: number, text: string, organizationId:
           }
         } else {
           // Fallback: use original text if format is unexpected
-          console.warn(`[CHECK] Unexpected LM Studio response format for ID ${checkId}`)
           result = {
             modified: text,
             violations: []
           }
         }
-        
-        console.log(`[CHECK] LM Studio response parsed successfully for ID ${checkId}:`, {
-          hasModified: !!result.modified,
-          violationsCount: result.violations.length
-        })
       } catch (parseError) {
         console.error(`[CHECK] Failed to parse LM Studio response for ID ${checkId}:`, parseError)
         console.error(`[CHECK] Response content for ID ${checkId}:`, responseContent.substring(0, 500))
@@ -536,14 +463,18 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         const modifiedMatch = responseContent.match(/"modified":\s*"([^"]+)"/)
         if (modifiedMatch) {
           modifiedText = modifiedMatch[1]
-          console.log(`[CHECK] Extracted modified text from failed parse: ${modifiedText}`)
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[CHECK] Extracted modified text from failed parse: ${modifiedText}`)
+          }
         }
         
         result = {
           modified: modifiedText,
           violations: []
         }
-        console.log(`[CHECK] Using enhanced fallback response for LM Studio for ID ${checkId}`)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[CHECK] Using enhanced fallback response for LM Studio for ID ${checkId}`)
+        }
       }
     } else {
       // OpenAI: Function calling を使用

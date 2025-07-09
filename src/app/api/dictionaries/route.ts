@@ -127,9 +127,7 @@ export async function POST(request: NextRequest) {
     // Embedding生成
     let vector: number[] | null = null;
     try {
-      console.log("辞書項目のembedding生成を開始:", phrase);
       vector = await createEmbedding(phrase.trim());
-      console.log("Embedding生成成功, 次元数:", vector.length);
     } catch (embeddingError) {
       console.warn("Embedding生成に失敗しました:", embeddingError);
       // Embedding生成に失敗してもアイテム作成は続行
