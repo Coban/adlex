@@ -53,7 +53,7 @@ export default function CheckDebugPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        addLog(`ERROR: HTTP ${response.status} - ${errorData.error || 'Unknown error'}`)
+        addLog(`ERROR: HTTP ${response.status} - ${errorData.error ?? 'Unknown error'}`)
         return
       }
 
@@ -91,7 +91,7 @@ export default function CheckDebugPage() {
         if (data.status === 'completed') {
           addLog('Check completed successfully!')
           addLog(`Modified text: ${data.modified_text}`)
-          addLog(`Violations: ${data.violations?.length || 0}`)
+          addLog(`Violations: ${data.violations?.length ?? 0}`)
           eventSource.close()
         } else if (data.status === 'failed') {
           addLog(`Check failed: ${data.error}`)
@@ -140,9 +140,9 @@ export default function CheckDebugPage() {
       
       if (check) {
         addLog(`Status: ${check.status}`)
-        addLog(`Modified text: ${check.modified_text || 'None'}`)
-        addLog(`Error message: ${check.error_message || 'None'}`)
-        addLog(`Completed at: ${check.completed_at || 'None'}`)
+        addLog(`Modified text: ${check.modified_text ?? 'None'}`)
+        addLog(`Error message: ${check.error_message ?? 'None'}`)
+        addLog(`Completed at: ${check.completed_at ?? 'None'}`)
       } else {
         addLog('Check not found')
       }
