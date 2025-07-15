@@ -240,7 +240,7 @@ test.describe('File Operations', () => {
     test('should handle clipboard API not available', async ({ page }) => {
       // Disable clipboard API
       await page.addInitScript(() => {
-        delete navigator.clipboard
+        (navigator as unknown as { clipboard?: Clipboard }).clipboard = undefined
       })
       
       // Try to copy
@@ -363,7 +363,7 @@ test.describe('File Operations', () => {
         
         // All items should be selected
         const checkedItems = page.locator('[data-testid="history-item"] [data-testid="item-checkbox"]:checked')
-        await expect(checkedItems).toHaveCount.greaterThan(0)
+        await expect(checkedItems.first()).toBeVisible()
       }
     })
 

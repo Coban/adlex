@@ -19,7 +19,7 @@ test.describe('Admin Functionality', () => {
       await page.waitForSelector('[data-testid="user-item"]', { timeout: 10000 })
       
       const userItems = page.locator('[data-testid="user-item"]')
-      await expect(userItems).toHaveCount.greaterThan(0)
+      await expect(userItems.first()).toBeVisible()
       
       // Check first user item has required fields
       const firstUser = userItems.first()
@@ -164,7 +164,7 @@ test.describe('Admin Functionality', () => {
       await page.waitForSelector('[data-testid="dictionary-item"]', { timeout: 10000 })
       
       const dictionaryItems = page.locator('[data-testid="dictionary-item"]')
-      await expect(dictionaryItems).toHaveCount.greaterThan(0)
+      await expect(dictionaryItems.first()).toBeVisible()
       
       // Check first dictionary item has required fields
       const firstItem = dictionaryItems.first()

@@ -419,6 +419,7 @@ export default function TextChecker() {
             </label>
             <Textarea
               id="original-text"
+              data-testid="text-input"
               placeholder="ここにテキストを入力してください..."
               value={originalText}
               onChange={(e) => setOriginalText(e.target.value)}
@@ -433,6 +434,7 @@ export default function TextChecker() {
                 onClick={handleCheck}
                 disabled={!originalText.trim()}
                 className="min-w-[120px]"
+                data-testid="check-button"
               >
                 チェック開始
               </Button>
@@ -493,7 +495,7 @@ export default function TextChecker() {
         {/* 結果エリア */}
         <div className="space-y-4">
           {hasActiveCheck ? (
-            <div>
+            <div data-testid="results-section">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">チェック結果</h2>
                 <div className="flex gap-2">
@@ -501,11 +503,12 @@ export default function TextChecker() {
                     variant="outline"
                     size="sm"
                     onClick={() => activeCheck?.result && copyToClipboard(activeCheck.result.modified_text)}
+                    data-testid="copy-button"
                   >
                     <Copy className="w-4 h-4" />
                     コピー
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" data-testid="download-button">
                     <Download className="w-4 h-4" />
                     PDF
                   </Button>

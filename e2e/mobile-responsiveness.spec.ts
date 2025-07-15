@@ -357,8 +357,9 @@ test.describe('Mobile Responsiveness', () => {
       const buttonBox = await checkButton.boundingBox()
       
       // Touch target should be at least 44x44px
-      expect(buttonBox.width).toBeGreaterThan(44)
-      expect(buttonBox.height).toBeGreaterThan(44)
+      expect(buttonBox).not.toBeNull()
+      expect(buttonBox!.width).toBeGreaterThan(44)
+      expect(buttonBox!.height).toBeGreaterThan(44)
     })
 
     test('should support screen reader navigation', async ({ page }) => {

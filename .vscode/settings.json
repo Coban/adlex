@@ -21,6 +21,42 @@
   // ESLint settings for auto-fix on save
   "eslint.enable": true,
   "eslint.format.enable": true,
+  "eslint.workingDirectories": [
+    "."
+  ],
+  "eslint.useESLintClass": true,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.probe": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.ignoreUntitled": true,
+  "problems.decorations.enabled": true,
+  "problems.showCurrentInStatus": true,
+  // Files to exclude from problems panel (optional)
+  "files.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/coverage": true,
+    "**/dist": true
+  },
+  // Search exclude patterns
+  "search.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/coverage": true,
+    "**/dist": true
+  },
+  // TypeScript specific settings
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.suggest.autoImports": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },

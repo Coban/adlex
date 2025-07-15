@@ -1,4 +1,10 @@
 import { createClient } from '@/lib/supabase/client'
+import { Database } from '@/types/database.types'
+
+type UserProfileInsert = Database['public']['Tables']['users']['Insert']
+type UserProfileUpdate = Database['public']['Tables']['users']['Update']
+type OrganizationPlan = Database['public']['Enums']['organization_plan']
+type UserRole = Database['public']['Enums']['user_role']
 
 export interface AuthError {
   message: string;
@@ -369,7 +375,7 @@ export async function getUserProfile(userId: string) {
   return data;
 }
 
-export async function createUserProfile(profile: any) {
+export async function createUserProfile(profile: UserProfileInsert) {
   if (!profile.id) {
     throw new Error('User ID is required');
   }
@@ -388,7 +394,7 @@ export async function createUserProfile(profile: any) {
   return data;
 }
 
-export async function updateUserProfile(userId: string, updates: any) {
+export async function updateUserProfile(userId: string, updates: UserProfileUpdate) {
   if (!userId) {
     throw new Error('User ID is required');
   }
@@ -414,7 +420,7 @@ export async function checkUserExists(email: string) {
   return data !== null;
 }
 
-export async function createOrganization(name: string, plan: string) {
+export async function createOrganization(name: string, plan: OrganizationPlan) {
   if (!name) {
     throw new Error('Organization name is required');
   }
@@ -429,7 +435,7 @@ export async function createOrganization(name: string, plan: string) {
   return data;
 }
 
-export async function inviteUserToOrganization(email: string, organizationId: string, role: string) {
+export async function inviteUserToOrganization(email: string, organizationId: number, role: UserRole) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Invalid email format');
   }
@@ -439,7 +445,8 @@ export async function inviteUserToOrganization(email: string, organizationId: st
     email,
     organization_id: organizationId,
     role,
-    token: 'invite-token-' + Date.now()
+    token: 'invite-token-' + Date.now(),
+    invited_by: '' // TODO: Get current user ID
   }).select().single();
   
   if (error) {
@@ -464,7 +471,7 @@ export async function acceptInvitation(token: string) {
   return data;
 }
 
-export async function changeUserRole(userId: string, role: string) {
+export async function changeUserRole(userId: string, role: UserRole) {
   if (!['admin', 'user'].includes(role)) {
     throw new Error('Invalid role');
   }

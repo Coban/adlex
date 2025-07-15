@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import TextChecker from '../TextChecker'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { useAuth } from '../../contexts/AuthContext'
+import TextChecker from '../TextChecker'
 
 // Mock the AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
@@ -57,7 +58,20 @@ const mockEventSource = {
   CLOSED: 2
 }
 
-global.EventSource = vi.fn(() => mockEventSource)
+const EventSourceConstructor = vi.fn(() => mockEventSource) as unknown as {
+  new (url: string | URL, eventSourceInitDict?: EventSourceInit): EventSource
+  readonly CONNECTING: 0
+  readonly OPEN: 1
+  readonly CLOSED: 2
+  prototype: EventSource
+}
+
+// Define static properties on the constructor
+Object.defineProperty(EventSourceConstructor, 'CONNECTING', { value: 0, writable: false })
+Object.defineProperty(EventSourceConstructor, 'OPEN', { value: 1, writable: false })
+Object.defineProperty(EventSourceConstructor, 'CLOSED', { value: 2, writable: false })
+
+global.EventSource = EventSourceConstructor
 
 // Mock navigator.clipboard
 Object.assign(navigator, {
@@ -74,7 +88,11 @@ Object.assign(window, {
 describe('TextChecker Component', () => {
   const mockUser = {
     id: 'user-123',
-    email: 'test@example.com'
+    email: 'test@example.com',
+    app_metadata: {},
+    user_metadata: {},
+    aud: 'authenticated',
+    created_at: new Date().toISOString()
   }
 
   beforeEach(() => {
@@ -83,7 +101,8 @@ describe('TextChecker Component', () => {
       user: mockUser,
       loading: false,
       signOut: vi.fn(),
-      signIn: vi.fn()
+      userProfile: null,
+      organization: null
     })
     
     // Reset mock supabase client with more robust setup
@@ -92,8 +111,7 @@ describe('TextChecker Component', () => {
         session: {
           access_token: 'mock-token'
         }
-      },
-      error: null
+      }
     })
     
     // Ensure the mock is properly bound - remove to avoid require issues
@@ -142,7 +160,6 @@ describe('TextChecker Component', () => {
   })
 
   it('shows error when text exceeds character limit', async () => {
-    const user = userEvent.setup()
     render(<TextChecker />)
     
     const textarea = screen.getByRole('textbox')
@@ -152,7 +169,7 @@ describe('TextChecker Component', () => {
     fireEvent.change(textarea, { target: { value: longText } })
     
     // Check for character count text more flexibly
-    expect(screen.getByText((content, element) => {
+    expect(screen.getByText((content, _element) => {
       return content.includes('10,001') && content.includes('10,000') && content.includes('文字')
     })).toBeInTheDocument()
   }, 10000)
@@ -162,7 +179,8 @@ describe('TextChecker Component', () => {
       user: null,
       loading: false,
       signOut: vi.fn(),
-      signIn: vi.fn()
+      userProfile: null,
+      organization: null
     })
 
     const user = userEvent.setup()
@@ -246,7 +264,7 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(textarea.value).toBe('')
+      expect((textarea as HTMLTextAreaElement).value).toBe('')
     })
   })
 
@@ -329,13 +347,13 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Simulate SSE message
-    const onMessageHandler = mockEventSource.onmessage
+    const onMessageHandler = mockEventSource.onmessage as ((event: MessageEvent) => void) | null
     if (onMessageHandler) {
       onMessageHandler({
         data: JSON.stringify({
           status: 'processing'
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -360,7 +378,7 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Simulate SSE completion message
-    const onMessageHandler = mockEventSource.onmessage
+    const onMessageHandler = mockEventSource.onmessage as ((event: MessageEvent) => void) | null
     if (onMessageHandler) {
       onMessageHandler({
         data: JSON.stringify({
@@ -370,7 +388,7 @@ describe('TextChecker Component', () => {
           modified_text: '修正されたテキスト',
           violations: []
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -388,9 +406,11 @@ describe('TextChecker Component', () => {
     })
     
     // Mock setTimeout to trigger immediately
-    vi.spyOn(global, 'setTimeout').mockImplementation((callback) => {
-      callback()
-      return 1
+    vi.spyOn(global, 'setTimeout').mockImplementation((callback, _delay) => {
+      if (typeof callback === 'function') {
+        callback()
+      }
+      return 1 as unknown as NodeJS.Timeout
     })
     
     render(<TextChecker />)
@@ -429,7 +449,7 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Complete first check
-    const onMessageHandler = mockEventSource.onmessage
+    const onMessageHandler = mockEventSource.onmessage as ((event: MessageEvent) => void) | null
     if (onMessageHandler) {
       onMessageHandler({
         data: JSON.stringify({
@@ -439,7 +459,7 @@ describe('TextChecker Component', () => {
           modified_text: '修正された最初のテキスト',
           violations: []
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -452,7 +472,7 @@ describe('TextChecker Component', () => {
     
     // Complete second check
     if (onMessageHandler) {
-      onMessageHandler({
+      (onMessageHandler as (event: MessageEvent) => void)({
         data: JSON.stringify({
           status: 'completed',
           id: 124,
@@ -460,7 +480,7 @@ describe('TextChecker Component', () => {
           modified_text: '修正された二番目のテキスト',
           violations: []
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -492,7 +512,7 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Complete check
-    const onMessageHandler = mockEventSource.onmessage
+    const onMessageHandler = mockEventSource.onmessage as ((event: MessageEvent) => void) | null
     if (onMessageHandler) {
       onMessageHandler({
         data: JSON.stringify({
@@ -502,7 +522,7 @@ describe('TextChecker Component', () => {
           modified_text: '修正されたテキスト',
           violations: []
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -533,7 +553,7 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Complete check with violations
-    const onMessageHandler = mockEventSource.onmessage
+    const onMessageHandler = mockEventSource.onmessage as ((event: MessageEvent) => void) | null
     if (onMessageHandler) {
       onMessageHandler({
         data: JSON.stringify({
@@ -548,7 +568,7 @@ describe('TextChecker Component', () => {
             reason: '効果に関する断定的表現'
           }]
         })
-      })
+      } as MessageEvent)
     }
     
     await waitFor(() => {
@@ -581,9 +601,9 @@ describe('TextChecker Component', () => {
     await user.click(submitButton)
     
     // Simulate SSE error
-    const onErrorHandler = mockEventSource.onerror
+    const onErrorHandler = mockEventSource.onerror as ((event: Event) => void) | null
     if (onErrorHandler) {
-      onErrorHandler(new Error('Connection failed'))
+      onErrorHandler(new Event('error'))
     }
     
     await waitFor(() => {

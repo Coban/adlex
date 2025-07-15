@@ -38,7 +38,7 @@ test.describe('Results Display Modes', () => {
     
     // Check for violation highlights
     const highlightedText = page.locator('[data-testid="violation-highlight"]')
-    await expect(highlightedText).toHaveCount.greaterThan(0)
+    await expect(highlightedText.first()).toBeVisible()
     
     // Verify highlighted text has proper styling
     await expect(highlightedText.first()).toHaveClass(/bg-red-200/)
@@ -58,7 +58,7 @@ test.describe('Results Display Modes', () => {
     
     // Verify diff lines are displayed
     const diffLines = page.locator('[data-testid="diff-line"]')
-    await expect(diffLines).toHaveCount.greaterThan(0)
+    await expect(diffLines.first()).toBeVisible()
     
     // Check for deleted lines (red background)
     const deletedLines = page.locator('[data-testid="diff-line"].bg-red-50')
@@ -82,7 +82,7 @@ test.describe('Results Display Modes', () => {
     
     // Verify violation items are displayed
     const violationItems = page.locator('[data-testid="violation-item"]')
-    await expect(violationItems).toHaveCount.greaterThan(0)
+    await expect(violationItems.first()).toBeVisible()
     
     // Check violation details
     const firstViolation = violationItems.first()

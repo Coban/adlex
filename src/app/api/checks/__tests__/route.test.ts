@@ -1,38 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { POST } from '../route'
 
-// Mock Supabase client
-const mockSupabaseClient = {
+// Create a complete mock for Supabase client
+const createMockSupabaseClient = () => ({
   auth: {
     getUser: vi.fn()
   },
-  from: vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        single: vi.fn(),
-        maybeSingle: vi.fn()
-      })),
-      textSearch: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve({ data: [], error: null }))
-      }))
-    })),
-    insert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn()
-      }))
-    })),
-    update: vi.fn(() => ({
-      eq: vi.fn(() => Promise.resolve({ data: null, error: null }))
-    })),
-    upsert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn()
-      }))
-    }))
-  })),
+  from: vi.fn(),
   rpc: vi.fn(() => Promise.resolve({ data: [], error: null }))
-}
+})
+
+const mockSupabaseClient = createMockSupabaseClient()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
@@ -66,49 +46,60 @@ vi.mocked(createChatCompletion).mockResolvedValue({
   }]
 })
 
-vi.mocked(createEmbedding).mockResolvedValue({
-  object: 'list',
-  data: [{
-    object: 'embedding',
-    embedding: [0.1, 0.2, 0.3],
-    index: 0
-  }]
-})
+vi.mocked(createEmbedding).mockResolvedValue([0.1, 0.2, 0.3])
 
 describe('Checks API Route', () => {
+  // Helper function to create mock Supabase response for user profile
+  const createUserProfileMock = (userData: unknown) => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        maybeSingle: vi.fn(() => Promise.resolve({
+          data: userData,
+          error: null
+        }))
+      }))
+    }))
+  })
+
+  // Helper function to create mock Supabase response for organization data
+  const createOrganizationMock = (orgData: unknown) => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({
+          data: orgData,
+          error: null
+        }))
+      }))
+    }))
+  })
+
+  // Helper function to create mock Supabase response for check insertion
+  const createCheckInsertMock = (checkData: unknown) => ({
+    insert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({
+          data: checkData,
+          error: null
+        }))
+      }))
+    }))
+  })
+
   // Helper function to mock standard Supabase calls
   const mockStandardSupabaseCalls = () => {
     // Mock user profile
-    mockSupabaseClient.from.mockReturnValueOnce({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(() => Promise.resolve({
-            data: {
-              id: 'user-123',
-              organization_id: 'org-123',
-              role: 'user'
-            },
-            error: null
-          }))
-        }))
-      }))
-    })
+    mockSupabaseClient.from.mockReturnValueOnce(createUserProfileMock({
+      id: 'user-123',
+      organization_id: 'org-123',
+      role: 'user'
+    }))
 
     // Mock organization data 
-    mockSupabaseClient.from.mockReturnValueOnce({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({
-            data: {
-              id: 'org-123',
-              used_checks: 10,
-              max_checks: 100
-            },
-            error: null
-          }))
-        }))
-      }))
-    })
+    mockSupabaseClient.from.mockReturnValueOnce(createOrganizationMock({
+      id: 'org-123',
+      used_checks: 10,
+      max_checks: 100
+    }))
   }
 
   beforeEach(() => {
@@ -139,56 +130,6 @@ describe('Checks API Route', () => {
 
   describe.skip('POST /api/checks', () => {
     it('should create a new check successfully', async () => {
-      // Mock user profile
-      const mockUserProfile = {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: vi.fn(() => Promise.resolve({
-              data: {
-                id: 'user-123',
-                organization_id: 'org-123',
-                role: 'user'
-              },
-              error: null
-            }))
-          }))
-        }))
-      }
-
-      // Mock organization data
-      const mockOrganizationData = {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            single: vi.fn(() => Promise.resolve({
-              data: {
-                id: 'org-123',
-                used_checks: 10,
-                max_checks: 100
-              },
-              error: null
-            }))
-          }))
-        }))
-      }
-
-      // Mock check insertion
-      const mockCheckInsert = {
-        insert: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(() => Promise.resolve({
-              data: {
-                id: 1,
-                original_text: 'Test text',
-                status: 'pending',
-                user_id: 'user-123',
-                organization_id: 'org-123'
-              },
-              error: null
-            }))
-          }))
-        }))
-      }
-
       // Mock RPC calls
       mockSupabaseClient.rpc.mockResolvedValue({
         data: [],
@@ -196,9 +137,23 @@ describe('Checks API Route', () => {
       })
 
       mockSupabaseClient.from
-        .mockReturnValueOnce(mockUserProfile)
-        .mockReturnValueOnce(mockOrganizationData)
-        .mockReturnValueOnce(mockCheckInsert)
+        .mockReturnValueOnce(createUserProfileMock({
+          id: 'user-123',
+          organization_id: 'org-123',
+          role: 'user'
+        }))
+        .mockReturnValueOnce(createOrganizationMock({
+          id: 'org-123',
+          used_checks: 10,
+          max_checks: 100
+        }))
+        .mockReturnValueOnce(createCheckInsertMock({
+          id: 1,
+          original_text: 'Test text',
+          status: 'pending',
+          user_id: 'user-123',
+          organization_id: 'org-123'
+        }))
 
       const request = new NextRequest('http://localhost:3000/api/checks', {
         method: 'POST',
@@ -221,36 +176,18 @@ describe('Checks API Route', () => {
 
     it.skip('should handle missing text input', async () => {
       // Mock user profile for this test
-      mockSupabaseClient.from.mockReturnValueOnce({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: vi.fn(() => Promise.resolve({
-              data: {
-                id: 'user-123',
-                organization_id: 'org-123',
-                role: 'user'
-              },
-              error: null
-            }))
-          }))
-        }))
-      })
+      mockSupabaseClient.from.mockReturnValueOnce(createUserProfileMock({
+        id: 'user-123',
+        organization_id: 'org-123',
+        role: 'user'
+      }))
 
       // Mock organization data 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            single: vi.fn(() => Promise.resolve({
-              data: {
-                id: 'org-123',
-                used_checks: 10,
-                max_checks: 100
-              },
-              error: null
-            }))
-          }))
-        }))
-      })
+      mockSupabaseClient.from.mockReturnValueOnce(createOrganizationMock({
+        id: 'org-123',
+        used_checks: 10,
+        max_checks: 100
+      }))
 
       const request = new NextRequest('http://localhost:3000/api/checks', {
         method: 'POST',

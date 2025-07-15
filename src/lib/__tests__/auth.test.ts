@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { createClient } from '@/lib/supabase/client'
 
 // Get the mocked client from the global setup
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockSupabaseClient = createClient() as any
 
 // Now import the functions
@@ -203,7 +205,7 @@ describe.skip('Auth utilities', () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       }
 
@@ -262,7 +264,7 @@ describe.skip('Auth utilities', () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       }
 
@@ -280,7 +282,7 @@ describe.skip('Auth utilities', () => {
       const result = await createUserProfile({
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       })
 
@@ -303,7 +305,7 @@ describe.skip('Auth utilities', () => {
       await expect(createUserProfile({
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       })).rejects.toThrow('Creation failed')
     })
@@ -312,14 +314,14 @@ describe.skip('Auth utilities', () => {
       await expect(createUserProfile({
         id: '',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       })).rejects.toThrow('User ID is required')
 
       await expect(createUserProfile({
         id: 'user-123',
         email: '',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user'
       })).rejects.toThrow('Email is required')
     })
@@ -330,7 +332,7 @@ describe.skip('Auth utilities', () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'admin'
       }
 
@@ -478,7 +480,7 @@ describe.skip('Auth utilities', () => {
       const mockInvitation = {
         id: 'inv-123',
         email: 'newuser@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user',
         token: 'invite-token-123'
       }
@@ -496,7 +498,7 @@ describe.skip('Auth utilities', () => {
 
       const result = await inviteUserToOrganization(
         'newuser@example.com',
-        'org-123',
+        123,
         'user'
       )
 
@@ -516,12 +518,12 @@ describe.skip('Auth utilities', () => {
         }))
       })
 
-      await expect(inviteUserToOrganization('newuser@example.com', 'org-123', 'user'))
+      await expect(inviteUserToOrganization('newuser@example.com', 123, 'user'))
         .rejects.toThrow('Invitation failed')
     })
 
     it('should validate email format', async () => {
-      await expect(inviteUserToOrganization('invalid-email', 'org-123', 'user'))
+      await expect(inviteUserToOrganization('invalid-email', 123, 'user'))
         .rejects.toThrow('Invalid email format')
     })
   })
@@ -531,7 +533,7 @@ describe.skip('Auth utilities', () => {
       const mockInvitation = {
         id: 'inv-123',
         email: 'newuser@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'user',
         token: 'invite-token-123'
       }
@@ -580,7 +582,7 @@ describe.skip('Auth utilities', () => {
       const mockUser = {
         id: 'user-123',
         email: 'test@example.com',
-        organization_id: 'org-123',
+        organization_id: 123,
         role: 'admin'
       }
 
@@ -618,7 +620,7 @@ describe.skip('Auth utilities', () => {
     })
 
     it('should validate role', async () => {
-      await expect(changeUserRole('user-123', 'invalid-role'))
+      await expect(changeUserRole('user-123', 'invalid-role' as 'user' | 'admin'))
         .rejects.toThrow('Invalid role')
     })
   })

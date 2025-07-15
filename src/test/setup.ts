@@ -4,6 +4,19 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { server } from "./mocks/server";
 
+// Extend global types
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var mockSupabaseClient: any
+  var EventSource: {
+    new (url: string | URL, eventSourceInitDict?: EventSourceInit): EventSource
+    prototype: EventSource
+    readonly CONNECTING: 0
+    readonly OPEN: 1
+    readonly CLOSED: 2
+  }
+}
+
 // Start server before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 
@@ -74,7 +87,7 @@ Object.assign(window, {
 });
 
 // Mock EventSource globally
-global.EventSource = vi.fn(() => ({
+const MockEventSource = vi.fn(() => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   close: vi.fn(),
@@ -88,7 +101,15 @@ global.EventSource = vi.fn(() => ({
   CONNECTING: 0,
   OPEN: 1,
   CLOSED: 2
-}));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+})) as any
+
+// Add static properties
+MockEventSource.CONNECTING = 0
+MockEventSource.OPEN = 1
+MockEventSource.CLOSED = 2
+
+global.EventSource = MockEventSource
 
 // Mock navigator.clipboard
 Object.assign(navigator, {

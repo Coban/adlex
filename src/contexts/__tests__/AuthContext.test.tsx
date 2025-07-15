@@ -1,22 +1,22 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
-import { AuthProvider, useAuth } from '../AuthContext'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { createClient } from '@/lib/supabase/client'
 
+import { AuthProvider, useAuth } from '../AuthContext'
+
 // Get the mocked client from the global setup
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockSupabaseClient = createClient() as any
 
 // Test component that uses the AuthContext
 function TestComponent() {
-  const { user, loading, signIn, signOut } = useAuth()
+  const { user, loading, signOut } = useAuth()
 
   return (
     <div>
       <div data-testid="loading">{loading ? 'Loading' : 'Not Loading'}</div>
       <div data-testid="user">{user ? user.email : 'No User'}</div>
-      <button onClick={() => signIn('test@example.com', 'password123')}>
-        Sign In
-      </button>
       <button onClick={signOut}>Sign Out</button>
     </div>
   )
@@ -32,7 +32,8 @@ describe.skip('AuthContext', () => {
       error: null
     })
     
-    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((_callback: any) => {
       // Return a mock subscription
       return {
         data: { subscription: { unsubscribe: vi.fn() } }
@@ -234,9 +235,11 @@ describe.skip('AuthContext', () => {
       email: 'test@example.com'
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let authStateCallback: (event: string, session: any) => void
 
-    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback: any) => {
       authStateCallback = callback
       return {
         data: { subscription: { unsubscribe: vi.fn() } }
@@ -420,9 +423,11 @@ describe.skip('AuthContext', () => {
       email: 'test@example.com'
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let authStateCallback: (event: string, session: any) => void
 
-    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback: any) => {
       authStateCallback = callback
       return {
         data: { subscription: { unsubscribe: vi.fn() } }

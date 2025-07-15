@@ -221,7 +221,7 @@ test.describe('Error Handling', () => {
     test('should handle SSE not supported', async ({ page }) => {
       // Disable EventSource
       await page.addInitScript(() => {
-        delete window.EventSource
+        (window as unknown as { EventSource?: typeof EventSource }).EventSource = undefined
       })
       
       await page.goto('/checker')
@@ -236,7 +236,7 @@ test.describe('Error Handling', () => {
     test('should handle clipboard API not available', async ({ page }) => {
       // Disable clipboard API
       await page.addInitScript(() => {
-        delete navigator.clipboard
+        (navigator as unknown as { clipboard?: Clipboard }).clipboard = undefined
       })
       
       await page.goto('/checker')
@@ -332,7 +332,7 @@ test.describe('Error Handling', () => {
 
   test.describe('Error Logging and Reporting', () => {
     test('should log errors to console', async ({ page }) => {
-      const consoleLogs = []
+      const consoleLogs: string[] = []
       page.on('console', msg => {
         if (msg.type() === 'error') {
           consoleLogs.push(msg.text())
