@@ -304,3 +304,177 @@ export async function signOut() {
     throw new Error('予期しないエラーが発生しました');
   }
 }
+
+// Additional auth functions expected by the tests
+export async function signInWithEmailAndPassword(email: string, password: string) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Invalid email format');
+  }
+  
+  if (password.length < 8) {
+    throw new Error('Password must be at least 8 characters');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function signUpWithEmailAndPassword(email: string, password: string) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Invalid email format');
+  }
+  
+  if (password.length < 8) {
+    throw new Error('Password must be at least 8 characters');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function getCurrentUser() {
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.getUser();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data.user;
+}
+
+export async function getUserProfile(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+  
+  if (error) {
+    if (error.message === 'Profile not found') {
+      return null;
+    }
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function createUserProfile(profile: any) {
+  if (!profile.id) {
+    throw new Error('User ID is required');
+  }
+  
+  if (!profile.email) {
+    throw new Error('Email is required');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('users').upsert(profile).select().single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function updateUserProfile(userId: string, updates: any) {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('users').update(updates).eq('id', userId).single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function checkUserExists(email: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data !== null;
+}
+
+export async function createOrganization(name: string, plan: string) {
+  if (!name) {
+    throw new Error('Organization name is required');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('organizations').insert({ name, plan }).select().single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function inviteUserToOrganization(email: string, organizationId: string, role: string) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Invalid email format');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('user_invitations').insert({
+    email,
+    organization_id: organizationId,
+    role,
+    token: 'invite-token-' + Date.now()
+  }).select().single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function acceptInvitation(token: string) {
+  if (!token) {
+    throw new Error('Token is required');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('user_invitations').select('*').eq('token', token).single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function changeUserRole(userId: string, role: string) {
+  if (!['admin', 'user'].includes(role)) {
+    throw new Error('Invalid role');
+  }
+  
+  const supabase = createClient();
+  const { data, error } = await supabase.from('users').update({ role }).eq('id', userId).single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}

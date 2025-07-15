@@ -40,7 +40,9 @@
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Chrome\")",
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Safari\")",
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=webkit)",
-      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox --project=\"Mobile Chrome\" --project=chromium-noauth)"
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox --project=\"Mobile Chrome\" --project=chromium-noauth)",
+      "Bash(npm run test:*)",
+      "Bash(npx vitest run:*)"
     ],
     "deny": []
   }
