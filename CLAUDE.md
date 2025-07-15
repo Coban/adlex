@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AdLex is a SaaS application for pharmaceutical law (薬機法) compliance checking and text rewriting. It uses AI to detect violations in Japanese advertising text and suggest safe alternatives.
+AdLex is a SaaS application for pharmaceutical law (薬機法) compliance checking and text rewriting. It uses AI to detect violations in Japanese advertising text and suggest safe alternatives. The application supports both text input and image upload with OCR processing.
 
 ### Tech Stack
 - **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS, shadcn/ui
@@ -12,6 +12,7 @@ AdLex is a SaaS application for pharmaceutical law (薬機法) compliance checki
 - **Database**: Supabase PostgreSQL with pgvector extension
 - **Authentication**: Supabase Auth
 - **AI**: OpenAI GPT-4o (production), LM Studio (local development)
+- **OCR**: Tesseract.js (MVP), Google Vision API (production)
 - **Testing**: Vitest (unit), Playwright (E2E), MSW (mocking)
 
 ## Development Commands
@@ -89,6 +90,8 @@ npm run test:all
 ## Architecture
 
 ### Core Processing Flow
+
+#### Text Check Processing
 1. **Text Input**: User submits text through `TextChecker` component
 2. **API Processing**: `/api/checks` creates check record and starts background processing
 3. **AI Analysis**: 
@@ -98,17 +101,32 @@ npm run test:all
 4. **Real-time Updates**: `/api/checks/[id]/stream` provides SSE updates
 5. **Results Display**: Violations highlighted with modification suggestions
 
+#### Image Check Processing
+1. **Image Upload**: User uploads image through `ImageChecker` component
+2. **OCR Processing**: `/api/ocr` processes image and extracts text using Tesseract.js or Vision API
+3. **Text Extraction**: Extracted text displayed in editable format
+4. **Text Check**: Extracted text processed through normal text checking flow
+5. **Results Display**: Same violation highlighting with image context
+
 ### Key Components
 - `src/components/TextChecker.tsx`: Main UI for text input/analysis
+- `src/components/ImageChecker.tsx`: Main UI for image upload/OCR processing (planned)
 - `src/lib/ai-client.ts`: AI service abstraction (OpenAI/LM Studio)
+- `src/lib/ocr-client.ts`: OCR service abstraction (Tesseract.js/Vision API) (planned)
 - `src/app/api/checks/route.ts`: Main check processing API
+- `src/app/api/ocr/route.ts`: Image upload and OCR processing API (planned)
 - `src/app/api/checks/[id]/stream/route.ts`: SSE streaming endpoint
 
 ### Database Schema
 - `organizations`: Company/group data with usage limits
 - `users`: User accounts with role-based access
 - `dictionaries`: NG/ALLOW phrase dictionary with vector embeddings
-- `checks`: Text analysis records
+- `checks`: Text/image analysis records with OCR support
+  - `input_type`: 'text' or 'image'
+  - `extracted_text`: OCR extracted text (for images)
+  - `image_url`: Uploaded image URL
+  - `ocr_status`: OCR processing status
+  - `ocr_metadata`: OCR processing details
 - `violations`: Specific violation details
 
 ## AI Configuration
@@ -124,6 +142,11 @@ LM_STUDIO_BASE_URL=http://localhost:1234/v1
 LM_STUDIO_API_KEY=lm-studio
 LM_STUDIO_CHAT_MODEL=google/gemma-3-12b
 LM_STUDIO_EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
+
+# OCR Configuration
+USE_TESSERACT=true                    # Use Tesseract.js for OCR (MVP)
+GOOGLE_VISION_API_KEY=your-key-here  # Google Vision API (production)
+GOOGLE_VISION_PROJECT_ID=your-project-id
 ```
 
 ### AI Client Usage
@@ -131,6 +154,12 @@ The system automatically selects the appropriate AI client:
 - Production: OpenAI with function calling
 - Local development: LM Studio with JSON parsing
 - Testing: Mock responses
+
+### OCR Client Usage
+The system automatically selects the appropriate OCR client:
+- MVP: Tesseract.js (client-side processing)
+- Production: Google Vision API (server-side processing)
+- Testing: Mock OCR responses
 
 ## Testing Setup
 
@@ -170,6 +199,13 @@ Use `npm run seed` to create test accounts:
 - Handle both OpenAI and LM Studio responses
 - Implement proper error handling for AI failures
 
+### OCR Integration
+- Use `extractText()` from `@/lib/ocr-client` for text extraction
+- Handle both Tesseract.js and Google Vision API responses
+- Implement proper error handling for OCR failures
+- Support image preprocessing (resize, rotate, enhance)
+- Handle multiple image formats (JPEG, PNG, WebP, PDF)
+
 ### Real-time Updates
 - Use Server-Sent Events for progress updates
 - Implement proper SSE error handling
@@ -183,3 +219,7 @@ Use `npm run seed` to create test accounts:
 - LM Studio requires manual model loading
 - Vector embeddings are automatically generated for dictionary entries
 - Database schema is managed through Supabase migrations
+- Image files are temporarily stored in Supabase Storage (auto-deleted after 1 hour)
+- OCR processing may take 5-30 seconds depending on image complexity
+- Supported image formats: JPEG, PNG, WebP, PDF (max 10MB)
+- For image checks, the same usage limits apply as text checks
