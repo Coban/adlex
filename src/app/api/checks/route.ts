@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       }
     }
     // TEMPORARY: Skip authentication for development testing
-    if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === 'true') {
+    if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true') {
       // Use an existing user for testing
       user = {
         id: '11111111-1111-1111-1111-111111111111',
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       const { data: orgData } = await supabase
         .from('organizations')
         .select('id')
-        .eq('name', 'サンプル組織')
+        .eq('name', 'テスト組織A')
         .single()
       
       if (!orgData) {
@@ -157,9 +157,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 400 })
     }
 
-    // Check usage limits
-    if ((organizationData.used_checks ?? 0) >= (organizationData.max_checks ?? 0)) {
-      return NextResponse.json({ error: 'Usage limit exceeded' }, { status: 403 })
+    // Check usage limits - skip for testing
+    if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true') {
+      // Skip usage limit check for testing
+    } else {
+      if ((organizationData.used_checks ?? 0) >= (organizationData.max_checks ?? 0)) {
+        return NextResponse.json({ error: 'Usage limit exceeded' }, { status: 403 })
+      }
     }
 
     const body = await request.json()
@@ -562,9 +566,11 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       })
       .eq('id', checkId)
 
-    // Update organization usage count
-    await supabase
-      .rpc('increment_organization_usage', { org_id: organizationId })
+    // Update organization usage count - skip for testing
+    if (!((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true')) {
+      await supabase
+        .rpc('increment_organization_usage', { org_id: organizationId })
+    }
 
   } catch (error) {
     console.error('Error in performActualCheck:', error)

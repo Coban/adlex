@@ -2,18 +2,40 @@ import { test as setup, expect } from '@playwright/test';
 
 const authFile = 'playwright/.auth/user.json';
 
+async function checkAuthentication(page: any) {
+  // Try to find the sign out button in desktop view first
+  try {
+    await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 3000 });
+    return true;
+  } catch {
+    // If not found, check if we're on mobile and need to open the menu
+    try {
+      const menuButton = page.locator('.md\\:hidden button').first();
+      const isMenuButtonVisible = await menuButton.isVisible();
+      if (isMenuButtonVisible) {
+        await menuButton.click();
+        await page.waitForTimeout(500); // Wait for menu to open
+        await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 3000 });
+        // Close the menu after checking
+        await menuButton.click();
+        return true;
+      }
+    } catch {
+      // Still not found
+    }
+    return false;
+  }
+}
+
 setup('authenticate', async ({ page }) => {
   // Navigate to the signin page
   await page.goto('/');
   
   // Check if we're already authenticated
-  try {
-    await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
+  if (await checkAuthentication(page)) {
     console.log('Already authenticated, saving current state');
     await page.context().storageState({ path: authFile });
     return;
-  } catch {
-    // Not authenticated, proceed with login
   }
   
   // Click on signin link
@@ -31,7 +53,11 @@ setup('authenticate', async ({ page }) => {
   
   // Wait for successful authentication
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 10000 });
+  
+  // Check authentication with mobile support
+  if (!(await checkAuthentication(page))) {
+    throw new Error('Authentication failed - sign out button not found');
+  }
   
   // Save the authentication state
   await page.context().storageState({ path: authFile });

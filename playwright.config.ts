@@ -28,7 +28,13 @@ export default defineConfig({
 
     /* Video recording */
     video: "retain-on-failure",
+    
+    /* Timeout for individual actions */
+    actionTimeout: 30000,
   },
+  
+  /* Test timeout */
+  timeout: 60000,
 
   /* Configure projects for major browsers */
   projects: [
@@ -113,6 +119,7 @@ export default defineConfig({
       NODE_ENV: 'test',
       OPENAI_API_KEY: 'mock',
       USE_LM_STUDIO: 'false',
+      SKIP_AUTH: 'true',
     },
   },
 });

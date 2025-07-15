@@ -59,27 +59,88 @@ export async function createChatCompletion(params: {
 }) {
   // Return mock response in test/mock mode
   if (USE_MOCK) {
-    return {
-      id: 'mock-chat-completion',
-      object: 'chat.completion' as const,
-      created: Date.now(),
-      model: 'mock-model',
-      choices: [{
-        index: 0,
-        message: {
-          role: 'assistant' as const,
-          content: JSON.stringify({
-            modified_text: "この文章には問題がありません。",
-            violations: [],
-            recommendations: []
-          })
-        },
-        finish_reason: 'stop' as const
-      }],
-      usage: {
-        prompt_tokens: 100,
-        completion_tokens: 50,
-        total_tokens: 150
+    // Check if this is a function calling request
+    if (params.tools && params.tools.length > 0) {
+      // Return function call response
+      return {
+        id: 'mock-chat-completion',
+        object: 'chat.completion' as const,
+        created: Date.now(),
+        model: 'mock-model',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant' as const,
+            content: null,
+            tool_calls: [{
+              id: 'call_mock',
+              type: 'function' as const,
+              function: {
+                name: 'apply_yakukiho_rules',
+                arguments: JSON.stringify({
+                  modified: "このサプリメントは健康維持にお役立ていただけます。血圧の健康維持をサポートします。",
+                  violations: [
+                    {
+                      start: 0,
+                      end: 4,
+                      reason: "医薬品的効能効果表現: がん治療効果の標榜は薬機法違反です",
+                      dictionaryId: 1
+                    },
+                    {
+                      start: 28,
+                      end: 35,
+                      reason: "医薬品的効能効果表現: 血圧降下効果は医薬品的効果に該当します",
+                      dictionaryId: 3
+                    }
+                  ]
+                })
+              }
+            }]
+          },
+          finish_reason: 'tool_calls' as const
+        }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150
+        }
+      }
+    } else {
+      // Return regular content response
+      return {
+        id: 'mock-chat-completion',
+        object: 'chat.completion' as const,
+        created: Date.now(),
+        model: 'mock-model',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant' as const,
+            content: JSON.stringify({
+              modified: "このサプリメントは健康維持にお役立ていただけます。血圧の健康維持をサポートします。",
+              violations: [
+                {
+                  start: 0,
+                  end: 4,
+                  reason: "医薬品的効能効果表現: がん治療効果の標榜は薬機法違反です",
+                  dictionaryId: 1
+                },
+                {
+                  start: 28,
+                  end: 35,
+                  reason: "医薬品的効能効果表現: 血圧降下効果は医薬品的効果に該当します",
+                  dictionaryId: 3
+                }
+              ]
+            })
+          },
+          finish_reason: 'stop' as const
+        }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150
+        }
       }
     }
   }

@@ -25,7 +25,22 @@
       "Bash(npm run type-check:*)",
       "Bash(npm install:*)",
       "Bash(mkdir:*)",
-      "Bash(npm run check:*)"
+      "Bash(npm run check:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npm run supabase:start:*)",
+      "Bash(true)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --headed --project=chromium --grep \"should perform text check and show results\")",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --headed --project=chromium --grep \"should perform text check and show results\" --timeout=60000)",
+      "Bash(SKIP_AUTH=true npm run test:e2e)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=json)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox --project=webkit)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Chrome\" --grep \"should perform text check and show results\")",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Chrome\" --grep \"should perform text check and show results\" --headed --timeout=60000)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Chrome\")",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=\"Mobile Safari\")",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=webkit)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox --project=\"Mobile Chrome\" --project=chromium-noauth)"
     ],
     "deny": []
   }
