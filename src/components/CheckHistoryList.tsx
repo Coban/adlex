@@ -173,7 +173,7 @@ export default function CheckHistoryList() {
       <div className="flex items-center justify-center p-8">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={fetchHistory} variant="outline">
+          <Button onClick={() => fetchHistory(1)} variant="outline">
             再試行
           </Button>
         </div>

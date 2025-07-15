@@ -523,7 +523,8 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         max_tokens: 2000
       })
 
-      const toolCall = llmResponse.choices?.[0]?.message?.tool_calls?.[0]
+      const message = llmResponse.choices?.[0]?.message
+      const toolCall = message && 'tool_calls' in message ? message.tool_calls?.[0] : null
       if (!toolCall || toolCall.function.name !== 'apply_yakukiho_rules') {
         console.error('Invalid tool call:', {
           toolCall,

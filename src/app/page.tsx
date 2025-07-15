@@ -4,11 +4,9 @@ import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
-import { useOrganization } from '@/hooks/use-supabase'
 
 export default function Home() {
-  const { user, loading } = useAuth()
-  const { organization } = useOrganization()
+  const { user, loading, userProfile } = useAuth()
 
   return (
     <div className="max-w-4xl mx-auto p-4">
@@ -26,14 +24,14 @@ export default function Home() {
               <Button asChild size="lg">
                 <Link href="/checker">テキストチェックを開始</Link>
               </Button>
-              {organization?.role === 'admin' && (
+              {userProfile?.role === 'admin' && (
                 <Button asChild variant="outline" size="lg">
                   <Link href="/admin/users">組織ユーザー管理</Link>
                 </Button>
               )}
             </div>
             
-            {organization?.role === 'admin' && (
+            {userProfile?.role === 'admin' && (
               <div className="mt-6 p-4 bg-blue-50 rounded-lg max-w-md mx-auto">
                 <h3 className="text-sm font-medium text-blue-900 mb-2">管理者機能</h3>
                 <p className="text-xs text-blue-700">

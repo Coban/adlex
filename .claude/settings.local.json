@@ -24,7 +24,8 @@
       "Bash(mv:*)",
       "Bash(npm run type-check:*)",
       "Bash(npm install:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(npm run check:*)"
     ],
     "deny": []
   }

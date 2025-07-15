@@ -32,29 +32,64 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // Setup project for authentication
+    { name: 'setup', testMatch: /.*\.setup\.ts/ },
+
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { 
+        ...devices["Desktop Chrome"],
+        // Use the authenticated state for most tests
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+
+    // Auth tests that run without authentication
+    {
+      name: "chromium-noauth",
+      testMatch: /.*auth\.spec\.ts/,
+      use: { 
+        ...devices["Desktop Chrome"],
+        // No authentication state for auth tests
+        storageState: { cookies: [], origins: [] },
+      },
     },
 
     {
       name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
+      use: { 
+        ...devices["Desktop Firefox"],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
 
     {
       name: "webkit",
-      use: { ...devices["Desktop Safari"] },
+      use: { 
+        ...devices["Desktop Safari"],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
 
     /* Test against mobile viewports. */
     {
       name: "Mobile Chrome",
-      use: { ...devices["Pixel 5"] },
+      use: { 
+        ...devices["Pixel 5"],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
     {
       name: "Mobile Safari",
-      use: { ...devices["iPhone 12"] },
+      use: { 
+        ...devices["iPhone 12"],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
     /* Test against branded browsers. */
     // {
@@ -74,5 +109,10 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120 * 1000,
     // E2EテストではMSWを無効化し、実際のSupabaseローカル環境を使用
+    env: {
+      NODE_ENV: 'test',
+      OPENAI_API_KEY: 'mock',
+      USE_LM_STUDIO: 'false',
+    },
   },
 });

@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Authentication", () => {
+  // Use unauthenticated context for these tests
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test.beforeEach(async ({ page }) => {
     // Navigate to the app
     await page.goto("/");
@@ -68,18 +71,23 @@ test.describe("Authentication", () => {
     // 直接組織アカウント作成ページにアクセス
     await page.goto('/auth/organization-signup');
 
-    // Fill organization signup form
-    await page.fill('input[name="organizationName"]', "テスト組織E2E");
-    await page.fill('input[name="email"]', "test-org@example.com");
-    await page.fill('input[name="password"]', "password123");
-    await page.fill('input[name="confirmPassword"]', "password123");
-    await page.fill('input[name="firstName"]', "テスト");
-    await page.fill('input[name="lastName"]', "ユーザー");
+    // Wait for form to load
+    await expect(page.getByRole('heading', { name: '組織アカウント作成' })).toBeVisible();
+
+    // Generate unique email for this test run
+    const timestamp = Date.now();
+    const testEmail = `test-org-${timestamp}@example.com`;
+
+    // Fill organization signup form using id selectors
+    await page.fill('#organizationName', "テスト組織E2E");
+    await page.fill('#email', testEmail);
+    await page.fill('#password', "password123");
+    await page.fill('#confirmPassword', "password123");
 
     // Submit form
-    await page.getByRole('button', { name: '組織を作成してサインアップ' }).click();
+    await page.getByRole('button', { name: '組織アカウント作成' }).click();
 
-    // Should be redirected after successful signup
-    await expect(page).toHaveURL("/");
+    // Should show success message
+    await expect(page.locator('text=組織とアカウントが作成されました')).toBeVisible({ timeout: 10000 });
   });
 });

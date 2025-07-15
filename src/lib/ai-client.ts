@@ -2,23 +2,26 @@ import OpenAI from 'openai'
 
 // Environment detection
 const isProduction = process.env.NODE_ENV === 'production'
-const isMockMode = process.env.OPENAI_API_KEY === 'mock'
+const isTest = process.env.NODE_ENV === 'test'
+const isMockMode = process.env.OPENAI_API_KEY === 'mock' || isTest
 const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' && !isMockMode
 
 // AI client configuration
 // Use LM Studio for local development, OpenAI for production, Mock for testing
-const USE_LM_STUDIO = !isProduction && process.env.USE_LM_STUDIO === 'true'
+const USE_LM_STUDIO = !isProduction && !isTest && process.env.USE_LM_STUDIO === 'true'
 const USE_MOCK = isMockMode || (!hasValidOpenAIKey && !USE_LM_STUDIO)
 
 // AI Client Configuration logged only in development
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   console.log('AI Client Configuration:', {
     isProduction,
+    isTest,
     hasValidOpenAIKey,
     USE_LM_STUDIO,
     USE_MOCK,
     isMockMode,
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10) + '...'
   })
 }
 
@@ -54,6 +57,33 @@ export async function createChatCompletion(params: {
   temperature?: number
   max_tokens?: number
 }) {
+  // Return mock response in test/mock mode
+  if (USE_MOCK) {
+    return {
+      id: 'mock-chat-completion',
+      object: 'chat.completion' as const,
+      created: Date.now(),
+      model: 'mock-model',
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant' as const,
+          content: JSON.stringify({
+            modified_text: "この文章には問題がありません。",
+            violations: [],
+            recommendations: []
+          })
+        },
+        finish_reason: 'stop' as const
+      }],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 50,
+        total_tokens: 150
+      }
+    }
+  }
+
   if (!aiClient) {
     throw new Error('AI client is not available. Please check your configuration.')
   }
@@ -69,7 +99,9 @@ export async function createChatCompletion(params: {
         // LM Studio may not support tools/tool_choice, so omit them
       }
       
+      console.log('LM Studio chat completion request')
       const response = await aiClient.chat.completions.create(lmParams)
+      console.log('LM Studio chat completion successful')
       return response
     }
     
@@ -87,6 +119,14 @@ export async function createChatCompletion(params: {
 
 // Utility function to create embeddings
 export async function createEmbedding(input: string): Promise<number[]> {
+  // Return mock embedding in test/mock mode
+  if (USE_MOCK) {
+    console.log('辞書項目のembedding生成を開始:', input)
+    const mockEmbedding = new Array(384).fill(0).map(() => Math.random() - 0.5)
+    console.log('Embedding生成成功, 次元数:', mockEmbedding.length)
+    return mockEmbedding
+  }
+
   if (!aiClient) {
     throw new Error('AI client is not available. Please check your configuration.')
   }
@@ -157,9 +197,16 @@ export function isUsingLMStudio(): boolean {
   return USE_LM_STUDIO
 }
 
+// Utility function to check if we're using mock mode
+export function isUsingMock(): boolean {
+  return USE_MOCK
+}
+
 // Get embedding dimension based on the model being used
 export function getEmbeddingDimension(): number {
-  if (USE_LM_STUDIO) {
+  if (USE_MOCK) {
+    return 384 // Mock embedding dimension
+  } else if (USE_LM_STUDIO) {
     // text-embedding-nomic-embed-text-v1.5 は768次元を使用
     return 768
   } else {
