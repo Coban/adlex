@@ -8,6 +8,7 @@ export async function PATCH(
 ) {
   try {
     const { id: userId } = await params;
+    console.log('Role change request for userId:', userId);
     let body
     try {
       body = await request.json()
@@ -16,6 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
     }
     const { role } = body;
+    console.log('Role change request body:', { role });
 
     if (!["admin", "user"].includes(role)) {
       return NextResponse.json(
@@ -66,11 +68,14 @@ export async function PATCH(
     }
 
     // 対象ユーザーが同じ組織に所属しているかチェック
+    console.log('Looking for target user with ID:', userId);
     const { data: targetUser, error: targetUserError } = await supabase
       .from("users")
-      .select("organization_id")
+      .select("organization_id, role, email")
       .eq("id", userId)
       .single();
+    
+    console.log('Target user lookup result:', { targetUser, targetUserError });
 
     if (targetUserError || !targetUser) {
       return NextResponse.json(
@@ -87,12 +92,14 @@ export async function PATCH(
     }
 
     // ユーザーの権限を更新
+    console.log('Updating user role for userId:', userId, 'to role:', role);
     const { data: updatedUser, error: updateError } = await supabase
       .from("users")
       .update({ role, updated_at: new Date().toISOString() })
       .eq("id", userId)
-      .select("id, email, role, updated_at")
-      .single();
+      .select("id, email, role, updated_at");
+    
+    console.log('Update result:', { data: updatedUser, error: updateError });
 
     if (updateError) {
       console.error("User role update error:", updateError);
@@ -102,9 +109,17 @@ export async function PATCH(
       );
     }
 
+    if (!updatedUser || updatedUser.length === 0) {
+      console.error("No user found with ID:", userId);
+      return NextResponse.json(
+        { error: "ユーザーが見つかりません" },
+        { status: 404 },
+      );
+    }
+
     return NextResponse.json({
       message: "ユーザー権限が更新されました",
-      user: updatedUser,
+      user: updatedUser[0],
     });
   } catch (error) {
     console.error("Update user role error:", error);

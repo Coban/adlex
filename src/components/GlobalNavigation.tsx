@@ -120,7 +120,7 @@ export default function GlobalNavigation() {
             </Link>
 
             {/* デスクトップナビゲーション */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-4" data-testid="desktop-nav">
               {visibleItems.map((item) => {
                 const Icon = item.icon
                 return (
@@ -132,6 +132,11 @@ export default function GlobalNavigation() {
                         ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
+                    data-testid={
+                      item.href === '/admin/users' ? 'nav-admin' : 
+                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      undefined
+                    }
                   >
                     {Icon && <Icon className="w-4 h-4" />}
                     <span>{item.name}</span>
@@ -204,6 +209,7 @@ export default function GlobalNavigation() {
                 size="sm"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="p-2"
+                data-testid="mobile-menu-toggle"
               >
                 {mobileMenuOpen ? (
                   <X className="w-5 h-5" />
@@ -231,6 +237,11 @@ export default function GlobalNavigation() {
                         ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
+                    data-testid={
+                      item.href === '/admin/users' ? 'nav-admin' : 
+                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      undefined
+                    }
                   >
                     {Icon && <Icon className="w-4 h-4" />}
                     <span>{item.name}</span>

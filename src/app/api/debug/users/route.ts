@@ -28,6 +28,13 @@ export async function GET() {
       .eq('email', 'admin@test.com')
       .maybeSingle()
 
+    // Check if organization 1 exists
+    const { data: org1, error: org1Error } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle()
+
     return NextResponse.json({
       currentAuthUser: {
         user,
@@ -44,6 +51,10 @@ export async function GET() {
       adminTestUser: {
         data: adminUser,
         error: adminError
+      },
+      organizationOne: {
+        data: org1,
+        error: org1Error
       }
     })
   } catch (error) {

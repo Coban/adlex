@@ -42,7 +42,14 @@
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=webkit)",
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --project=firefox --project=\"Mobile Chrome\" --project=chromium-noauth)",
       "Bash(npm run test:*)",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "Bash(timeout 120s npm run test:e2e -- --grep \"should display admin dashboard\")",
+      "Bash(npx supabase:*)",
+      "Bash(psql:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)",
+      "Bash(npx playwright:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

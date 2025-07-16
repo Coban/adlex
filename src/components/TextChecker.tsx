@@ -57,11 +57,48 @@ export default function TextChecker() {
   const handlePdfExport = async () => {
     setPdfError(null)
     try {
-      // Simulate PDF generation that could fail
-      if (Math.random() < 0.3) { // 30% chance of failure for testing
-        throw new Error('PDFの生成に失敗しました')
+      if (!activeCheck?.result) {
+        throw new Error('エクスポートするデータがありません')
       }
-      // Would implement actual PDF generation here
+
+      // Create PDF content using browser's print functionality
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `check-report-${timestamp}.pdf`
+      
+      // Create a blob with the result data
+      const content = `
+        AdLex - 薬機法チェック結果レポート
+        
+        生成日時: ${new Date().toLocaleString('ja-JP')}
+        
+        元のテキスト:
+        ${activeCheck.result.original_text}
+        
+        修正されたテキスト:
+        ${activeCheck.result.modified_text}
+        
+        検出された違反:
+        ${activeCheck.result.violations.length > 0 
+          ? activeCheck.result.violations.map((v, i) => 
+              `${i + 1}. ${activeCheck.result!.original_text.slice(v.start_pos, v.end_pos)} - ${v.reason}`
+            ).join('\n')
+          : '違反は検出されませんでした'
+        }
+      `
+      
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      
+      // Create download link
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
       console.log('PDF export successful')
     } catch (error) {
       setPdfError(error instanceof Error ? error.message : 'PDFの生成に失敗しました')
@@ -70,12 +107,13 @@ export default function TextChecker() {
 
   const handleCopy = async (text: string) => {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text)
         setCopySuccess('コピーしました')
       } else {
         // Fallback for environments where clipboard API is not available
-        setCopySuccess('コピーしました')
+        // Show fallback message for manual copy
+        setCopySuccess('手動でコピーしてください')
       }
       setTimeout(() => setCopySuccess(null), 2000)
     } catch (error) {
@@ -465,6 +503,7 @@ export default function TextChecker() {
               onChange={(e) => setOriginalText(e.target.value)}
               className="min-h-[400px] resize-none"
               maxLength={10000}
+              aria-label="薬機法チェック用テキスト入力"
             />
             <div className="flex justify-between items-center mt-2">
               <span className="text-sm text-gray-500">
@@ -482,20 +521,28 @@ export default function TextChecker() {
             
             {/* エラーメッセージ */}
             {errorMessage && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md" data-testid="error-message">
-                <p className="text-red-800 text-sm">{errorMessage}</p>
-                <Button 
-                  onClick={() => {
-                    setErrorMessage(null)
-                    handleCheck()
-                  }}
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-2"
-                  data-testid="retry-button"
-                >
-                  再試行
-                </Button>
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-800 text-sm" data-testid="error-message">{errorMessage}</p>
+                {errorMessage.includes('使用制限') || errorMessage.includes('Usage limit') ? (
+                  <div className="mt-2" data-testid="upgrade-prompt">
+                    <p className="text-sm text-gray-600">
+                      プランをアップグレードするか、管理者にお問い合わせください。
+                    </p>
+                  </div>
+                ) : (
+                  <Button 
+                    onClick={() => {
+                      setErrorMessage(null)
+                      handleCheck()
+                    }}
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    data-testid="retry-button"
+                  >
+                    再試行
+                  </Button>
+                )}
               </div>
             )}
             
@@ -588,8 +635,8 @@ export default function TextChecker() {
 
               {/* コピー成功メッセージ */}
               {copySuccess && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md" data-testid="copy-success">
-                  <p className="text-green-800 text-sm">{copySuccess}</p>
+                <div className={`mt-4 p-3 border rounded-md ${copySuccess.includes('手動') ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`} data-testid={copySuccess.includes('手動') ? 'copy-fallback' : 'copy-success'}>
+                  <p className={`text-sm ${copySuccess.includes('手動') ? 'text-yellow-800' : 'text-green-800'}`}>{copySuccess}</p>
                 </div>
               )}
 
@@ -597,13 +644,23 @@ export default function TextChecker() {
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="side-by-side">並列表示</TabsTrigger>
                   <TabsTrigger value="diff">差分表示</TabsTrigger>
-                  <TabsTrigger value="violations">違反詳細</TabsTrigger>
+                  <TabsTrigger value="violations" data-testid="violations-tab">違反詳細</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="side-by-side" className="mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h3 className="font-medium mb-2">元のテキスト</h3>
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-medium">元のテキスト</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(activeCheck.result!.original_text)}
+                          data-testid="copy-original-button"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
                       <div 
                         className="border rounded p-4 min-h-[300px] bg-gray-50 text-base leading-relaxed font-medium text-gray-900"
                         dangerouslySetInnerHTML={{
@@ -628,6 +685,24 @@ export default function TextChecker() {
 
                 <TabsContent value="violations" className="mt-4">
                   <div className="space-y-4">
+                    {activeCheck.result!.violations.length > 0 && (
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const violationText = activeCheck.result!.violations.map((v, i) => 
+                              `違反 ${i + 1}: "${activeCheck.result!.original_text.slice(v.start_pos, v.end_pos)}" - ${v.reason}`
+                            ).join('\n')
+                            handleCopy(violationText)
+                          }}
+                          data-testid="copy-violation-button"
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          違反詳細をコピー
+                        </Button>
+                      </div>
+                    )}
                     {activeCheck.result!.violations.length > 0 ? (
                       activeCheck.result!.violations.map((violation, index) => (
                         <div key={violation.id || index} className="border rounded p-4 bg-red-50">

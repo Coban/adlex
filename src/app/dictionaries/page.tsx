@@ -23,8 +23,9 @@ interface EmbeddingStats {
 }
 
 export default function DictionariesPage() {
-  const { organization, user } = useAuth()
+  const { organization, userProfile, loading: authLoading } = useAuth()
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([])
+  const [fallbackOrganization, setFallbackOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [embeddingStats, setEmbeddingStats] = useState<EmbeddingStats | null>(null)
   const [embeddingRefreshLoading, setEmbeddingRefreshLoading] = useState(false)
@@ -37,21 +38,72 @@ export default function DictionariesPage() {
     category: 'NG' as 'NG' | 'ALLOW',
     notes: ''
   })
+  const [message, setMessage] = useState('')
+  const [showDeleteDialog, setShowDeleteDialog] = useState<number | null>(null)
 
   const loadDictionaries = useCallback(async () => {
+    // Try loading dictionaries even if organization is null
+    // This is a fallback for when auth context doesn't work properly
     if (!organization) {
+      try {
+        // Try to get dictionaries directly based on current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Get user profile directly from database
+          const { data: userProfile, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (!userError && userProfile?.organization_id) {
+            // Also get the organization info for fallback
+            const { data: orgData, error: orgError } = await supabase
+              .from('organizations')
+              .select('*')
+              .eq('id', userProfile.organization_id)
+              .maybeSingle();
+            
+            if (!orgError && orgData) {
+              setFallbackOrganization(orgData);
+            }
+            
+            const { data, error } = await supabase
+              .from('dictionaries')
+              .select('*')
+              .eq('organization_id', userProfile.organization_id)
+              .order('created_at', { ascending: false })
+
+            if (!error && data) {
+              console.log('Loaded dictionaries via fallback:', data.length, 'items')
+              setDictionaries(data || [])
+              setLoading(false)
+              return
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Fallback dictionary loading failed:', error)
+      }
+      
       setLoading(false)
       return
     }
     
     try {
+      console.log('Loading dictionaries for organization:', organization.id)
       const { data, error } = await supabase
         .from('dictionaries')
         .select('*')
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Dictionary loading error:', error)
+        throw error
+      }
+      
+      console.log('Loaded dictionaries:', data?.length || 0, 'items')
       setDictionaries(data || [])
     } catch (error) {
       console.error('辞書の読み込みに失敗しました:', error)
@@ -61,7 +113,8 @@ export default function DictionariesPage() {
   }, [organization])
 
   const loadEmbeddingStats = useCallback(async () => {
-    if (!organization || !user || user.role !== 'admin') return
+    const currentOrg = organization || fallbackOrganization
+    if (!currentOrg || !userProfile || userProfile.role !== 'admin') return
     
     try {
       const response = await fetch('/api/dictionaries/embeddings/refresh', {
@@ -75,30 +128,35 @@ export default function DictionariesPage() {
     } catch (error) {
       console.error('Embedding統計情報の読み込みに失敗しました:', error)
     }
-  }, [organization, user])
+  }, [organization, fallbackOrganization, userProfile])
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(false)
     }, 5000)
 
-    if (organization) {
-      loadDictionaries()
-      loadEmbeddingStats()
-    } else {
-      // If no organization after some time, just show the page
-      const orgTimeout = setTimeout(() => {
-        setLoading(false)
-      }, 3000)
-      return () => clearTimeout(orgTimeout)
+    if (!authLoading) {
+      const currentOrg = organization || fallbackOrganization
+      if (currentOrg) {
+        loadDictionaries()
+        loadEmbeddingStats()
+      } else {
+        // If no organization after auth is done, try fallback loading
+        loadDictionaries()
+        const orgTimeout = setTimeout(() => {
+          setLoading(false)
+        }, 3000)
+        return () => clearTimeout(orgTimeout)
+      }
     }
 
     return () => clearTimeout(timeout)
-  }, [organization, loadDictionaries, loadEmbeddingStats])
+  }, [organization, fallbackOrganization, authLoading, loadDictionaries, loadEmbeddingStats])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!organization) return
+    const currentOrg = organization || fallbackOrganization
+    if (!currentOrg) return
 
     try {
       const response = await fetch('/api/dictionaries', {
@@ -123,6 +181,8 @@ export default function DictionariesPage() {
         alert(result.warning)
       }
 
+      setMessage('辞書に追加しました')
+      setTimeout(() => setMessage(''), 3000)
       setFormData({ phrase: '', category: 'NG', notes: '' })
       setShowAddForm(false)
       loadDictionaries()
@@ -160,6 +220,8 @@ export default function DictionariesPage() {
         alert(result.warning)
       }
 
+      setMessage('辞書を更新しました')
+      setTimeout(() => setMessage(''), 3000)
       setEditingDictionary(null)
       setFormData({ phrase: '', category: 'NG', notes: '' })
       loadDictionaries()
@@ -170,16 +232,24 @@ export default function DictionariesPage() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('この辞書項目を削除しますか？')) return
+  const handleDeleteRequest = (id: number) => {
+    setShowDeleteDialog(id)
+  }
+
+  const handleDelete = async () => {
+    if (!showDeleteDialog) return
 
     try {
       const { error } = await supabase
         .from('dictionaries')
         .delete()
-        .eq('id', id)
+        .eq('id', showDeleteDialog)
 
       if (error) throw error
+      
+      setMessage('辞書から削除しました')
+      setTimeout(() => setMessage(''), 3000)
+      setShowDeleteDialog(null)
       loadDictionaries()
       loadEmbeddingStats()
     } catch (error) {
@@ -187,10 +257,15 @@ export default function DictionariesPage() {
     }
   }
 
-  const handleRefreshAllEmbeddings = async () => {
-    if (!confirm('すべての辞書項目のEmbeddingを再生成しますか？この処理には時間がかかる場合があります。')) return
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
 
+  const handleRefreshAllEmbeddings = async () => {
+    setShowRegenerateDialog(false)
+    setIsRegenerating(true)
     setEmbeddingRefreshLoading(true)
+    setMessage('埋め込みを再生成中...')
+    
     try {
       const response = await fetch('/api/dictionaries/embeddings/refresh', {
         method: 'POST',
@@ -206,7 +281,9 @@ export default function DictionariesPage() {
         throw new Error(result.error ?? 'Embedding再生成に失敗しました')
       }
 
-      alert(result.message)
+      setMessage('埋め込みの再生成が完了しました')
+      setTimeout(() => setMessage(''), 5000)
+      
       if (result.failures && result.failures.length > 0) {
         console.warn('Embedding生成に失敗した項目:', result.failures)
       }
@@ -215,9 +292,11 @@ export default function DictionariesPage() {
       loadEmbeddingStats()
     } catch (error) {
       console.error('Embedding再生成に失敗しました:', error)
-      alert(error instanceof Error ? error.message : 'Embedding再生成に失敗しました')
+      setMessage('Embedding再生成に失敗しました')
+      setTimeout(() => setMessage(''), 3000)
     } finally {
       setEmbeddingRefreshLoading(false)
+      setIsRegenerating(false)
     }
   }
 
@@ -246,13 +325,18 @@ export default function DictionariesPage() {
   const ngDictionaries = filteredDictionaries.filter(d => d.category === 'NG')
   const allowDictionaries = filteredDictionaries.filter(d => d.category === 'ALLOW')
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = userProfile?.role === 'admin'
+  const effectiveOrganization = organization || fallbackOrganization
 
+  if (authLoading) {
+    return <div className="p-6">認証中...</div>
+  }
+  
   if (loading) {
-    return <div className="p-6">読み込み中...</div>
+    return <div className="p-6">辞書読み込み中...</div>
   }
 
-  if (!organization) {
+  if (!effectiveOrganization && dictionaries.length === 0) {
     return (
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
@@ -267,7 +351,7 @@ export default function DictionariesPage() {
         <div data-testid="dictionary-list" className="space-y-2">
           <Card>
             <CardContent className="pt-6 text-center text-muted-foreground">
-              組織が設定されていません
+              組織が設定されていません (userProfile: {userProfile?.email || 'null'})
             </CardContent>
           </Card>
         </div>
@@ -285,9 +369,10 @@ export default function DictionariesPage() {
         <div className="flex gap-2">
           {isAdmin && (
             <Button 
-              onClick={handleRefreshAllEmbeddings} 
+              onClick={() => setShowRegenerateDialog(true)} 
               disabled={embeddingRefreshLoading}
               variant="outline"
+              data-testid="regenerate-embeddings"
             >
               {embeddingRefreshLoading ? 'Embedding再生成中...' : 'Embedding再生成'}
             </Button>
@@ -297,6 +382,20 @@ export default function DictionariesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Success Message */}
+      {message && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-md" data-testid="success-message">
+          <p className="text-green-800 text-sm">{message}</p>
+        </div>
+      )}
+
+      {/* Processing Message */}
+      {isRegenerating && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md" data-testid="processing-message">
+          <p className="text-blue-800 text-sm">埋め込みを再生成中...</p>
+        </div>
+      )}
 
       {/* Embedding統計情報（管理者のみ） */}
       {isAdmin && embeddingStats && (
@@ -440,7 +539,7 @@ export default function DictionariesPage() {
           <DictionaryList
             dictionaries={filteredDictionaries}
             onEdit={startEdit}
-            onDelete={handleDelete}
+            onDelete={handleDeleteRequest}
           />
         </TabsContent>
 
@@ -448,7 +547,7 @@ export default function DictionariesPage() {
           <DictionaryList
             dictionaries={ngDictionaries}
             onEdit={startEdit}
-            onDelete={handleDelete}
+            onDelete={handleDeleteRequest}
           />
         </TabsContent>
 
@@ -456,10 +555,63 @@ export default function DictionariesPage() {
           <DictionaryList
             dictionaries={allowDictionaries}
             onEdit={startEdit}
-            onDelete={handleDelete}
+            onDelete={handleDeleteRequest}
           />
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4" data-testid="confirm-delete">
+            <h3 className="text-lg font-semibold mb-4">辞書項目を削除</h3>
+            <p className="text-gray-600 mb-6">
+              この辞書項目を削除しますか？この操作は取り消せません。
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowDeleteDialog(null)}
+              >
+                キャンセル
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleDelete}
+                data-testid="confirm-button"
+              >
+                削除
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate Embeddings Confirmation Dialog */}
+      {showRegenerateDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4" data-testid="confirm-regenerate">
+            <h3 className="text-lg font-semibold mb-4">埋め込みを再生成</h3>
+            <p className="text-gray-600 mb-6">
+              すべての辞書項目のEmbeddingを再生成しますか？この処理には時間がかかる場合があります。
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowRegenerateDialog(false)}
+              >
+                キャンセル
+              </Button>
+              <Button 
+                onClick={handleRefreshAllEmbeddings}
+                data-testid="confirm-button"
+              >
+                再生成
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -473,11 +625,13 @@ interface DictionaryListProps {
 function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps) {
   if (dictionaries.length === 0) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-center text-muted-foreground">
-          辞書項目がありません
-        </CardContent>
-      </Card>
+      <div className="space-y-2" data-testid="dictionary-list">
+        <Card>
+          <CardContent className="pt-6 text-center text-muted-foreground">
+            辞書項目がありません
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -489,13 +643,14 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-medium">{dictionary.phrase}</span>
+                  <span className="font-medium" data-testid="phrase-text">{dictionary.phrase}</span>
                   <span
                     className={`px-2 py-1 text-xs rounded-full ${
                       dictionary.category === 'NG'
                         ? 'bg-red-100 text-red-800'
                         : 'bg-green-100 text-green-800'
                     }`}
+                    data-testid="phrase-category"
                   >
                     {dictionary.category}
                   </span>
@@ -516,7 +671,7 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
                   作成日: {new Date(dictionary.created_at!).toLocaleDateString('ja-JP')}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2" data-testid="phrase-actions">
                 <Button
                   variant="outline"
                   size="sm"
@@ -529,6 +684,7 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
                   variant="destructive"
                   size="sm"
                   onClick={() => onDelete(dictionary.id)}
+                  data-testid="delete-button"
                 >
                   削除
                 </Button>

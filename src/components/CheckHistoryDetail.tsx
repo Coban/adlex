@@ -275,7 +275,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               </>
             )}
           </Button>
-          <Button variant="outline" size="sm" onClick={exportToPDF}>
+          <Button variant="outline" size="sm" onClick={exportToPDF} data-testid="pdf-download">
             <Download className="h-4 w-4 mr-2" />
             PDF出力
           </Button>

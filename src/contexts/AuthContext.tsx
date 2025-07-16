@@ -34,14 +34,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
+      console.log('Starting fetchUserProfile for userId:', userId)
+      
+      // First get the user profile
+      console.log('Querying users table for id:', userId)
       const { data: profile, error } = await supabase
         .from('users')
-        .select(`
-          *,
-          organizations (*)
-        `)
+        .select('*')
         .eq('id', userId)
         .maybeSingle()
+      
+      console.log('Users query result:', { profile, error })
 
       if (error) {
         console.error('Error fetching user profile:', {
@@ -55,12 +58,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrganization(null)
         return
       }
+      
+      if (!profile) {
+        console.log('No profile found for user:', userId)
+        setUserProfile(null)
+        setOrganization(null)
+        return
+      }
 
+      console.log('User profile fetched:', profile)
       setUserProfile(profile)
       
-      // Handle organization - it might be null for anonymous users or array
-      const orgData = profile?.organizations
-      setOrganization(Array.isArray(orgData) ? orgData[0] : orgData as Organization || null)
+      // If user has an organization_id, fetch the organization separately
+      if (profile?.organization_id) {
+        console.log('Fetching organization for user:', profile.email, 'organization_id:', profile.organization_id)
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', profile.organization_id)
+          .maybeSingle()
+
+        if (orgError) {
+          console.error('Error fetching organization:', orgError)
+          setOrganization(null)
+        } else {
+          console.log('Organization fetched:', org)
+          setOrganization(org)
+        }
+      } else {
+        console.log('No organization_id in profile:', profile)
+        setOrganization(null)
+      }
+      
+      console.log('fetchUserProfile completed')
       
     } catch (error) {
       console.error('Failed to fetch user profile:', error)
@@ -86,12 +116,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
-            await fetchUserProfile(session.user.id)
+            try {
+              await fetchUserProfile(session.user.id)
+            } catch (error) {
+              console.error('Error in fetchUserProfile:', error)
+            }
+            setLoading(false)
           } else {
             setUserProfile(null)
             setOrganization(null)
+            setLoading(false)
           }
-          setLoading(false)
         }
       } catch (error) {
         console.error('Failed to get session:', error)
@@ -109,9 +144,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fallback timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       if (isMounted) {
+        console.log('Auth loading timeout - forcing loading to false')
         setLoading(false)
       }
-    }, 10000) // 10 seconds timeout
+    }, 5000) // 5 seconds timeout
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

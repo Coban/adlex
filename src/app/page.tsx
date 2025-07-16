@@ -16,7 +16,7 @@ export default function Home() {
           </div>
         ) : user ? (
           <div className="text-center py-8">
-            <h2 className="text-2xl font-bold mb-4">ようこそ、{user.email}さん</h2>
+            <h1 className="text-2xl font-bold mb-4">ようこそ、{user.email}さん</h1>
             <p className="text-gray-600 mb-6">
               薬機法チェック & リライト機能をご利用いただけます。
             </p>
@@ -42,7 +42,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <h2 className="text-2xl font-bold mb-4">AdLex - 薬機法チェック & リライト</h2>
+            <h1 className="text-2xl font-bold mb-4">AdLex - 薬機法チェック & リライト</h1>
             <p className="text-gray-600 mb-6">
               テキストの薬機法違反をチェックし、安全な表現にリライトするAIツールです。<br/>
               本格的な機能を利用するには、サインインまたはサインアップが必要です。

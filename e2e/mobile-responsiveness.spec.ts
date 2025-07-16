@@ -363,8 +363,15 @@ test.describe('Mobile Responsiveness', () => {
     })
 
     test('should support screen reader navigation', async ({ page }) => {
+      // Wait for auth loading to complete
+      await page.waitForTimeout(3000)
+      
       // Test that headings are properly structured
       await expect(page.locator('h1')).toBeVisible()
+      
+      // Go to checker page to test text input
+      await page.goto('/checker')
+      await page.waitForTimeout(3000) // Wait for checker page to load
       
       // Test that form labels are associated
       const textInput = page.locator('[data-testid="text-input"]')
@@ -372,6 +379,10 @@ test.describe('Mobile Responsiveness', () => {
     })
 
     test('should handle focus management on mobile', async ({ page }) => {
+      // Go to checker page to test text input
+      await page.goto('/checker')
+      await page.waitForTimeout(3000) // Wait for checker page to load
+      
       const textInput = page.locator('[data-testid="text-input"]')
       
       // Focus should be manageable

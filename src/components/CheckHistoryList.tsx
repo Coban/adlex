@@ -210,7 +210,7 @@ export default function CheckHistoryList() {
             
             <div className="flex gap-4">
               <Select value={statusFilter} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-48" data-testid="status-filter">
                   <SelectValue placeholder="ステータスで絞り込み" />
                 </SelectTrigger>
                 <SelectContent>
@@ -224,7 +224,7 @@ export default function CheckHistoryList() {
 
               <div className="flex-1"></div>
 
-              <Button onClick={exportToCSV} variant="outline" className="shrink-0">
+              <Button onClick={exportToCSV} variant="outline" className="shrink-0" data-testid="csv-export">
                 <Download className="h-4 w-4 mr-2" />
                 CSV出力
               </Button>
@@ -255,7 +255,7 @@ export default function CheckHistoryList() {
           </Card>
         ) : (
           history.map((check) => (
-            <Card key={check.id} className="hover:shadow-md transition-shadow">
+            <Card key={check.id} className="hover:shadow-md transition-shadow" data-testid="history-item">
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
