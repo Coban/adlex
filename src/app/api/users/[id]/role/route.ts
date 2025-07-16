@@ -8,7 +8,14 @@ export async function PATCH(
 ) {
   try {
     const { id: userId } = await params;
-    const { role } = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    const { role } = body;
 
     if (!["admin", "user"].includes(role)) {
       return NextResponse.json(

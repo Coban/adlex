@@ -4,7 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, password } = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    const { token, password } = body;
 
     if (!token || !password) {
       return NextResponse.json(

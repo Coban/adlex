@@ -46,7 +46,13 @@ export async function POST(request: NextRequest) {
     }
 
     // リクエストボディから対象IDを取得（省略可能）
-    const body = await request.json().catch(() => ({}));
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     const { dictionaryIds } = body;
 
     // 対象となる辞書項目を取得

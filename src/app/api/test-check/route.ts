@@ -4,7 +4,14 @@ import { createChatCompletion, createEmbedding } from '@/lib/ai-client'
 
 export async function POST(request: NextRequest) {
   try {
-    const { text } = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    const { text } = body
     
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })

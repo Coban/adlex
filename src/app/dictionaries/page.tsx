@@ -39,7 +39,10 @@ export default function DictionariesPage() {
   })
 
   const loadDictionaries = useCallback(async () => {
-    if (!organization) return
+    if (!organization) {
+      setLoading(false)
+      return
+    }
     
     try {
       const { data, error } = await supabase
@@ -75,10 +78,22 @@ export default function DictionariesPage() {
   }, [organization, user])
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLoading(false)
+    }, 5000)
+
     if (organization) {
       loadDictionaries()
       loadEmbeddingStats()
+    } else {
+      // If no organization after some time, just show the page
+      const orgTimeout = setTimeout(() => {
+        setLoading(false)
+      }, 3000)
+      return () => clearTimeout(orgTimeout)
     }
+
+    return () => clearTimeout(timeout)
   }, [organization, loadDictionaries, loadEmbeddingStats])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -237,6 +252,29 @@ export default function DictionariesPage() {
     return <div className="p-6">読み込み中...</div>
   }
 
+  if (!organization) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">辞書管理</h1>
+            <p className="text-muted-foreground">組織の薬機法チェック辞書を管理します</p>
+          </div>
+          <Button data-testid="add-phrase-button" disabled>
+            新規作成
+          </Button>
+        </div>
+        <div data-testid="dictionary-list" className="space-y-2">
+          <Card>
+            <CardContent className="pt-6 text-center text-muted-foreground">
+              組織が設定されていません
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -254,7 +292,7 @@ export default function DictionariesPage() {
               {embeddingRefreshLoading ? 'Embedding再生成中...' : 'Embedding再生成'}
             </Button>
           )}
-          <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
+          <Button onClick={() => setShowAddForm(true)} disabled={showAddForm} data-testid="add-phrase-button">
             新規作成
           </Button>
         </div>
@@ -295,12 +333,18 @@ export default function DictionariesPage() {
           <div className="flex gap-4">
             <div className="flex-1">
               <Label htmlFor="search">検索</Label>
-              <Input
-                id="search"
-                placeholder="フレーズや備考で検索..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="search"
+                  placeholder="フレーズや備考で検索..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  data-testid="dictionary-search"
+                />
+                <Button variant="outline" data-testid="search-button">
+                  検索
+                </Button>
+              </div>
             </div>
             <div className="w-48">
               <Label htmlFor="category">カテゴリ</Label>
@@ -309,6 +353,7 @@ export default function DictionariesPage() {
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background"
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value as 'ALL' | 'NG' | 'ALLOW')}
+                data-testid="category-filter"
               >
                 <option value="ALL">すべて</option>
                 <option value="NG">NG</option>
@@ -437,9 +482,9 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="dictionary-list">
       {dictionaries.map((dictionary) => (
-        <Card key={dictionary.id}>
+        <Card key={dictionary.id} data-testid="dictionary-item">
           <CardContent className="pt-6">
             <div className="flex justify-between items-start">
               <div className="flex-1">
@@ -476,6 +521,7 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
                   variant="outline"
                   size="sm"
                   onClick={() => onEdit(dictionary)}
+                  data-testid="edit-button"
                 >
                   編集
                 </Button>

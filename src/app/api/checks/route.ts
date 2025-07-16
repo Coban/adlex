@@ -166,14 +166,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+
     const { text } = body
 
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })
     }
 
-    if (text.length > 10000) {
+    // Remove null bytes and other problematic Unicode characters
+    const cleanText = text.replace(/\0/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+
+    if (cleanText.length > 10000) {
       return NextResponse.json({ error: 'Text too long (max 10,000 characters)' }, { status: 400 })
     }
 
@@ -183,7 +193,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userData.id, // Use the userData.id (which might be different from user.id)
         organization_id: userData.organization_id,
-        original_text: text,
+        original_text: cleanText,
         status: 'pending'
       })
       .select()
@@ -195,7 +205,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Start background processing with timeout protection
-    const processingPromise = processCheck(checkData.id, text, userData.organization_id)
+    const processingPromise = processCheck(checkData.id, cleanText, userData.organization_id)
     
     // Don't await - let it run in background, but set up timeout protection
     processingPromise.catch((error) => {
