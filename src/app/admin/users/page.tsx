@@ -267,7 +267,7 @@ export default function UsersAdminPage() {
                           現在の権限: {user.role === 'admin' ? '管理者' : 'ユーザー'}
                         </p>
                         <p className="text-sm text-gray-500" data-testid="user-status">
-                          {(user as any).deactivated ? '無効' : `登録日: ${new Date(user.created_at).toLocaleDateString('ja-JP')}`}
+                          {'deactivated' in user && user.deactivated ? '無効' : `登録日: ${new Date(user.created_at).toLocaleDateString('ja-JP')}`}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2" data-testid="user-actions">

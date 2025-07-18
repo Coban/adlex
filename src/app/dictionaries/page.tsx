@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { Database } from '@/types/database.types'
 
 type Dictionary = Database['public']['Tables']['dictionaries']['Row']
+type Organization = Database['public']['Tables']['organizations']['Row']
 
 interface EmbeddingStats {
   organizationId: number;
@@ -113,7 +114,7 @@ export default function DictionariesPage() {
   }, [organization])
 
   const loadEmbeddingStats = useCallback(async () => {
-    const currentOrg = organization || fallbackOrganization
+    const currentOrg = organization ?? fallbackOrganization
     if (!currentOrg || !userProfile || userProfile.role !== 'admin') return
     
     try {
@@ -136,7 +137,7 @@ export default function DictionariesPage() {
     }, 5000)
 
     if (!authLoading) {
-      const currentOrg = organization || fallbackOrganization
+      const currentOrg = organization ?? fallbackOrganization
       if (currentOrg) {
         loadDictionaries()
         loadEmbeddingStats()
@@ -155,7 +156,7 @@ export default function DictionariesPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    const currentOrg = organization || fallbackOrganization
+    const currentOrg = organization ?? fallbackOrganization
     if (!currentOrg) return
 
     try {
@@ -326,7 +327,7 @@ export default function DictionariesPage() {
   const allowDictionaries = filteredDictionaries.filter(d => d.category === 'ALLOW')
 
   const isAdmin = userProfile?.role === 'admin'
-  const effectiveOrganization = organization || fallbackOrganization
+  const effectiveOrganization = organization ?? fallbackOrganization
 
   if (authLoading) {
     return <div className="p-6">認証中...</div>
@@ -351,7 +352,7 @@ export default function DictionariesPage() {
         <div data-testid="dictionary-list" className="space-y-2">
           <Card>
             <CardContent className="pt-6 text-center text-muted-foreground">
-              組織が設定されていません (userProfile: {userProfile?.email || 'null'})
+              組織が設定されていません (userProfile: {userProfile?.email ?? 'null'})
             </CardContent>
           </Card>
         </div>
