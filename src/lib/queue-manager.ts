@@ -49,6 +49,11 @@ class CheckQueueManager {
       this.queue.push(queueItem)
     }
 
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Queue] Added check ${checkId} to queue. Queue length: ${this.queue.length}`)
+    }
+
     // Start processing if not already running
     if (!this.isProcessing) {
       this.processQueue()
@@ -74,6 +79,11 @@ class CheckQueueManager {
         // Clean up when done
         processingPromise.finally(() => {
           this.processing.delete(item.id)
+          
+          // Debug logging
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[Queue] Finished processing check ${item.id}. Processing count: ${this.processing.size}`)
+          }
         })
       }
 
@@ -84,11 +94,14 @@ class CheckQueueManager {
         setTimeout(() => this.processQueue(), 100)
       }
     } finally {
-      // Continue processing if there are more items
-      if (this.queue.length > 0) {
-        setTimeout(() => this.processQueue(), 100)
-      } else {
+      // Only set isProcessing to false when both queue and processing are empty
+      if (this.queue.length === 0 && this.processing.size === 0) {
         this.isProcessing = false
+      }
+      
+      // Continue processing if there are more items and capacity
+      if (this.queue.length > 0 && this.processing.size < this.maxConcurrent) {
+        setTimeout(() => this.processQueue(), 100)
       }
     }
   }
@@ -130,11 +143,18 @@ class CheckQueueManager {
     processingCount: number
     maxConcurrent: number
   } {
-    return {
+    const status = {
       queueLength: this.queue.length,
       processingCount: this.processing.size,
       maxConcurrent: this.maxConcurrent
     }
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Queue Status]', status)
+    }
+    
+    return status
   }
 
   /**

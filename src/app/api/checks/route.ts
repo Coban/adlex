@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { processCheck } from '@/lib/check-processor'
+import { queueManager } from '@/lib/queue-manager'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
@@ -119,13 +119,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create check' }, { status: 500 })
     }
 
-    // Start background processing with timeout protection
-    const processingPromise = processCheck(checkData.id, cleanText, userData.organization_id!)
-    
-    // Don't await - let it run in background, but set up timeout protection
-    processingPromise.catch((error) => {
-      console.error('Background processing failed for check:', checkData.id, error)
-    })
+    // Add to queue for processing
+    await queueManager.addToQueue(checkData.id, cleanText, userData.organization_id!)
 
     return NextResponse.json({
       id: checkData.id,

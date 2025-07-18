@@ -66,7 +66,11 @@ export default function TextChecker() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
-  const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null)
+  const [queueStatus, setQueueStatus] = useState<QueueStatus>({
+    queueLength: 0,
+    processingCount: 0,
+    maxConcurrent: 3
+  })
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState('side-by-side')
 
@@ -85,7 +89,11 @@ export default function TextChecker() {
 
   // Periodically check queue status
   useEffect(() => {
-    const interval = setInterval(checkQueueStatus, 2000) // Check every 2 seconds
+    // Initial check
+    checkQueueStatus()
+    
+    // Then check every 2 seconds
+    const interval = setInterval(checkQueueStatus, 2000)
     return () => clearInterval(interval)
   }, [])
 
