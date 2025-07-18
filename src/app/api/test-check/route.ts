@@ -47,13 +47,23 @@ export async function POST(request: NextRequest) {
         // Note: LM Studio may not support tools, so we omit them for now
       })
 
+      interface LLMResponse {
+        choices?: Array<{
+          message?: {
+            content?: string
+          }
+        }>
+      }
+      
+      const typedResponse = llmResponse as LLMResponse
+      
       console.log('Chat completion response structure:', {
-        hasChoices: !!llmResponse.choices,
-        choicesLength: llmResponse.choices?.length,
-        firstChoiceContent: llmResponse.choices?.[0]?.message?.content
+        hasChoices: !!typedResponse.choices,
+        choicesLength: typedResponse.choices?.length,
+        firstChoiceContent: typedResponse.choices?.[0]?.message?.content
       })
 
-      const responseContent = llmResponse.choices?.[0]?.message?.content
+      const responseContent = typedResponse.choices?.[0]?.message?.content
       if (!responseContent) {
         console.error('No content found in response')
         return NextResponse.json({ 

@@ -38,16 +38,26 @@ export async function GET() {
         temperature: 0.1
       })
 
+      interface LLMResponse {
+        choices?: Array<{
+          message?: {
+            content?: string
+          }
+        }>
+      }
+      
+      const llmResponse = response as LLMResponse
+      
       console.log('LM Studio response:', {
-        hasChoices: !!response.choices,
-        content: response.choices?.[0]?.message?.content?.substring(0, 200)
+        hasChoices: !!llmResponse.choices,
+        content: llmResponse.choices?.[0]?.message?.content?.substring(0, 200)
       })
 
       return NextResponse.json({
         success: true,
         aiProvider: 'LM Studio',
-        hasResponse: !!response.choices?.[0]?.message?.content,
-        responsePreview: response.choices?.[0]?.message?.content?.substring(0, 200) + '...'
+        hasResponse: !!llmResponse.choices?.[0]?.message?.content,
+        responsePreview: llmResponse.choices?.[0]?.message?.content?.substring(0, 200) + '...'
       })
     } else {
       return NextResponse.json({

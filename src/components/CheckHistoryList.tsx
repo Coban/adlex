@@ -200,9 +200,10 @@ export default function CheckHistoryList() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full"
+                  data-testid="history-search"
                 />
               </div>
-              <Button type="submit" className="shrink-0">
+              <Button type="submit" className="shrink-0" data-testid="search-button">
                 <Search className="h-4 w-4 mr-2" />
                 検索
               </Button>

@@ -44,13 +44,23 @@ export async function POST(request: NextRequest) {
       max_tokens: 1000
     })
 
+    interface ChatResponse {
+      choices?: Array<{
+        message?: {
+          content?: string
+        }
+      }>
+    }
+    
+    const chatResponse = response as ChatResponse
+    
     console.log(`[DEBUG] AI response received:`, {
-      hasChoices: !!response.choices,
-      choicesLength: response.choices?.length,
-      hasContent: !!response.choices?.[0]?.message?.content
+      hasChoices: !!chatResponse.choices,
+      choicesLength: chatResponse.choices?.length,
+      hasContent: !!chatResponse.choices?.[0]?.message?.content
     })
 
-    const responseContent = response.choices?.[0]?.message?.content
+    const responseContent = chatResponse.choices?.[0]?.message?.content
     if (!responseContent) {
       return NextResponse.json({ error: 'No response content' }, { status: 500 })
     }

@@ -105,7 +105,7 @@ test.describe('Admin Functionality', () => {
             return
           }
         } catch (roleCheckError) {
-          console.log('Could not verify role change:', roleCheckError.message)
+          console.log('Could not verify role change:', (roleCheckError as Error).message)
         }
         
         // Check for error messages
@@ -275,7 +275,7 @@ test.describe('Admin Functionality', () => {
           return
         }
         
-        console.log('Dictionary add test failed:', error.message)
+        console.log('Dictionary add test failed:', (error as Error).message)
         throw error
       }
     })

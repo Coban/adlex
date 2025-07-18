@@ -9,10 +9,22 @@ test.describe('Navigation', () => {
     })
 
     test('should display public navigation items', async ({ page }) => {
-      // Check for public navigation items
-      await expect(page.locator('[data-testid="nav-home"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-signin"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-signup"]')).toBeVisible()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+        
+        // Check for public navigation items in mobile menu
+        await expect(page.locator('[data-testid="nav-home"]').first()).toBeVisible()
+        await expect(page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signin"]')).toBeVisible()
+        await expect(page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signup"]')).toBeVisible()
+      } else {
+        // Check for public navigation items in desktop nav
+        await expect(page.locator('[data-testid="nav-home"]')).toBeVisible()
+        await expect(page.locator('[data-testid="nav-signin"]')).toBeVisible()
+        await expect(page.locator('[data-testid="nav-signup"]')).toBeVisible()
+      }
       
       // Check that authenticated items are not visible
       await expect(page.locator('[data-testid="nav-checker"]')).not.toBeVisible()
@@ -21,13 +33,35 @@ test.describe('Navigation', () => {
     })
 
     test('should navigate to sign in page', async ({ page }) => {
-      await page.locator('[data-testid="nav-signin"]').click()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+        // Click signin button in mobile menu
+        await page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signin"]').click()
+      } else {
+        // Click signin button in desktop nav
+        await page.locator('[data-testid="nav-signin"]').click()
+      }
+      
       await expect(page).toHaveURL('/auth/signin')
       await expect(page.locator('h1')).toContainText('サインイン')
     })
 
     test('should navigate to sign up page', async ({ page }) => {
-      await page.locator('[data-testid="nav-signup"]').click()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+        // Click signup button in mobile menu
+        await page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signup"]').click()
+      } else {
+        // Click signup button in desktop nav
+        await page.locator('[data-testid="nav-signup"]').click()
+      }
+      
       await expect(page).toHaveURL('/auth/signup')
       await expect(page.locator('h1')).toContainText('サインアップ')
     })
@@ -53,11 +87,18 @@ test.describe('Navigation', () => {
     })
 
     test('should display user navigation items', async ({ page }) => {
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+      }
+      
       // Check for authenticated navigation items
-      await expect(page.locator('[data-testid="nav-home"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-checker"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-history"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-signout"]')).toBeVisible()
+      await expect(page.locator('[data-testid="nav-home"]').first()).toBeVisible()
+      await expect(page.locator('[data-testid="nav-checker"]').first()).toBeVisible()
+      await expect(page.locator('[data-testid="nav-history"]').first()).toBeVisible()
+      await expect(page.locator('[data-testid="nav-signout"]').first()).toBeVisible()
       
       // Check that public auth items are not visible
       await expect(page.locator('[data-testid="nav-signin"]')).not.toBeVisible()
@@ -69,13 +110,27 @@ test.describe('Navigation', () => {
     })
 
     test('should navigate to checker page', async ({ page }) => {
-      await page.locator('[data-testid="nav-checker"]').click()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+      }
+      
+      await page.locator('[data-testid="nav-checker"]').first().click()
       await expect(page).toHaveURL('/checker')
       await expect(page.locator('h1')).toContainText('薬機法チェック')
     })
 
     test('should navigate to history page', async ({ page }) => {
-      await page.locator('[data-testid="nav-history"]').click()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+      }
+      
+      await page.locator('[data-testid="nav-history"]').first().click()
       await expect(page).toHaveURL('/history')
       await expect(page.locator('h1')).toContainText('チェック履歴')
     })
@@ -91,12 +146,33 @@ test.describe('Navigation', () => {
     })
 
     test('should sign out successfully', async ({ page }) => {
-      await page.locator('[data-testid="nav-signout"]').click()
+      // Check if we're on mobile - if so, open mobile menu
+      const isMobile = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobile) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+        // Click signout button in mobile menu
+        await page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signout"]').click()
+      } else {
+        // Click signout button in desktop nav
+        await page.locator('[data-testid="nav-signout"]').click()
+      }
       
       // Should redirect to home page and show public navigation
       await expect(page).toHaveURL('/')
-      await expect(page.locator('[data-testid="nav-signin"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-signup"]')).toBeVisible()
+      
+      // Check for signin/signup buttons (might need to open mobile menu again)
+      const isMobileAfterSignout = await page.locator('[data-testid="mobile-menu-toggle"]').isVisible()
+      if (isMobileAfterSignout) {
+        await page.locator('[data-testid="mobile-menu-toggle"]').click()
+        await page.waitForTimeout(500)
+        
+        await expect(page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signin"]')).toBeVisible()
+        await expect(page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-signup"]')).toBeVisible()
+      } else {
+        await expect(page.locator('[data-testid="nav-signin"]')).toBeVisible()
+        await expect(page.locator('[data-testid="nav-signup"]')).toBeVisible()
+      }
     })
   })
 
@@ -110,8 +186,8 @@ test.describe('Navigation', () => {
     test('should display mobile menu toggle', async ({ page }) => {
       await expect(page.locator('[data-testid="mobile-menu-toggle"]')).toBeVisible()
       
-      // Navigation items should be hidden on mobile initially
-      await expect(page.locator('[data-testid="nav-checker"]')).not.toBeVisible()
+      // Navigation items should be hidden on mobile initially - check desktop nav specifically
+      await expect(page.locator('[data-testid="desktop-nav"]').locator('[data-testid="nav-checker"]')).not.toBeVisible()
     })
 
     test('should toggle mobile menu', async ({ page }) => {
@@ -122,9 +198,9 @@ test.describe('Navigation', () => {
       await menuToggle.click()
       await expect(mobileMenu).toBeVisible()
       
-      // Navigation items should be visible in mobile menu
-      await expect(page.locator('[data-testid="nav-checker"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-history"]')).toBeVisible()
+      // Navigation items should be visible in mobile menu specifically
+      await expect(mobileMenu.locator('[data-testid="nav-checker"]')).toBeVisible()
+      await expect(mobileMenu.locator('[data-testid="nav-history"]')).toBeVisible()
       
       // Close mobile menu
       await menuToggle.click()
@@ -135,8 +211,8 @@ test.describe('Navigation', () => {
       // Open mobile menu
       await page.locator('[data-testid="mobile-menu-toggle"]').click()
       
-      // Navigate to checker page
-      await page.locator('[data-testid="nav-checker"]').click()
+      // Navigate to checker page via mobile menu
+      await page.locator('[data-testid="mobile-menu"]').locator('[data-testid="nav-checker"]').click()
       await expect(page).toHaveURL('/checker')
       
       // Mobile menu should close after navigation
@@ -153,9 +229,9 @@ test.describe('Navigation', () => {
       // Navigate to history page
       await page.goto('/history')
       
-      // Wait for history items and click on first one
+      // Wait for history items and click on first one's "詳細を見る" button
       await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
-      await page.locator('[data-testid="history-item"]').first().click()
+      await page.locator('[data-testid="history-item"]').first().locator('text=詳細を見る').click()
       
       // Check breadcrumb navigation
       await expect(page.locator('[data-testid="breadcrumb"]')).toBeVisible()
@@ -168,7 +244,7 @@ test.describe('Navigation', () => {
       // Navigate to history detail page
       await page.goto('/history')
       await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
-      await page.locator('[data-testid="history-item"]').first().click()
+      await page.locator('[data-testid="history-item"]').first().locator('text=詳細を見る').click()
       
       // Click on history breadcrumb
       await page.locator('[data-testid="breadcrumb-history"]').click()

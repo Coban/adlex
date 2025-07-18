@@ -1,12 +1,13 @@
 'use client'
 
 import { Loader2, Copy, Download } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/lib/supabase/client'
 
 interface CheckItem {
@@ -16,12 +17,19 @@ interface CheckItem {
   status: 'queued' | 'processing' | 'completed' | 'failed'
   statusMessage: string
   timestamp: number
+  queuePosition?: number
+}
+
+interface QueueStatus {
+  queueLength: number
+  processingCount: number
+  maxConcurrent: number
 }
 
 interface Violation {
   id: number
-  start_pos: number
-  end_pos: number
+  startPos: number
+  endPos: number
   reason: string
   dictionary_id?: number
 }
@@ -32,7 +40,13 @@ interface CheckStreamData {
   id?: number
   original_text?: string
   modified_text?: string
-  violations?: Violation[]
+  violations?: Array<{
+    id: number
+    start_pos: number
+    end_pos: number
+    reason: string
+    dictionary_id: number | null
+  }>
 }
 
 interface CheckResult {
@@ -44,15 +58,36 @@ interface CheckResult {
 }
 
 export default function TextChecker() {
-  const [originalText, setOriginalText] = useState('')
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [text, setText] = useState('')
   const [checks, setChecks] = useState<CheckItem[]>([])
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
+  const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null)
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState('side-by-side')
-  const { user } = useAuth()
+
+  // Monitor queue status
+  const checkQueueStatus = async () => {
+    try {
+      const response = await fetch('/api/checks/queue-status')
+      if (response.ok) {
+        const data = await response.json()
+        setQueueStatus(data.queue)
+      }
+    } catch (error) {
+      console.error('Failed to get queue status:', error)
+    }
+  }
+
+  // Periodically check queue status
+  useEffect(() => {
+    const interval = setInterval(checkQueueStatus, 2000) // Check every 2 seconds
+    return () => clearInterval(interval)
+  }, [])
 
   const handlePdfExport = async () => {
     setPdfError(null)
@@ -80,7 +115,7 @@ export default function TextChecker() {
         検出された違反:
         ${activeCheck.result.violations.length > 0 
           ? activeCheck.result.violations.map((v, i) => 
-              `${i + 1}. ${activeCheck.result!.original_text.slice(v.start_pos, v.end_pos)} - ${v.reason}`
+              `${i + 1}. ${activeCheck.result!.original_text.slice(v.startPos, v.endPos)} - ${v.reason}`
             ).join('\n')
           : '違反は検出されませんでした'
         }
@@ -129,9 +164,9 @@ export default function TextChecker() {
   }
 
   const handleCheck = async () => {
-    if (!originalText.trim()) return
+    if (!text.trim()) return
     
-    if (originalText.length > 10000) {
+    if (text.length > 10000) {
       setErrorMessage('テキストは10,000文字以内で入力してください。')
       return
     }
@@ -142,7 +177,7 @@ export default function TextChecker() {
     const checkId = Date.now().toString()
     const newCheckItem: CheckItem = {
       id: checkId,
-      originalText: originalText,
+      originalText: text,
       result: null,
       status: 'queued',
       statusMessage: 'チェックをキューに追加しています...',
@@ -154,19 +189,25 @@ export default function TextChecker() {
     setActiveCheckId(checkId)
     
     // 入力欄をクリア（次の入力の準備）
-    setOriginalText('')
+    setText('')
     
     try {
-      // Check if user is authenticated using AuthContext
-      if (!user) {
+      // Check if user is authenticated using AuthContext (skip in development if SKIP_AUTH is true)
+      const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === 'true'
+      
+      if (!skipAuth && !user) {
         throw new Error('認証が必要です。サインインしてください。')
       }
 
-      // Get auth token from Supabase
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        throw new Error('認証セッションが見つかりません。再度サインインしてください。')
+      // Get auth token from Supabase (skip in development if SKIP_AUTH is true)
+      let session = null
+      if (!skipAuth) {
+        const { data: { session: authSession } } = await supabase.auth.getSession()
+        session = authSession
+        
+        if (!session) {
+          throw new Error('認証セッションが見つかりません。再度サインインしてください。')
+        }
       }
 
       // ステータス更新
@@ -176,12 +217,20 @@ export default function TextChecker() {
           : check
       ))
 
+      // Check queue status
+      checkQueueStatus()
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+
       const response = await fetch('/api/checks', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers,
         credentials: 'same-origin', // Include cookies in the request
         body: JSON.stringify({ text: newCheckItem.originalText }),
       })
@@ -214,7 +263,7 @@ export default function TextChecker() {
       
       // ポーリングによるフォールバック機能
       let pollCount = 0
-      const maxPolls = 30 // 30秒
+      const maxPolls = 120 // 120秒（2分）
       
       const pollInterval = setInterval(async () => {
         pollCount++
@@ -242,17 +291,36 @@ export default function TextChecker() {
                 .select('*')
                 .eq('check_id', checkData.id)
               
+              // Map violations to component structure
+              interface DBViolation {
+                id: number
+                start_pos: number
+                end_pos: number
+                reason: string
+                dictionary_id: number | null
+              }
+              
+              const mappedViolations = violations?.map((v: DBViolation) => ({
+                id: v.id,
+                startPos: v.start_pos,
+                endPos: v.end_pos,
+                reason: v.reason,
+                dictionary_id: v.dictionary_id ?? undefined
+              })) ?? []
+              
+              const checkResult: CheckResult = {
+                id: currentCheck.id,
+                original_text: currentCheck.original_text,
+                modified_text: currentCheck.modified_text ?? '',
+                status: currentCheck.status ?? 'failed',
+                violations: mappedViolations
+              }
+              
               setChecks(prev => prev.map(check => 
                 check.id === checkId 
                   ? { 
                       ...check, 
-                      result: {
-                        id: currentCheck.id,
-                        original_text: currentCheck.original_text,
-                        modified_text: currentCheck.modified_text ?? '',
-                        status: currentCheck.status ?? 'failed',
-                        violations: violations ?? []
-                      } as CheckResult,
+                      result: checkResult,
                       status: 'completed',
                       statusMessage: 'チェック完了' 
                     }
@@ -304,7 +372,7 @@ export default function TextChecker() {
         }
       }, 1000) // 1秒ごとにポーリング
       
-      // タイムアウト設定（30秒）
+      // タイムアウト設定（120秒）
       const timeout = setTimeout(() => {
         clearInterval(pollInterval)
         eventSource.close()
@@ -313,25 +381,48 @@ export default function TextChecker() {
             ? { 
                 ...check, 
                 status: 'failed',
-                statusMessage: '処理がタイムアウトしました' 
+                statusMessage: '処理がタイムアウトしました（2分）' 
               }
             : check
         ))
-        setErrorMessage('処理がタイムアウトしました。もう一度お試しください。')
-      }, 30000)
+        setErrorMessage('処理がタイムアウトしました（2分）。LM Studioの応答が遅い可能性があります。もう一度お試しください。')
+      }, 120000)
       
       eventSource.onmessage = (event) => {
         try {
+          // Skip heartbeat messages
+          if (event.data.startsWith(': heartbeat')) {
+            return
+          }
+          
           const data: CheckStreamData = JSON.parse(event.data)
           
           if (data.status === 'completed') {
             clearInterval(pollInterval)
             clearTimeout(timeout)
+            
+            // Map database structure to component structure
+            const mappedViolations = data.violations?.map((v) => ({
+              id: v.id,
+              startPos: v.start_pos,
+              endPos: v.end_pos,
+              reason: v.reason,
+              dictionary_id: v.dictionary_id ?? undefined
+            })) ?? []
+            
+            const checkResult: CheckResult = {
+              id: data.id ?? 0,
+              original_text: data.original_text ?? '',
+              modified_text: data.modified_text ?? '',
+              status: data.status ?? 'completed',
+              violations: mappedViolations
+            }
+            
             setChecks(prev => prev.map(check => 
               check.id === checkId 
                 ? { 
                     ...check, 
-                    result: data as CheckResult,
+                    result: checkResult,
                     status: 'completed',
                     statusMessage: 'チェック完了' 
                   }
@@ -425,17 +516,69 @@ export default function TextChecker() {
     
     let highlightedText = text
     // Sort violations by start position in reverse order to maintain indices
-    const sortedViolations = [...violations].sort((a, b) => b.start_pos - a.start_pos)
+    const sortedViolations = [...violations].sort((a, b) => b.startPos - a.startPos)
     
     sortedViolations.forEach((violation) => {
-      const before = highlightedText.slice(0, violation.start_pos)
-      const highlighted = highlightedText.slice(violation.start_pos, violation.end_pos)
-      const after = highlightedText.slice(violation.end_pos)
+      // Validate positions
+      const startPos = Math.max(0, Math.min(violation.startPos, text.length))
+      const endPos = Math.max(startPos, Math.min(violation.endPos, text.length))
+      
+      // Check if positions are valid and extract text
+      const violationText = text.substring(startPos, endPos)
+      let finalStartPos = startPos
+      let finalEndPos = endPos
+      
+      // If positions are invalid or text is empty, try to find the text from reason
+      if (startPos >= endPos || !violationText.trim()) {
+        // Extract text from reason using common patterns
+        const patterns = [
+          /「(.+?)」/,      // 「text」
+          /：(.+?)→/,      // ：text→
+          /：(.+?)は/,      // ：textは
+        ]
+        
+        let searchText = null
+        for (const pattern of patterns) {
+          const match = violation.reason.match(pattern)
+          if (match?.[1]) {
+            searchText = match[1].trim()
+            break
+          }
+        }
+        
+        if (searchText) {
+          // Try to find the text in the original text
+          const foundIndex = text.indexOf(searchText)
+          if (foundIndex !== -1) {
+            finalStartPos = foundIndex
+            finalEndPos = foundIndex + searchText.length
+          } else {
+            // If exact match fails, try without common suffixes
+            const cleanText = searchText.replace(/(になる|する|を出す|に|が|は|の)$/, '')
+            if (cleanText && cleanText !== searchText) {
+              const cleanIndex = text.indexOf(cleanText)
+              if (cleanIndex !== -1) {
+                finalStartPos = cleanIndex
+                finalEndPos = cleanIndex + cleanText.length
+              }
+            }
+          }
+        }
+        
+        // If still not found, skip this violation
+        if (finalStartPos === startPos && finalEndPos === endPos) {
+          console.warn(`Could not find violation text in original text: ${violation.reason}`)
+          return
+        }
+      }
+      
+      // Apply highlighting
+      const before = highlightedText.substring(0, finalStartPos)
+      const highlighted = highlightedText.substring(finalStartPos, finalEndPos)
+      const after = highlightedText.substring(finalEndPos)
       
       highlightedText = before + 
-        `<span class="bg-red-200 text-red-900 px-2 py-1 rounded font-semibold border border-red-300" title="${violation.reason}">` + 
-        highlighted + 
-        '</span>' + 
+        `<span class="bg-red-200 text-red-800 px-1 rounded" title="${violation.reason}">${highlighted}</span>` + 
         after
     })
     
@@ -499,19 +642,19 @@ export default function TextChecker() {
               id="original-text"
               data-testid="text-input"
               placeholder="ここにテキストを入力してください..."
-              value={originalText}
-              onChange={(e) => setOriginalText(e.target.value)}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
               className="min-h-[400px] resize-none"
               maxLength={10000}
               aria-label="薬機法チェック用テキスト入力"
             />
             <div className="flex justify-between items-center mt-2">
               <span className="text-sm text-gray-500">
-                {originalText.length.toLocaleString()} / 10,000文字
+                {text.length.toLocaleString()} / 10,000文字
               </span>
               <Button
                 onClick={handleCheck}
-                disabled={!originalText.trim()}
+                disabled={!text.trim()}
                 className="min-w-[120px]"
                 data-testid="check-button"
               >
@@ -546,6 +689,21 @@ export default function TextChecker() {
               </div>
             )}
             
+            {/* キュー状態表示 */}
+            {queueStatus && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-sm text-blue-800">
+                  <div className="flex justify-between items-center">
+                    <span>キュー状態</span>
+                    <span className="text-xs">
+                      処理中: {queueStatus.processingCount}/{queueStatus.maxConcurrent} | 
+                      待機中: {queueStatus.queueLength}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* チェック履歴 */}
             {checks.length > 0 && (
               <div className="mt-4 space-y-2">
@@ -691,10 +849,45 @@ export default function TextChecker() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const violationText = activeCheck.result!.violations.map((v, i) => 
-                              `違反 ${i + 1}: "${activeCheck.result!.original_text.slice(v.start_pos, v.end_pos)}" - ${v.reason}`
-                            ).join('\n')
-                            handleCopy(violationText)
+                            const violationText = activeCheck.result!.violations.map((v, i) => {
+                              const startPos = Math.max(0, Math.min(v.startPos, activeCheck.result!.original_text.length))
+                              const endPos = Math.max(startPos, Math.min(v.endPos, activeCheck.result!.original_text.length))
+                              
+                              let violationText = activeCheck.result!.original_text.substring(startPos, endPos)
+                              
+                              // If positions are invalid, try to extract from reason
+                              if (startPos >= endPos || !violationText.trim()) {
+                                const patterns = [/「(.+?)」/, /：(.+?)→/, /：(.+?)は/]
+                                for (const pattern of patterns) {
+                                  const match = v.reason.match(pattern)
+                                  if (match?.[1]) {
+                                    const searchText = match[1].trim()
+                                    const foundIndex = activeCheck.result!.original_text.indexOf(searchText)
+                                    if (foundIndex !== -1) {
+                                      violationText = searchText
+                                      break
+                                    }
+                                    // Try without suffixes
+                                    const cleanText = searchText.replace(/(になる|する|を出す|に|が|は|の)$/, '')
+                                    if (cleanText && cleanText !== searchText) {
+                                      const cleanIndex = activeCheck.result!.original_text.indexOf(cleanText)
+                                      if (cleanIndex !== -1) {
+                                        violationText = cleanText
+                                        break
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              
+                              return `違反箇所 ${i + 1}\n位置: ${startPos} - ${endPos}\n該当テキスト: "${violationText || '不明'}"\n理由: ${v.reason}`
+                            }).join('\n\n')
+                            
+                            navigator.clipboard.writeText(violationText)
+                            toast({
+                              title: "コピーしました",
+                              description: "違反詳細がクリップボードにコピーされました。",
+                            })
                           }}
                           data-testid="copy-violation-button"
                         >
@@ -710,11 +903,43 @@ export default function TextChecker() {
                             違反箇所 {index + 1}
                           </div>
                           <div className="text-base text-red-700 mb-2 font-medium">
-                            位置: {violation.start_pos} - {violation.end_pos}
+                            位置: {violation.startPos} - {violation.endPos}
                           </div>
                           <div className="text-base mb-2 leading-relaxed text-gray-900">
                             <strong>該当テキスト:</strong>{' '}
-                            &ldquo;{activeCheck.result!.original_text.slice(violation.start_pos, violation.end_pos)}&rdquo;
+                            &ldquo;{(() => {
+                              const startPos = Math.max(0, Math.min(violation.startPos, activeCheck.result!.original_text.length))
+                              const endPos = Math.max(startPos, Math.min(violation.endPos, activeCheck.result!.original_text.length))
+                              
+                              let violationText = activeCheck.result!.original_text.substring(startPos, endPos)
+                              
+                              // If positions are invalid, try to extract from reason
+                              if (startPos >= endPos || !violationText.trim()) {
+                                const patterns = [/「(.+?)」/, /：(.+?)→/, /：(.+?)は/]
+                                for (const pattern of patterns) {
+                                  const match = violation.reason.match(pattern)
+                                  if (match?.[1]) {
+                                    const searchText = match[1].trim()
+                                    const foundIndex = activeCheck.result!.original_text.indexOf(searchText)
+                                    if (foundIndex !== -1) {
+                                      violationText = searchText
+                                      break
+                                    }
+                                    // Try without suffixes
+                                    const cleanText = searchText.replace(/(になる|する|を出す|に|が|は|の)$/, '')
+                                    if (cleanText && cleanText !== searchText) {
+                                      const cleanIndex = activeCheck.result!.original_text.indexOf(cleanText)
+                                      if (cleanIndex !== -1) {
+                                        violationText = cleanText
+                                        break
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              
+                              return violationText || '不明'
+                            })()}&rdquo;
                           </div>
                           <div className="text-base leading-relaxed text-gray-900">
                             <strong>理由:</strong> {violation.reason}

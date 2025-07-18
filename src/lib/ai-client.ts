@@ -9,7 +9,7 @@ const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_K
 // AI client configuration
 // Use LM Studio for local development, OpenAI for production, Mock for testing
 const USE_LM_STUDIO = !isProduction && !isTest && process.env.USE_LM_STUDIO === 'true'
-const USE_MOCK = isMockMode || (!hasValidOpenAIKey && !USE_LM_STUDIO)
+const USE_MOCK = isMockMode
 
 // AI Client Configuration logged only in development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -161,9 +161,24 @@ export async function createChatCompletion(params: {
       }
       
       console.log('LM Studio chat completion request')
-      const response = await aiClient.chat.completions.create(lmParams)
-      console.log('LM Studio chat completion successful')
-      return response
+      
+      // Add timeout handling for LM Studio requests
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('LM Studio chat completion timed out (90 seconds)')), 90000)
+      })
+      
+      const chatPromise = aiClient.chat.completions.create(lmParams)
+      
+      try {
+        const response = await Promise.race([chatPromise, timeoutPromise])
+        console.log('LM Studio chat completion successful')
+        return response
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('timed out')) {
+          throw error
+        }
+        throw new Error(`LM Studio chat completion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     }
     
     // For OpenAI, use full parameters
@@ -195,29 +210,43 @@ export async function createEmbedding(input: string): Promise<number[]> {
   try {
     // For LM Studio, use direct fetch to avoid OpenAI SDK parsing issues
     if (USE_LM_STUDIO) {
-      const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY ?? 'lm-studio'}`
-        },
-        body: JSON.stringify({
-          model: AI_MODELS.embedding,
-          input,
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60秒タイムアウト
+      
+      try {
+        const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY ?? 'lm-studio'}`
+          },
+          body: JSON.stringify({
+            model: AI_MODELS.embedding,
+            input,
+          }),
+          signal: controller.signal
         })
-      })
-      
-      if (!response.ok) {
-        throw new Error(`LM Studio API error: ${response.status} ${response.statusText}`)
+        
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          throw new Error(`LM Studio API error: ${response.status} ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        
+        if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
+          return data.data[0].embedding
+        }
+        
+        throw new Error('LM Studio embedding response is missing data')
+      } catch (error) {
+        clearTimeout(timeoutId)
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('LM Studio embedding request timed out (60 seconds)')
+        }
+        throw error
       }
-      
-      const data = await response.json()
-      
-      if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
-        return data.data[0].embedding
-      }
-      
-      throw new Error('LM Studio embedding response is missing data')
     }
     
     // For OpenAI, use the SDK

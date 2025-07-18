@@ -58,17 +58,43 @@ export async function GET(
   }
 
 
-  // Set up SSE headers
+  // Set up SSE headers with timeout configuration
   const headers = new Headers({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control',
+    'Keep-Alive': 'timeout=90, max=100', // 90秒のキープアライブ
   })
 
-  // Create a readable stream
+  // Create a readable stream with timeout handling
   const stream = new ReadableStream({
     start(controller) {
       const channel = supabase.channel(`check-updates-${checkId}`)
+      // Send heartbeat every 30 seconds to keep connection alive
+      const heartbeatInterval = setInterval(() => {
+        try {
+          controller.enqueue(new TextEncoder().encode(`: heartbeat\n\n`))
+        } catch (error) {
+          console.error(`[SSE] Heartbeat error for check ${checkId}:`, error)
+          clearInterval(heartbeatInterval)
+        }
+      }, 30000)
+
+      // Set connection timeout (2 minutes)
+      const connectionTimeout = setTimeout(() => {
+        console.log(`[SSE] Connection timeout for check ${checkId}`)
+        const timeoutData = JSON.stringify({
+          id: checkId,
+          status: 'failed',
+          error: 'SSE接続がタイムアウトしました'
+        })
+        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\n\n`))
+        controller.close()
+        channel.unsubscribe()
+        clearInterval(heartbeatInterval)
+      }, 120000) // 2分
 
       channel
         .on('postgres_changes', { 
@@ -80,6 +106,8 @@ export async function GET(
             const updatedCheck = payload.new as Database['public']['Tables']['checks']['Row']
             
             if (updatedCheck.status === 'completed' || updatedCheck.status === 'failed') {
+                clearTimeout(connectionTimeout)
+                clearInterval(heartbeatInterval)
                 await sendFinalData(controller, checkId, supabase)
                 controller.close()
                 channel.unsubscribe()
@@ -94,12 +122,17 @@ export async function GET(
         .subscribe((status, err) => {
             if (err) {
                 console.error(`[SSE] Subscription error for check ${checkId}:`, err)
+                clearTimeout(connectionTimeout)
+                clearInterval(heartbeatInterval)
                 controller.close()
             }
         })
 
       // Clean up on client disconnect
       request.signal.addEventListener('abort', () => {
+        console.log(`[SSE] Client disconnected for check ${checkId}`)
+        clearTimeout(connectionTimeout)
+        clearInterval(heartbeatInterval)
         channel.unsubscribe()
         controller.close()
       })

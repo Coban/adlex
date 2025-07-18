@@ -12,6 +12,7 @@ export default function AuthDebugPage(): React.JSX.Element {
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null)
   const [debugInfo, setDebugInfo] = useState<string>('')
   const [mounted, setMounted] = useState(false)
+  const [signOutLoading, setSignOutLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -48,6 +49,28 @@ export default function AuthDebugPage(): React.JSX.Element {
 
     initAuth()
   }, [supabase, mounted])
+
+  const handleSignOut = async () => {
+    setSignOutLoading(true)
+    setDebugInfo(prev => prev + '\n→ サインアウト処理開始...')
+    
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Sign out error:', error)
+        setDebugInfo(prev => prev + `\n✗ サインアウトエラー: ${error.message}`)
+      } else {
+        setDebugInfo(prev => prev + '\n✓ サインアウト完了')
+        setUser(null)
+        setSessionInfo(null)
+      }
+    } catch (error) {
+      console.error('Sign out exception:', error)
+      setDebugInfo(prev => prev + `\n✗ サインアウト例外: ${error}`)
+    } finally {
+      setSignOutLoading(false)
+    }
+  }
 
   if (!mounted) {
     return <div>Loading...</div>
@@ -146,6 +169,39 @@ export default function AuthDebugPage(): React.JSX.Element {
               </>
             )}
           </div>
+          
+          {/* サインアウトボタン */}
+          {user && (
+            <div style={{ marginTop: '16px' }}>
+              <button
+                onClick={handleSignOut}
+                disabled={signOutLoading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: signOutLoading ? '#d1d5db' : '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: signOutLoading ? 'not-allowed' : 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (!signOutLoading) {
+                    e.currentTarget.style.backgroundColor = '#b91c1c'
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!signOutLoading) {
+                    e.currentTarget.style.backgroundColor = '#dc2626'
+                  }
+                }}
+              >
+                {signOutLoading ? 'サインアウト中...' : 'サインアウト'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* セッション情報 */}

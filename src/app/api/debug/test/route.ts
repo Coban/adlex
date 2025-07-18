@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         message: 'Chat completion test successful',
-        response: response.choices[0]?.message?.content ?? 'No content'
+        response: (response as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? 'No content'
       })
     }
     

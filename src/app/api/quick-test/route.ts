@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       temperature: 0.5
     })
     
-    const responseContent = chatResponse.choices?.[0]?.message?.content
+    const responseContent = (chatResponse as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content
     console.log('✅ Chat success, response:', responseContent)
     
     return NextResponse.json({

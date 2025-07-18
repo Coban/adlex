@@ -133,6 +133,9 @@ export default function GlobalNavigation() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                     data-testid={
+                      item.href === '/' ? 'nav-home' :
+                      item.href === '/checker' ? 'nav-checker' :
+                      item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
                       item.href === '/dictionaries' ? 'nav-dictionaries' : 
                       undefined
@@ -177,6 +180,7 @@ export default function GlobalNavigation() {
                     }
                   }}
                   className="flex items-center space-x-2"
+                  data-testid="nav-signout"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>サインアウト</span>
@@ -188,13 +192,13 @@ export default function GlobalNavigation() {
             {mounted && !loading && !user && (
               <div className="hidden md:flex items-center space-x-2">
                 <Link href="/auth/signin">
-                  <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" className="flex items-center space-x-2" data-testid="nav-signin">
                     <LogIn className="w-4 h-4" />
                     <span>サインイン</span>
                   </Button>
                 </Link>
                 <Link href="/auth/signup">
-                  <Button size="sm" className="flex items-center space-x-2">
+                  <Button size="sm" className="flex items-center space-x-2" data-testid="nav-signup">
                     <UserPlus className="w-4 h-4" />
                     <span>サインアップ</span>
                   </Button>
@@ -223,7 +227,7 @@ export default function GlobalNavigation() {
 
         {/* モバイルメニュー */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
+          <div className="md:hidden py-4 border-t border-gray-200" data-testid="mobile-menu">
             <div className="space-y-2">
               {mobileVisibleItems.map((item) => {
                 const Icon = item.icon
@@ -238,6 +242,9 @@ export default function GlobalNavigation() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                     data-testid={
+                      item.href === '/' ? 'nav-home' :
+                      item.href === '/checker' ? 'nav-checker' :
+                      item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
                       item.href === '/dictionaries' ? 'nav-dictionaries' : 
                       undefined
@@ -277,6 +284,7 @@ export default function GlobalNavigation() {
                       }
                     }}
                     className="w-full flex items-center justify-center space-x-2"
+                    data-testid="nav-signout"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>サインアウト</span>
@@ -287,13 +295,13 @@ export default function GlobalNavigation() {
               {!loading && !user && (
                 <div className="space-y-2">
                   <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full flex items-center justify-center space-x-2">
+                    <Button variant="outline" size="sm" className="w-full flex items-center justify-center space-x-2" data-testid="nav-signin">
                       <LogIn className="w-4 h-4" />
                       <span>サインイン</span>
                     </Button>
                   </Link>
                   <Link href="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
-                    <Button size="sm" className="w-full flex items-center justify-center space-x-2">
+                    <Button size="sm" className="w-full flex items-center justify-center space-x-2" data-testid="nav-signup">
                       <UserPlus className="w-4 h-4" />
                       <span>サインアップ</span>
                     </Button>
