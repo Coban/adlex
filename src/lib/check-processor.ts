@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
-import { createChatCompletion, createEmbedding, isUsingLMStudio } from '@/lib/ai-client'
+import { createChatCompletion, createEmbedding, isUsingLMStudio, getAIClientInfo } from '@/lib/ai-client'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 
@@ -18,6 +18,56 @@ interface ViolationData {
   end: number
   reason: string
   dictionaryId?: number
+}
+
+// Helper function to manually extract fields from malformed responses
+function extractFieldsManually(responseContent: string): {
+  modified: string
+  violations: Array<{
+    start: number
+    end: number
+    reason: string
+    dictionaryId?: number
+  }>
+} | null {
+  try {
+    // Extract modified text
+    const modifiedMatch = responseContent.match(/"modified"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"/)
+    const modified = modifiedMatch ? modifiedMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : null
+    
+    // Extract violations array
+    const violationsMatch = responseContent.match(/"violations"\s*:\s*(\[[\s\S]*?\])/)
+    let violations = []
+    
+    if (violationsMatch) {
+      try {
+        violations = JSON.parse(violationsMatch[1])
+      } catch {
+        // If violations array parsing fails, try to extract individual violations
+        const violationPattern = /\{\s*"start"\s*:\s*(\d+)\s*,\s*"end"\s*:\s*(\d+)\s*,\s*"reason"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"/g
+        let match
+        while ((match = violationPattern.exec(responseContent)) !== null) {
+          violations.push({
+            start: parseInt(match[1]),
+            end: parseInt(match[2]),
+            reason: match[3].replace(/\\"/g, '"').replace(/\\n/g, '\n')
+          })
+        }
+      }
+    }
+    
+    if (modified !== null) {
+      return {
+        modified,
+        violations: Array.isArray(violations) ? violations : []
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Manual field extraction failed:', error)
+    return null
+  }
 }
 
 export async function processCheck(checkId: number, text: string, organizationId: number) {
@@ -47,7 +97,7 @@ export async function processCheck(checkId: number, text: string, organizationId
       } else if (error.message.includes('Failed to create embedding')) {
         errorMessage = 'テキスト解析エラー: 埋め込みベクトルの生成に失敗しました'
       } else if (error.message.includes('Failed to create chat completion')) {
-        errorMessage = 'AI分析エラー: テキスト処理に失敗しました'
+        errorMessage = `AI分析エラー: テキスト処理に失敗しました - ${error.message}`
       } else if (error.message.includes('OpenAI did not return expected function call')) {
         errorMessage = 'AI分析エラー: OpenAI応答形式が期待と異なります'
       } else if (error.message.includes('LM Studio did not return content')) {
@@ -80,6 +130,10 @@ export async function processCheck(checkId: number, text: string, organizationId
 
 async function performActualCheck(checkId: number, text: string, organizationId: number, supabase: SupabaseClient<Database>) {
   try {
+    // Log AI configuration for debugging
+    const aiInfo = getAIClientInfo()
+    console.log(`[CHECK ${checkId}] AI Configuration:`, aiInfo)
+    
     // Update status to processing
     const { error: statusError } = await supabase
       .from('checks')
@@ -195,9 +249,13 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       // LM Studio: プレーンテキスト応答を使用
       const plainTextPrompt = `${systemPrompt}
 
-### 応答形式：
-以下のJSON形式で厳密に応答してください。他のテキストは含めないでください：
+### 重要: 応答形式の指示
+以下のJSON形式でのみ応答してください。
+- JSONの前後に説明文や追加テキストを一切含めないでください
+- コードブロックも使用しないでください
+- JSONオブジェクトのみを返してください
 
+必須フォーマット:
 {
   "modified": "修正されたテキスト",
   "violations": [
@@ -209,8 +267,14 @@ async function performActualCheck(checkId: number, text: string, organizationId:
   ]
 }
 
-違反が見つからない場合は、violationsを空配列[]にしてください。JSONのみを返してください。`
+注意事項:
+- 違反が見つからない場合は、violations: [] として空配列を設定
+- modified フィールドは必須 (修正不要の場合は元のテキストをそのまま設定)
+- JSONの構文エラーがないよう注意
+- レスポンスはJSONオブジェクトで開始し、JSONオブジェクトで終了してください`
 
+      console.log(`[CHECK ${checkId}] Calling LM Studio for text analysis...`)
+      
       const llmResponse = await createChatCompletion({
         messages: [
           { role: 'system', content: plainTextPrompt },
@@ -222,6 +286,8 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         temperature: 0.1,
         max_tokens: 2000
       })
+      
+      console.log(`[CHECK ${checkId}] LM Studio response received successfully`)
 
       interface LLMResponse {
         choices?: Array<{
@@ -236,15 +302,52 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         throw new Error('LM Studio did not return content')
       }
 
-      // Extract JSON from response
-      const jsonMatch = responseContent.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        console.error('LM Studio response:', responseContent)
-        throw new Error('No JSON found in LM Studio response')
-      }
-
+      // Extract JSON from response with improved parsing
+      let jsonContent = ''
+      
       try {
-        const parsed = JSON.parse(jsonMatch[0])
+        // Try different approaches to extract JSON
+        
+        // 1. Look for JSON in code blocks first
+        const codeBlockMatch = responseContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+        if (codeBlockMatch) {
+          jsonContent = codeBlockMatch[1].trim()
+        } else {
+          // 2. Find the first complete JSON object
+          const startIndex = responseContent.indexOf('{')
+          if (startIndex === -1) {
+            throw new Error('No JSON object found in response')
+          }
+          
+          // Find matching closing brace
+          let braceCount = 0
+          let endIndex = -1
+          for (let i = startIndex; i < responseContent.length; i++) {
+            if (responseContent[i] === '{') {
+              braceCount++
+            } else if (responseContent[i] === '}') {
+              braceCount--
+              if (braceCount === 0) {
+                endIndex = i
+                break
+              }
+            }
+          }
+          
+          if (endIndex === -1) {
+            throw new Error('No complete JSON object found in response')
+          }
+          
+          jsonContent = responseContent.substring(startIndex, endIndex + 1)
+        }
+        
+        // Clean up the JSON content
+        jsonContent = jsonContent.trim()
+        
+        console.log('Extracted JSON content:', jsonContent)
+        
+        // Parse the JSON
+        const parsed = JSON.parse(jsonContent)
         
         // Validate required fields
         if (typeof parsed.modified !== 'string') {
@@ -255,9 +358,45 @@ async function performActualCheck(checkId: number, text: string, organizationId:
         }
 
         result = parsed
+        
       } catch (parseError) {
-        console.error('Failed to parse LM Studio JSON:', jsonMatch[0])
-        throw new Error(`Failed to parse LM Studio response: ${parseError}`)
+        console.error('Failed to parse LM Studio response:')
+        console.error('Raw response:', responseContent)
+        console.error('Extracted JSON:', jsonContent)
+        console.error('Parse error:', parseError)
+        
+        // Enhanced fallback with manual field extraction
+        try {
+          const fallbackResult = extractFieldsManually(responseContent)
+          if (fallbackResult) {
+            console.log('Using fallback parsing result:', fallbackResult)
+            result = fallbackResult
+          } else {
+            // Ultimate fallback: return safe minimal result
+            console.warn('All parsing methods failed, using safe fallback')
+            result = {
+              modified: text, // Return original text unchanged
+              violations: [{
+                start: 0,
+                end: Math.min(text.length, 10),
+                reason: "LM Studio応答の解析に失敗しました。手動で確認してください。",
+                dictionaryId: undefined
+              }]
+            }
+          }
+        } catch {
+          // Ultimate fallback: return safe minimal result
+          console.warn('Fallback parsing failed, using ultimate safe fallback')
+          result = {
+            modified: text, // Return original text unchanged
+            violations: [{
+              start: 0,
+              end: Math.min(text.length, 10),
+              reason: "LM Studio応答の解析に失敗しました。手動で確認してください。",
+              dictionaryId: undefined
+            }]
+          }
+        }
       }
     } else {
       // OpenAI: Function calling を使用
@@ -357,13 +496,38 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       .update({
         status: 'completed',
         modified_text: result.modified,
-        violation_count: result.violations.length
+        completed_at: new Date().toISOString()
       })
       .eq('id', checkId)
 
     if (finalUpdateError) {
       console.error(`[CHECK] Failed to update final results for check ${checkId}:`, finalUpdateError)
       throw new Error(`Failed to update final results: ${finalUpdateError.message}`)
+    }
+
+    // Update organization usage count (skip for testing)
+    if (!((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true')) {
+      // Get current usage count and increment it
+      const { data: org, error: fetchError } = await supabase
+        .from('organizations')
+        .select('used_checks')
+        .eq('id', organizationId)
+        .single()
+      
+      if (!fetchError && org) {
+        const newUsedChecks = (org.used_checks ?? 0) + 1
+        const { error: usageError } = await supabase
+          .from('organizations')
+          .update({ used_checks: newUsedChecks })
+          .eq('id', organizationId)
+        
+        if (usageError) {
+          console.error(`[CHECK] Failed to update organization usage for org ${organizationId}:`, usageError)
+          // Don't throw error - this is not critical for the check itself
+        }
+      } else if (fetchError) {
+        console.error(`[CHECK] Failed to fetch organization usage for org ${organizationId}:`, fetchError)
+      }
     }
 
     console.log(`[CHECK] Successfully completed check ${checkId} with ${result.violations.length} violations`)

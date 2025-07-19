@@ -21,7 +21,10 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     USE_MOCK,
     isMockMode,
     environment: process.env.NODE_ENV,
-    openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10) + '...'
+    openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10) + '...',
+    lm_studio_chat_model: process.env.LM_STUDIO_CHAT_MODEL,
+    lm_studio_embedding_model: process.env.LM_STUDIO_EMBEDDING_MODEL,
+    lm_studio_base_url: process.env.LM_STUDIO_BASE_URL
   })
 }
 
@@ -39,14 +42,30 @@ const lmStudioClient = new OpenAI({
 // Select the appropriate client
 export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
 
-// Model configurations
+// Model configurations with validation
+const getChatModel = () => {
+  if (!USE_LM_STUDIO) return 'gpt-4o'
+  
+  const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? 'microsoft/Phi-3-mini-4k-instruct-gguf'
+  
+  // Prevent using embedding models for chat
+  if (chatModel.includes('embedding') || chatModel.includes('embed')) {
+    console.warn(`Warning: Chat model "${chatModel}" appears to be an embedding model. Using default chat model.`)
+    return 'microsoft/Phi-3-mini-4k-instruct-gguf'
+  }
+  
+  return chatModel
+}
+
+const getEmbeddingModel = () => {
+  if (!USE_LM_STUDIO) return 'text-embedding-3-small'
+  
+  return process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5'
+}
+
 export const AI_MODELS = {
-  chat: USE_LM_STUDIO 
-    ? (process.env.LM_STUDIO_CHAT_MODEL ?? 'google/gemma-3-12b')
-    : 'gpt-4o',
-  embedding: USE_LM_STUDIO 
-    ? (process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5')
-    : 'text-embedding-3-small'
+  chat: getChatModel(),
+  embedding: getEmbeddingModel()
 }
 
 // Utility function to create chat completion
@@ -160,7 +179,7 @@ export async function createChatCompletion(params: {
         // LM Studio may not support tools/tool_choice, so omit them
       }
       
-      console.log('LM Studio chat completion request')
+      console.log('LM Studio chat completion request with model:', AI_MODELS.chat)
       
       // Add timeout handling for LM Studio requests
       const timeoutPromise = new Promise((_, reject) => {
@@ -174,9 +193,27 @@ export async function createChatCompletion(params: {
         console.log('LM Studio chat completion successful')
         return response
       } catch (error) {
-        if (error instanceof Error && error.message.includes('timed out')) {
-          throw error
+        console.error('LM Studio specific error:', error)
+        
+        if (error instanceof Error) {
+          // Handle common LM Studio model-related errors
+          if (error.message.includes('Failed to load model') && error.message.includes('not llm')) {
+            throw new Error(`LM Studio model error: "${AI_MODELS.chat}" is not a chat/LLM model. Please load a chat model in LM Studio (e.g., microsoft/Phi-3-mini-4k-instruct-gguf, google/gemma-2-2b-it-gguf). Current model appears to be an embedding model. Check /api/debug/model-validation for configuration help.`)
+          }
+          if (error.message.includes('model') && error.message.includes('not found')) {
+            throw new Error(`LM Studio model not found: ${AI_MODELS.chat}. Please ensure this model is loaded in LM Studio. Check /api/debug/model-validation for available models.`)
+          }
+          if (error.message.includes('connection') || error.message.includes('ECONNREFUSED')) {
+            throw new Error('LM Studio is not running or not accessible. Please start LM Studio and load a chat model. Check /api/debug/model-validation for connection status.')
+          }
+          if (error.message.includes('timed out')) {
+            throw new Error('LM Studio request timed out. The model may be overloaded or the request too complex.')
+          }
+          if (error.message.includes('404')) {
+            throw new Error(`LM Studio 404 error: Model "${AI_MODELS.chat}" not found or not properly loaded. Please check LM Studio and ensure a chat model is loaded. Check /api/debug/model-validation for configuration help.`)
+          }
         }
+        
         throw new Error(`LM Studio chat completion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
@@ -189,6 +226,20 @@ export async function createChatCompletion(params: {
     return response
   } catch (error) {
     console.error('Error in createChatCompletion:', error)
+    
+    // Log detailed error information for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        currentModel: AI_MODELS.chat,
+        usingLMStudio: USE_LM_STUDIO,
+        hasValidOpenAIKey,
+        aiClientAvailable: !!aiClient
+      })
+    }
+    
     throw new Error(`Failed to create chat completion: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
@@ -285,6 +336,56 @@ export async function createEmbedding(input: string): Promise<number[]> {
 // Utility function to check if we're using LM Studio
 export function isUsingLMStudio(): boolean {
   return USE_LM_STUDIO
+}
+
+// Additional utility functions for debugging and monitoring
+export function getCurrentAIModel(): string {
+  return AI_MODELS.chat
+}
+
+export function getAIClientInfo() {
+  return {
+    isUsingLMStudio: USE_LM_STUDIO,
+    currentChatModel: AI_MODELS.chat,
+    currentEmbeddingModel: AI_MODELS.embedding,
+    hasValidOpenAIKey,
+    clientAvailable: !!aiClient,
+    environment: process.env.NODE_ENV,
+    isMockMode: USE_MOCK,
+    lmStudioChatModelEnv: process.env.LM_STUDIO_CHAT_MODEL,
+    lmStudioEmbeddingModelEnv: process.env.LM_STUDIO_EMBEDDING_MODEL,
+    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL
+  }
+}
+
+// Function to validate and suggest model configurations
+export function validateModelConfiguration() {
+  const issues = []
+  const suggestions = []
+  
+  if (USE_LM_STUDIO) {
+    const chatModel = AI_MODELS.chat
+    const embeddingModel = AI_MODELS.embedding
+    
+    // Check if chat model looks like an embedding model
+    if (chatModel.includes('embedding') || chatModel.includes('embed')) {
+      issues.push(`Chat model "${chatModel}" appears to be an embedding model`)
+      suggestions.push('Set LM_STUDIO_CHAT_MODEL to a proper chat model like "microsoft/Phi-3-mini-4k-instruct-gguf"')
+    }
+    
+    // Check if embedding model looks like a chat model
+    if (!embeddingModel.includes('embedding') && !embeddingModel.includes('embed')) {
+      issues.push(`Embedding model "${embeddingModel}" might not be an embedding model`)
+      suggestions.push('Set LM_STUDIO_EMBEDDING_MODEL to a proper embedding model like "text-embedding-nomic-embed-text-v1.5"')
+    }
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues,
+    suggestions,
+    currentConfig: getAIClientInfo()
+  }
 }
 
 // Utility function to check if we're using mock mode
