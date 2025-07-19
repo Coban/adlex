@@ -470,6 +470,51 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       }
     }
 
+    // Validate result consistency: if text was modified, there should be violations
+    if (result.modified !== text && result.violations.length === 0) {
+      console.warn(`[CHECK ${checkId}] Text was modified but no violations reported. Adding inferred violation.`)
+      
+      // Find the differences between original and modified text
+      const originalWords = text.split('')
+      const modifiedWords = result.modified.split('')
+      
+      // Simple diff to find the first change
+      let startPos = 0
+      let endPos = text.length
+      
+      // Find start of difference
+      while (startPos < Math.min(originalWords.length, modifiedWords.length) && 
+             originalWords[startPos] === modifiedWords[startPos]) {
+        startPos++
+      }
+      
+      // Find end of difference (working backwards)
+      let originalEnd = originalWords.length - 1
+      let modifiedEnd = modifiedWords.length - 1
+      while (originalEnd >= startPos && modifiedEnd >= 0 && 
+             originalWords[originalEnd] === modifiedWords[modifiedEnd]) {
+        originalEnd--
+        modifiedEnd--
+      }
+      endPos = originalEnd + 1
+      
+      // Ensure we have a valid range
+      if (startPos >= endPos) {
+        startPos = 0
+        endPos = Math.min(10, text.length) // Default to first 10 characters
+      }
+      
+      // Add an inferred violation
+      result.violations.push({
+        start: startPos,
+        end: endPos,
+        reason: `薬機法違反の可能性: 「${text.substring(startPos, endPos)}」は適切でない表現として修正されました。`,
+        dictionaryId: undefined
+      })
+      
+      console.log(`[CHECK ${checkId}] Added inferred violation at positions ${startPos}-${endPos}`)
+    }
+
     // Store violations in database
     const violationsToInsert = result.violations.map((violation: ViolationData) => ({
       check_id: checkId,
