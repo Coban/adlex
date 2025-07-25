@@ -1,10 +1,10 @@
-# 詳細設計書 - RiskMill
+# 詳細設計書 - AdLex
 
 最終更新: 2025-06-11
 
 ## 1. 概要
 
-`RiskMill` は薬機法チェックと自動リライトを提供する SaaS です。要件定義書 `REQUIREMENTS_DEFINITION.md` に基づき、Next.js と Supabase を用いた Web アプリとして実装されています。本ドキュメントでは現在の実装を踏まえた詳細設計を記載します。
+`AdLex` は薬機法チェックと自動リライトを提供する SaaS です。要件定義書 `REQUIREMENTS_DEFINITION.md` に基づき、Next.js と Supabase を用いた Web アプリとして実装されています。本ドキュメントでは現在の実装を踏まえた詳細設計を記載します。
 
 ## 2. システム構成
 
