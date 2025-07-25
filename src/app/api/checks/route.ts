@@ -44,7 +44,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (authError || !user) {
+    // TEMPORARY: Skip authentication for test/development mode
+    if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true') {
+      user = {
+        id: '11111111-1111-1111-1111-111111111111',
+        email: 'admin@test.com'
+      } as { id: string; email: string }
+    } else if (authError || !user) {
       console.log('Authentication failed:', authError?.message)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

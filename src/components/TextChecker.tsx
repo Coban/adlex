@@ -1,7 +1,7 @@
 'use client'
 
 import { Loader2, Copy, Download } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -60,6 +60,8 @@ interface CheckResult {
 export default function TextChecker() {
   const { user } = useAuth()
   const { toast } = useToast()
+  const componentId = useId()
+  const checkCounter = useRef(0)
   const [text, setText] = useState('')
   const [checks, setChecks] = useState<CheckItem[]>([])
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null)
@@ -181,15 +183,16 @@ export default function TextChecker() {
 
     setErrorMessage(null)
 
-    // 新しいチェックアイテムを作成
-    const checkId = Date.now().toString()
+    // 新しいチェックアイテムを作成（SSR/CSR で一致するIDを生成）
+    checkCounter.current += 1
+    const checkId = `${componentId}-${checkCounter.current}`
     const newCheckItem: CheckItem = {
       id: checkId,
       originalText: text,
       result: null,
       status: 'queued',
       statusMessage: 'チェックをキューに追加しています...',
-      timestamp: Date.now()
+      timestamp: checkCounter.current // カウンターを使用して一意性を保つ
     }
 
     // チェックリストに追加
@@ -536,8 +539,11 @@ export default function TextChecker() {
       let finalStartPos = startPos
       let finalEndPos = endPos
       
-      // If positions are invalid or text is empty, try to find the text from reason
-      if (startPos >= endPos || !violationText.trim()) {
+      // For inferred violations, always use the original positions
+      const isInferredViolation = violation.reason.startsWith('[INFERRED]')
+      
+      // If positions are invalid or text is empty and it's not an inferred violation, try to find the text from reason
+      if (!isInferredViolation && (startPos >= endPos || !violationText.trim())) {
         // Extract text from reason using common patterns
         const patterns = [
           /「(.+?)」/,      // 「text」
@@ -751,10 +757,7 @@ export default function TextChecker() {
                         </div>
                       </div>
                       <div className="text-xs text-gray-400">
-                        {new Date(check.timestamp).toLocaleTimeString('ja-JP', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
+                        チェック #{check.timestamp}
                       </div>
                     </div>
                   </div>
@@ -921,8 +924,11 @@ export default function TextChecker() {
                               
                               let violationText = activeCheck.result!.original_text.substring(startPos, endPos)
                               
-                              // If positions are invalid, try to extract from reason
-                              if (startPos >= endPos || !violationText.trim()) {
+                              // For inferred violations, always use the position-based text
+                              const isInferredViolation = violation.reason.startsWith('[INFERRED]')
+                              
+                              // If positions are invalid and it's not an inferred violation, try to extract from reason
+                              if (!isInferredViolation && (startPos >= endPos || !violationText.trim())) {
                                 const patterns = [/「(.+?)」/, /：(.+?)→/, /：(.+?)は/]
                                 for (const pattern of patterns) {
                                   const match = violation.reason.match(pattern)

@@ -474,45 +474,22 @@ async function performActualCheck(checkId: number, text: string, organizationId:
     if (result.modified !== text && result.violations.length === 0) {
       console.warn(`[CHECK ${checkId}] Text was modified but no violations reported. Adding inferred violation.`)
       
-      // Find the differences between original and modified text
-      const originalWords = text.split('')
-      const modifiedWords = result.modified.split('')
+      // When AI modifies text but doesn't report violations, we should highlight the entire text
+      // as potentially problematic, since we cannot reliably determine the specific issue
+      // without re-running the AI analysis specifically for violation detection
       
-      // Simple diff to find the first change
-      let startPos = 0
-      let endPos = text.length
+      const startPos = 0
+      const endPos = text.length
       
-      // Find start of difference
-      while (startPos < Math.min(originalWords.length, modifiedWords.length) && 
-             originalWords[startPos] === modifiedWords[startPos]) {
-        startPos++
-      }
-      
-      // Find end of difference (working backwards)
-      let originalEnd = originalWords.length - 1
-      let modifiedEnd = modifiedWords.length - 1
-      while (originalEnd >= startPos && modifiedEnd >= 0 && 
-             originalWords[originalEnd] === modifiedWords[modifiedEnd]) {
-        originalEnd--
-        modifiedEnd--
-      }
-      endPos = originalEnd + 1
-      
-      // Ensure we have a valid range
-      if (startPos >= endPos) {
-        startPos = 0
-        endPos = Math.min(10, text.length) // Default to first 10 characters
-      }
-      
-      // Add an inferred violation
+      // Add an inferred violation covering the entire text
       result.violations.push({
         start: startPos,
         end: endPos,
-        reason: `薬機法違反の可能性: 「${text.substring(startPos, endPos)}」は適切でない表現として修正されました。`,
+        reason: `[INFERRED] AIによる修正が行われましたが、具体的な違反箇所が特定できませんでした。修正前: ${text} → 修正後: ${result.modified}`,
         dictionaryId: undefined
       })
       
-      console.log(`[CHECK ${checkId}] Added inferred violation at positions ${startPos}-${endPos}`)
+      console.log(`[CHECK ${checkId}] Added inferred violation for entire text due to AI modification without specific violations`)
     }
 
     // Store violations in database
