@@ -203,22 +203,16 @@ export default function TextChecker() {
     setText('')
     
     try {
-      // Check if user is authenticated using AuthContext (skip in development if SKIP_AUTH is true)
-      const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === 'true'
-      
-      if (!skipAuth && !user) {
+      // Check if user is authenticated using AuthContext
+      if (!user) {
         throw new Error('認証が必要です。サインインしてください。')
       }
 
-      // Get auth token from Supabase (skip in development if SKIP_AUTH is true)
-      let session = null
-      if (!skipAuth) {
-        const { data: { session: authSession } } = await supabase.auth.getSession()
-        session = authSession
-        
-        if (!session) {
-          throw new Error('認証セッションが見つかりません。再度サインインしてください。')
-        }
+      // Get auth token from Supabase
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        throw new Error('認証セッションが見つかりません。再度サインインしてください。')
       }
 
       // ステータス更新

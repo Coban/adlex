@@ -527,29 +527,27 @@ async function performActualCheck(checkId: number, text: string, organizationId:
       throw new Error(`Failed to update final results: ${finalUpdateError.message}`)
     }
 
-    // Update organization usage count (skip for testing)
-    if (!((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true')) {
-      // Get current usage count and increment it
-      const { data: org, error: fetchError } = await supabase
+    // Update organization usage count
+    // Get current usage count and increment it
+    const { data: org, error: fetchError } = await supabase
+      .from('organizations')
+      .select('used_checks')
+      .eq('id', organizationId)
+      .single()
+    
+    if (!fetchError && org) {
+      const newUsedChecks = (org.used_checks ?? 0) + 1
+      const { error: usageError } = await supabase
         .from('organizations')
-        .select('used_checks')
+        .update({ used_checks: newUsedChecks })
         .eq('id', organizationId)
-        .single()
       
-      if (!fetchError && org) {
-        const newUsedChecks = (org.used_checks ?? 0) + 1
-        const { error: usageError } = await supabase
-          .from('organizations')
-          .update({ used_checks: newUsedChecks })
-          .eq('id', organizationId)
-        
-        if (usageError) {
-          console.error(`[CHECK] Failed to update organization usage for org ${organizationId}:`, usageError)
-          // Don't throw error - this is not critical for the check itself
-        }
-      } else if (fetchError) {
-        console.error(`[CHECK] Failed to fetch organization usage for org ${organizationId}:`, fetchError)
+      if (usageError) {
+        console.error(`[CHECK] Failed to update organization usage for org ${organizationId}:`, usageError)
+        // Don't throw error - this is not critical for the check itself
       }
+    } else if (fetchError) {
+      console.error(`[CHECK] Failed to fetch organization usage for org ${organizationId}:`, fetchError)
     }
 
     console.log(`[CHECK] Successfully completed check ${checkId} with ${result.violations.length} violations`)

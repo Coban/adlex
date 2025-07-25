@@ -17,21 +17,12 @@ export async function GET(
   const supabase = await createClient()
 
   // Verify user has access to this check
-  let user
   const authResult = await supabase.auth.getUser()
-  user = authResult.data.user
+  const user = authResult.data.user
   const authError = authResult.error
   
-  // TEMPORARY: Skip authentication for test/development mode
-  if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true') {
-    user = {
-      id: '11111111-1111-1111-1111-111111111111',
-      email: 'admin@test.com'
-    } as { id: string; email: string }
-  } else {
-    if (authError || !user) {
-      return new Response('Unauthorized', { status: 401 })
-    }
+  if (authError || !user) {
+    return new Response('Unauthorized', { status: 401 })
   }
 
   const { data: checkData, error: checkError } = await supabase
@@ -45,16 +36,14 @@ export async function GET(
   }
   
   // Further validation to ensure user can access this check
-  if (!((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true')) {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('id, organization_id, role')
-      .eq('id', user.id)
-      .single()
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('id, organization_id, role')
+    .eq('id', user.id)
+    .single()
 
-    if (!userProfile || (userProfile.role === 'user' && checkData.user_id !== user.id) || (userProfile.organization_id !== checkData.organization_id)) {
-        return new Response('Forbidden', { status: 403 })
-    }
+  if (!userProfile || (userProfile.role === 'user' && checkData.user_id !== user.id) || (userProfile.organization_id !== checkData.organization_id)) {
+      return new Response('Forbidden', { status: 403 })
   }
 
 

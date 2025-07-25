@@ -44,13 +44,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // TEMPORARY: Skip authentication for test/development mode
-    if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true') {
-      user = {
-        id: '11111111-1111-1111-1111-111111111111',
-        email: 'admin@test.com'
-      } as { id: string; email: string }
-    } else if (authError || !user) {
+    if (authError || !user) {
       console.log('Authentication failed:', authError?.message)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -77,18 +71,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check usage limits (skip for testing)
-    if (!((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && process.env.SKIP_AUTH === 'true')) {
-      const organization = userData.organizations
-      const currentUsage = organization.used_checks ?? 0
-      const maxChecks = organization.max_checks ?? 1000
-      if (currentUsage >= maxChecks) {
-        return NextResponse.json({ 
-          error: 'Monthly usage limit exceeded',
-          usage: currentUsage,
-          limit: maxChecks
-        }, { status: 429 })
-      }
+    // Check usage limits
+    const organization = userData.organizations
+    const currentUsage = organization.used_checks ?? 0
+    const maxChecks = organization.max_checks ?? 1000
+    if (currentUsage >= maxChecks) {
+      return NextResponse.json({ 
+        error: 'Monthly usage limit exceeded',
+        usage: currentUsage,
+        limit: maxChecks
+      }, { status: 429 })
     }
 
     const { text } = await request.json()
