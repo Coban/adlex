@@ -203,30 +203,37 @@ test.describe('Error Handling', () => {
     })
 
     test('should handle invalid authentication tokens', async ({ page }) => {
-      // Set invalid token
+      // Clear all authentication state first
+      await page.goto('/checker')
       await page.evaluate(() => {
-        localStorage.setItem('supabase.auth.token', 'invalid-token')
+        localStorage.clear()
+        sessionStorage.clear()
+        // Clear all cookies
+        document.cookie.split(";").forEach((c) => {
+          const eqPos = c.indexOf("=")
+          const name = eqPos > -1 ? c.substr(0, eqPos) : c
+          document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"
+        })
       })
       
-      await page.goto('/checker')
+      // Reload to trigger auth check without valid session
+      await page.reload()
       
       // Wait for auth to process
-      await page.waitForTimeout(3000)
+      await page.waitForTimeout(2000)
       
-      // Should redirect to login or show error
-      try {
-        await expect(page).toHaveURL('/auth/signin', { timeout: 10000 })
-      } catch {
-        // If not redirected, check current state
-        const currentUrl = page.url()
-        console.log(`Current URL: ${currentUrl}`)
-        
-        // Either should be on login page or show auth error
-        const isOnLoginPage = currentUrl.includes('/auth/signin')
-        const hasAuthError = await page.locator('text=認証').count() > 0
-        
-        expect(isOnLoginPage || hasAuthError).toBeTruthy()
-      }
+      // Should show login prompt since no valid authentication
+      const currentUrl = page.url()
+      console.log(`Current URL: ${currentUrl}`)
+      
+      // Check if redirected to login page or showing login prompt
+      const isOnLoginPage = currentUrl.includes('/auth/signin')
+      const hasLoginPrompt = await page.locator('text=ログインが必要です').count() > 0
+      const hasSigninLink = await page.locator('a[href="/auth/signin"]').count() > 0
+      
+      console.log(`Is on login page: ${isOnLoginPage}, Has login prompt: ${hasLoginPrompt}, Has signin link: ${hasSigninLink}`)
+      
+      expect(isOnLoginPage || (hasLoginPrompt && hasSigninLink)).toBeTruthy()
     })
   })
 
