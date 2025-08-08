@@ -5,15 +5,15 @@ import { describe, it, expect } from 'vitest'
 
 import { Input } from '../../ui/input'
 
-describe('Input Component', () => {
-  it('renders correctly', () => {
+describe('Inputコンポーネント', () => {
+  it('正しくレンダリングされること', () => {
     render(<Input placeholder="Test input" />)
     
     const input = screen.getByPlaceholderText('Test input')
     expect(input).toBeInTheDocument()
   })
 
-  it('handles user input', async () => {
+  it('ユーザー入力を適切に処理すること', async () => {
     const user = userEvent.setup()
     render(<Input placeholder="Test input" />)
     
@@ -23,35 +23,35 @@ describe('Input Component', () => {
     expect(input).toHaveValue('Hello World')
   })
 
-  it('applies custom className', () => {
+  it('カスタムclassNameが適用されること', () => {
     render(<Input className="custom-class" placeholder="Test input" />)
     
     const input = screen.getByPlaceholderText('Test input')
     expect(input).toHaveClass('custom-class')
   })
 
-  it('can be disabled', () => {
+  it('無効化可能なこと', () => {
     render(<Input disabled placeholder="Test input" />)
     
     const input = screen.getByPlaceholderText('Test input')
     expect(input).toBeDisabled()
   })
 
-  it('supports different input types', () => {
+  it('異なる入力タイプをサポートすること', () => {
     render(<Input type="email" placeholder="Email" />)
     
     const input = screen.getByPlaceholderText('Email')
     expect(input).toHaveAttribute('type', 'email')
   })
 
-  it('forwards ref correctly', () => {
+  it('refを正しく転送すること', () => {
     const ref = { current: null }
     render(<Input ref={ref} placeholder="Test input" />)
     
     expect(ref.current).toBeInstanceOf(HTMLInputElement)
   })
 
-  it('handles focus and blur events', async () => {
+  it('フォーカスとブラーイベントを適切に処理すること', async () => {
     const user = userEvent.setup()
     render(<Input placeholder="Test input" />)
     
@@ -64,7 +64,7 @@ describe('Input Component', () => {
     expect(input).not.toHaveFocus()
   })
 
-  it('supports controlled input', async () => {
+  it('制御された入力をサポートすること', async () => {
     const user = userEvent.setup()
     
     function TestComponent() {
@@ -84,14 +84,14 @@ describe('Input Component', () => {
     expect(input).toHaveValue('Test')
   })
 
-  it('applies default styling', () => {
+  it('デフォルトスタイルが適用されること', () => {
     render(<Input placeholder="Test input" />)
     
     const input = screen.getByPlaceholderText('Test input')
     expect(input).toHaveClass('flex', 'h-10', 'w-full', 'rounded-md', 'border')
   })
 
-  it('handles invalid state styling', () => {
+  it('無効な状態のスタイルを適切に処理すること', () => {
     render(<Input aria-invalid="true" placeholder="Test input" />)
     
     const input = screen.getByPlaceholderText('Test input')

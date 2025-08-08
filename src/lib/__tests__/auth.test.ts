@@ -1,10 +1,51 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { createClient } from '@/lib/supabase/client'
+// Create local mock for Supabase client
+const mockSupabaseClient = {
+  auth: {
+    signInWithPassword: vi.fn(),
+    signUp: vi.fn(),
+    signOut: vi.fn(),
+    getUser: vi.fn(),
+    getSession: vi.fn(),
+    onAuthStateChange: vi.fn(() => ({
+      data: { subscription: { unsubscribe: vi.fn() } },
+      error: null
+    }))
+  },
+  from: vi.fn(() => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: null, error: null })),
+        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
+      })),
+      textSearch: vi.fn(() => ({
+        limit: vi.fn(() => Promise.resolve({ data: [], error: null }))
+      }))
+    })),
+    insert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: null, error: null }))
+      }))
+    })),
+    update: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: null, error: null }))
+      }))
+    })),
+    upsert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: null, error: null }))
+      }))
+    }))
+  })),
+  rpc: vi.fn(() => Promise.resolve({ data: [], error: null }))
+}
 
-// Get the mocked client from the global setup
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSupabaseClient = createClient() as any
+// Mock the Supabase client locally for this test file
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: vi.fn(() => mockSupabaseClient)
+}))
 
 // Now import the functions
 import { 
@@ -22,7 +63,7 @@ import {
   changeUserRole
 } from '../auth'
 
-describe.skip('Auth utilities', () => {
+describe.skip('認証ユーティリティ', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -31,8 +72,8 @@ describe.skip('Auth utilities', () => {
     vi.resetAllMocks()
   })
 
-  describe.skip('signInWithEmailAndPassword', () => {
-    it('should sign in successfully', async () => {
+  describe('メールアドレスとパスワードでサインイン', () => {
+    it('正常にサインインできること', async () => {
       const mockUser = {
         id: 'user-123',
         email: 'test@example.com'
@@ -65,7 +106,7 @@ describe.skip('Auth utilities', () => {
       })
     })
 
-    it('should handle sign in errors', async () => {
+    it('サインインエラーを適切に処理すること', async () => {
       mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({
         data: { user: null, session: null },
         error: new Error('Invalid credentials')
@@ -75,19 +116,19 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Invalid credentials')
     })
 
-    it('should validate email format', async () => {
+    it('メールアドレスの形式を検証すること', async () => {
       await expect(signInWithEmailAndPassword('invalid-email', 'password123'))
         .rejects.toThrow('Invalid email format')
     })
 
-    it('should validate password length', async () => {
+    it('パスワードの長さを検証すること', async () => {
       await expect(signInWithEmailAndPassword('test@example.com', '123'))
         .rejects.toThrow('Password must be at least 8 characters')
     })
   })
 
-  describe.skip('signUpWithEmailAndPassword', () => {
-    it('should sign up successfully', async () => {
+  describe('メールアドレスとパスワードでサインアップ', () => {
+    it('正常にサインアップできること', async () => {
       const mockUser = {
         id: 'user-123',
         email: 'test@example.com'
@@ -120,7 +161,7 @@ describe.skip('Auth utilities', () => {
       })
     })
 
-    it('should handle sign up errors', async () => {
+    it('サインアップエラーを適切に処理すること', async () => {
       mockSupabaseClient.auth.signUp.mockResolvedValue({
         data: { user: null, session: null },
         error: new Error('User already exists')
@@ -130,19 +171,19 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('User already exists')
     })
 
-    it('should validate email format', async () => {
+    it('メールアドレスの形式を検証すること', async () => {
       await expect(signUpWithEmailAndPassword('invalid-email', 'password123'))
         .rejects.toThrow('Invalid email format')
     })
 
-    it('should validate password strength', async () => {
+    it('パスワードの強度を検証すること', async () => {
       await expect(signUpWithEmailAndPassword('test@example.com', 'weak'))
         .rejects.toThrow('Password must be at least 8 characters')
     })
   })
 
-  describe('signOut', () => {
-    it('should sign out successfully', async () => {
+  describe('サインアウト', () => {
+    it('正常にサインアウトできること', async () => {
       mockSupabaseClient.auth.signOut.mockResolvedValue({
         error: null
       })
@@ -152,7 +193,7 @@ describe.skip('Auth utilities', () => {
       expect(mockSupabaseClient.auth.signOut).toHaveBeenCalled()
     })
 
-    it('should handle sign out errors', async () => {
+    it('サインアウトエラーを適切に処理すること', async () => {
       mockSupabaseClient.auth.signOut.mockResolvedValue({
         error: { message: 'Sign out failed' }
       })
@@ -161,8 +202,8 @@ describe.skip('Auth utilities', () => {
     })
   })
 
-  describe('getCurrentUser', () => {
-    it('should get current user successfully', async () => {
+  describe('現在のユーザー取得', () => {
+    it('現在のユーザーを正常に取得できること', async () => {
       const mockUser = {
         id: 'user-123',
         email: 'test@example.com'
@@ -179,7 +220,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockUser)
     })
 
-    it('should return null when no user is authenticated', async () => {
+    it('認証されていない場合nullを返すこと', async () => {
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: null },
         error: null
@@ -190,7 +231,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toBeNull()
     })
 
-    it('should handle auth errors', async () => {
+    it('認証エラーを適切に処理すること', async () => {
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: null },
         error: new Error('Token expired')
@@ -200,8 +241,8 @@ describe.skip('Auth utilities', () => {
     })
   })
 
-  describe('getUserProfile', () => {
-    it('should get user profile successfully', async () => {
+  describe('ユーザープロフィール取得', () => {
+    it('ユーザープロフィールを正常に取得できること', async () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
@@ -226,7 +267,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockProfile)
     })
 
-    it('should return null when profile not found', async () => {
+    it('プロフィールが見つからない場合nullを返すこと', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -243,7 +284,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toBeNull()
     })
 
-    it('should handle database errors', async () => {
+    it('データベースエラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -259,8 +300,8 @@ describe.skip('Auth utilities', () => {
     })
   })
 
-  describe('createUserProfile', () => {
-    it('should create user profile successfully', async () => {
+  describe('ユーザープロフィール作成', () => {
+    it('ユーザープロフィールを正常に作成できること', async () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
@@ -290,7 +331,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockProfile)
     })
 
-    it('should handle creation errors', async () => {
+    it('作成エラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         upsert: vi.fn(() => ({
           select: vi.fn(() => ({
@@ -310,7 +351,7 @@ describe.skip('Auth utilities', () => {
       })).rejects.toThrow('Creation failed')
     })
 
-    it('should validate required fields', async () => {
+    it('必須フィールドを検証すること', async () => {
       await expect(createUserProfile({
         id: '',
         email: 'test@example.com',
@@ -327,8 +368,8 @@ describe.skip('Auth utilities', () => {
     })
   })
 
-  describe('updateUserProfile', () => {
-    it('should update user profile successfully', async () => {
+  describe('ユーザープロフィール更新', () => {
+    it('ユーザープロフィールを正常に更新できること', async () => {
       const mockProfile = {
         id: 'user-123',
         email: 'test@example.com',
@@ -353,7 +394,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockProfile)
     })
 
-    it('should handle update errors', async () => {
+    it('更新エラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         update: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -369,14 +410,14 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Update failed')
     })
 
-    it('should validate user ID', async () => {
+    it('ユーザーIDを検証すること', async () => {
       await expect(updateUserProfile('', { role: 'admin' }))
         .rejects.toThrow('User ID is required')
     })
   })
 
-  describe('checkUserExists', () => {
-    it('should return true when user exists', async () => {
+  describe('ユーザー存在確認', () => {
+    it('ユーザーが存在する場合trueを返すこと', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -393,7 +434,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toBe(true)
     })
 
-    it('should return false when user does not exist', async () => {
+    it('ユーザーが存在しない場合falseを返すこと', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -410,7 +451,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toBe(false)
     })
 
-    it('should handle database errors', async () => {
+    it('データベースエラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -426,8 +467,8 @@ describe.skip('Auth utilities', () => {
     })
   })
 
-  describe('createOrganization', () => {
-    it('should create organization successfully', async () => {
+  describe('組織作成', () => {
+    it('組織を正常に作成できること', async () => {
       const mockOrganization = {
         id: 'org-123',
         name: 'Test Organization',
@@ -453,7 +494,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockOrganization)
     })
 
-    it('should handle creation errors', async () => {
+    it('作成エラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         insert: vi.fn(() => ({
           select: vi.fn(() => ({
@@ -469,14 +510,14 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Creation failed')
     })
 
-    it('should validate organization name', async () => {
+    it('組織名を検証すること', async () => {
       await expect(createOrganization('', 'basic'))
         .rejects.toThrow('Organization name is required')
     })
   })
 
-  describe('inviteUserToOrganization', () => {
-    it('should send invitation successfully', async () => {
+  describe('組織へのユーザー招待', () => {
+    it('招待を正常に送信できること', async () => {
       const mockInvitation = {
         id: 'inv-123',
         email: 'newuser@example.com',
@@ -506,7 +547,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockInvitation)
     })
 
-    it('should handle invitation errors', async () => {
+    it('招待エラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         insert: vi.fn(() => ({
           select: vi.fn(() => ({
@@ -522,14 +563,14 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Invitation failed')
     })
 
-    it('should validate email format', async () => {
+    it('メールアドレスの形式を検証すること', async () => {
       await expect(inviteUserToOrganization('invalid-email', 123, 'user'))
         .rejects.toThrow('Invalid email format')
     })
   })
 
-  describe('acceptInvitation', () => {
-    it('should accept invitation successfully', async () => {
+  describe('招待承諾', () => {
+    it('招待を正常に承諾できること', async () => {
       const mockInvitation = {
         id: 'inv-123',
         email: 'newuser@example.com',
@@ -555,7 +596,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockInvitation)
     })
 
-    it('should handle invalid token', async () => {
+    it('無効なトークンを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -571,14 +612,14 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Invalid token')
     })
 
-    it('should validate token format', async () => {
+    it('トークンの形式を検証すること', async () => {
       await expect(acceptInvitation(''))
         .rejects.toThrow('Token is required')
     })
   })
 
-  describe('changeUserRole', () => {
-    it('should change user role successfully', async () => {
+  describe('ユーザーロール変更', () => {
+    it('ユーザーロールを正常に変更できること', async () => {
       const mockUser = {
         id: 'user-123',
         email: 'test@example.com',
@@ -603,7 +644,7 @@ describe.skip('Auth utilities', () => {
       expect(result).toEqual(mockUser)
     })
 
-    it('should handle role change errors', async () => {
+    it('ロール変更エラーを適切に処理すること', async () => {
       mockSupabaseClient.from.mockReturnValue({
         update: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -619,14 +660,14 @@ describe.skip('Auth utilities', () => {
         .rejects.toThrow('Role change failed')
     })
 
-    it('should validate role', async () => {
+    it('ロールを検証すること', async () => {
       await expect(changeUserRole('user-123', 'invalid-role' as 'user' | 'admin'))
         .rejects.toThrow('Invalid role')
     })
   })
 
-  describe('Input validation', () => {
-    it('should validate email format', () => {
+  describe('入力値検証', () => {
+    it('メールアドレスの形式を検証すること', () => {
       const validEmails = [
         'test@example.com',
         'user.name@domain.co.uk',
@@ -658,7 +699,7 @@ describe.skip('Auth utilities', () => {
       })
     })
 
-    it('should validate password strength', () => {
+    it('パスワードの強度を検証すること', () => {
       const validPasswords = [
         'password123',
         'mySecurePassword!',
@@ -690,8 +731,8 @@ describe.skip('Auth utilities', () => {
   })
 
   // Simple test to verify auth module can be imported
-  describe('Auth module', () => {
-    it('should export expected functions', () => {
+  describe('認証モジュール', () => {
+    it('期待される関数をエクスポートすること', () => {
       expect(typeof signInWithEmailAndPassword).toBe('function')
       expect(typeof signUpWithEmailAndPassword).toBe('function')
       expect(typeof signOut).toBe('function')

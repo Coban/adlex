@@ -10,15 +10,17 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn()
 }))
 
-// Mock the Supabase client
+// Create local mock for Supabase client
 const mockSupabaseClient = {
   auth: {
     getSession: vi.fn(() => Promise.resolve({
       data: {
         session: {
-          access_token: 'mock-token'
+          access_token: 'mock-token',
+          user: { id: 'test-user-id', email: 'test@example.com' }
         }
-      }
+      },
+      error: null
     }))
   },
   from: vi.fn(() => ({
@@ -33,6 +35,7 @@ const mockSupabaseClient = {
   }))
 }
 
+// Mock the Supabase client locally for this test file
 vi.mock('../../lib/supabase/client', () => ({
   createClient: vi.fn(() => mockSupabaseClient)
 }))
@@ -85,7 +88,7 @@ Object.assign(window, {
   alert: vi.fn()
 })
 
-describe('TextChecker Component', () => {
+describe('TextCheckerコンポーネント', () => {
   const mockUser = {
     id: 'user-123',
     email: 'test@example.com',
@@ -105,23 +108,23 @@ describe('TextChecker Component', () => {
       organization: null
     })
     
-    // Reset mock supabase client with more robust setup
+    // Reset local mock supabase client
     mockSupabaseClient.auth.getSession.mockResolvedValue({
       data: {
         session: {
-          access_token: 'mock-token'
+          access_token: 'mock-token',
+          user: mockUser
         }
-      }
+      },
+      error: null
     })
-    
-    // Ensure the mock is properly bound - remove to avoid require issues
   })
 
   afterEach(() => {
     vi.resetAllMocks()
   })
 
-  it('renders the main interface correctly', () => {
+  it('メインインターフェースが正常にレンダリングされること', () => {
     render(<TextChecker />)
     
     expect(screen.getByText('薬機法チェック & リライト')).toBeInTheDocument()
@@ -130,7 +133,7 @@ describe('TextChecker Component', () => {
     expect(screen.getByRole('button', { name: 'チェック開始' })).toBeInTheDocument()
   })
 
-  it('displays character count correctly', async () => {
+  it('文字数が正しく表示されること', async () => {
     const user = userEvent.setup()
     render(<TextChecker />)
     
@@ -140,14 +143,14 @@ describe('TextChecker Component', () => {
     expect(screen.getByText('7 / 10,000文字')).toBeInTheDocument()
   })
 
-  it('disables submit button when text is empty', () => {
+  it('テキストが空の場合送信ボタンが無効化されること', () => {
     render(<TextChecker />)
     
     const submitButton = screen.getByRole('button', { name: 'チェック開始' })
     expect(submitButton).toBeDisabled()
   })
 
-  it('enables submit button when text is entered', async () => {
+  it('テキストが入力された場合送信ボタンが有効化されること', async () => {
     const user = userEvent.setup()
     render(<TextChecker />)
     
@@ -159,7 +162,7 @@ describe('TextChecker Component', () => {
     expect(submitButton).not.toBeDisabled()
   })
 
-  it('shows error when text exceeds character limit', async () => {
+  it('テキストが文字数制限を超えた場合エラーが表示されること', async () => {
     render(<TextChecker />)
     
     const textarea = screen.getByRole('textbox')
@@ -174,7 +177,7 @@ describe('TextChecker Component', () => {
     })).toBeInTheDocument()
   }, 10000)
 
-  it.skip('shows error when user is not authenticated', async () => {
+  it.skip('ユーザーが認証されていない場合エラーが表示されること', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       loading: false,
@@ -197,7 +200,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('starts check process when submit button is clicked', async () => {
+  it.skip('送信ボタンをクリックしたときチェックプロセスが開始されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -226,7 +229,7 @@ describe('TextChecker Component', () => {
     )
   })
 
-  it.skip('displays loading state during check', async () => {
+  it.skip('チェック中にローディング状態が表示されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -247,7 +250,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('clears input after successful submission', async () => {
+  it.skip('正常に送信後入力がクリアされること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -268,7 +271,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('displays check in history after submission', async () => {
+  it.skip('送信後履歴にチェックが表示されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -290,7 +293,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('handles API errors gracefully', async () => {
+  it.skip('APIエラーを適切に処理すること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -312,7 +315,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('handles network errors', async () => {
+  it.skip('ネットワークエラーを適切に処理すること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockRejectedValueOnce(new Error('Network error'))
@@ -330,7 +333,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('updates status via SSE', async () => {
+  it.skip('SSE経由でステータスが更新されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -361,7 +364,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('displays results when check completes', async () => {
+  it.skip('チェック完了時に結果が表示されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -397,7 +400,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('handles timeout gracefully', async () => {
+  it.skip('タイムアウトを適切に処理すること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -426,7 +429,7 @@ describe('TextChecker Component', () => {
     }, { timeout: 10000 })
   })
 
-  it.skip('allows switching between checks in history', async () => {
+  it.skip('履歴のチェック間での切り替えが可能なこと', async () => {
     const user = userEvent.setup()
     
     mockFetch
@@ -495,7 +498,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('handles copy functionality', async () => {
+  it.skip('コピー機能を適切に処理すること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -536,7 +539,7 @@ describe('TextChecker Component', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('修正されたテキスト')
   })
 
-  it.skip('displays violations correctly', async () => {
+  it.skip('違反内容が正しく表示されること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({
@@ -584,7 +587,7 @@ describe('TextChecker Component', () => {
     })
   })
 
-  it.skip('handles SSE connection errors', async () => {
+  it.skip('SSE接続エラーを適切に処理すること', async () => {
     const user = userEvent.setup()
     
     mockFetch.mockResolvedValueOnce({

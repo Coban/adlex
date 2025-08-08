@@ -21,7 +21,7 @@ global.fetch = mockFetch
 // Import after mocking
 import { createChatCompletion, createEmbedding } from '../ai-client'
 
-describe('AI Client', () => {
+describe('AIクライアント', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Set test environment to avoid mock mode
@@ -38,13 +38,13 @@ describe('AI Client', () => {
     vi.resetAllMocks()
   })
 
-  describe('createChatCompletion', () => {
-    describe('Test mode', () => {
+  describe('チャット完了作成', () => {
+    describe('テストモード', () => {
       beforeEach(() => {
         vi.stubEnv('NODE_ENV', 'test')
       })
 
-      it('should return mock response in test mode', async () => {
+      it('テストモードでモックレスポンスを返すこと', async () => {
         const result = await createChatCompletion({
           messages: [
             { role: 'user', content: 'Test message' }
@@ -74,7 +74,7 @@ describe('AI Client', () => {
         expect(mockFetch).not.toHaveBeenCalled()
       })
 
-      it('should return mock function call response in test mode', async () => {
+      it('テストモードでモック関数呼び出しレスポンスを返すこと', async () => {
         const functions = [{
           name: 'check_text',
           description: 'Check text for violations',
@@ -130,13 +130,13 @@ describe('AI Client', () => {
     })
   })
 
-  describe('createEmbedding', () => {
-    describe('Test mode', () => {
+  describe('埋め込み作成', () => {
+    describe('テストモード', () => {
       beforeEach(() => {
         vi.stubEnv('NODE_ENV', 'test')
       })
 
-      it('should return mock embedding in test mode', async () => {
+      it('テストモードでモック埋め込みを返すこと', async () => {
         const result = await createEmbedding('Test text')
 
         expect(result).toEqual(expect.any(Array))

@@ -5,15 +5,15 @@ import { describe, it, expect } from 'vitest'
 
 import { Textarea } from '../../ui/textarea'
 
-describe('Textarea Component', () => {
-  it('renders correctly', () => {
+describe('Textareaコンポーネント', () => {
+  it('正しくレンダリングされること', () => {
     render(<Textarea placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toBeInTheDocument()
   })
 
-  it('handles user input', async () => {
+  it('ユーザー入力を適切に処理すること', async () => {
     const user = userEvent.setup()
     render(<Textarea placeholder="Test textarea" />)
     
@@ -23,7 +23,7 @@ describe('Textarea Component', () => {
     expect(textarea).toHaveValue('Hello World')
   })
 
-  it('handles multiline input', async () => {
+  it('複数行入力を適切に処理すること', async () => {
     const user = userEvent.setup()
     render(<Textarea placeholder="Test textarea" />)
     
@@ -33,42 +33,42 @@ describe('Textarea Component', () => {
     expect(textarea).toHaveValue('Line 1\nLine 2\nLine 3')
   })
 
-  it('applies custom className', () => {
+  it('カスタムclassNameが適用されること', () => {
     render(<Textarea className="custom-class" placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveClass('custom-class')
   })
 
-  it('can be disabled', () => {
+  it('無効化可能なこと', () => {
     render(<Textarea disabled placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toBeDisabled()
   })
 
-  it('supports rows attribute', () => {
+  it('rows属性をサポートすること', () => {
     render(<Textarea rows={5} placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveAttribute('rows', '5')
   })
 
-  it('supports maxLength attribute', () => {
+  it('maxLength属性をサポートすること', () => {
     render(<Textarea maxLength={100} placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveAttribute('maxlength', '100')
   })
 
-  it('forwards ref correctly', () => {
+  it('refを正しく転送すること', () => {
     const ref = { current: null }
     render(<Textarea ref={ref} placeholder="Test textarea" />)
     
     expect(ref.current).toBeInstanceOf(HTMLTextAreaElement)
   })
 
-  it('handles focus and blur events', async () => {
+  it('フォーカスとブラーイベントを適切に処理すること', async () => {
     const user = userEvent.setup()
     render(<Textarea placeholder="Test textarea" />)
     
@@ -81,7 +81,7 @@ describe('Textarea Component', () => {
     expect(textarea).not.toHaveFocus()
   })
 
-  it('supports controlled textarea', async () => {
+  it('制御されたtextareaをサポートすること', async () => {
     const user = userEvent.setup()
     
     function TestComponent() {
@@ -101,28 +101,28 @@ describe('Textarea Component', () => {
     expect(textarea).toHaveValue('Test')
   })
 
-  it('applies default styling', () => {
+  it('デフォルトスタイルが適用されること', () => {
     render(<Textarea placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveClass('flex', 'min-h-[80px]', 'w-full', 'rounded-md', 'border')
   })
 
-  it('handles resize property', () => {
+  it('resizeプロパティを適切に処理すること', () => {
     render(<Textarea style={{ resize: 'vertical' }} placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveStyle('resize: vertical')
   })
 
-  it('handles readonly state', () => {
+  it('読み取り専用状態を適切に処理すること', () => {
     render(<Textarea readOnly placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')
     expect(textarea).toHaveAttribute('readonly')
   })
 
-  it('handles required attribute', () => {
+  it('required属性を適切に処理すること', () => {
     render(<Textarea required placeholder="Test textarea" />)
     
     const textarea = screen.getByPlaceholderText('Test textarea')

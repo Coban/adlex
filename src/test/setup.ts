@@ -4,10 +4,8 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { server } from "./mocks/server";
 
-// Extend global types
+// Extend global types for EventSource only
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  var mockSupabaseClient: any
   var EventSource: {
     new (url: string | URL, eventSourceInitDict?: EventSourceInit): EventSource
     prototype: EventSource
@@ -119,57 +117,4 @@ Object.assign(navigator, {
   }
 });
 
-// Mock fetch globally
-global.fetch = vi.fn();
-
-// Mock Supabase client globally
-const mockSupabaseClient = {
-  auth: {
-    signInWithPassword: vi.fn(),
-    signUp: vi.fn(),
-    signOut: vi.fn(),
-    getUser: vi.fn(),
-    getSession: vi.fn(),
-    onAuthStateChange: vi.fn(() => ({
-      data: { subscription: { unsubscribe: vi.fn() } },
-      error: null
-    }))
-  },
-  from: vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({ data: null, error: null })),
-        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      })),
-      textSearch: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve({ data: [], error: null }))
-      }))
-    })),
-    insert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      }))
-    })),
-    update: vi.fn(() => ({
-      eq: vi.fn(() => Promise.resolve({ data: null, error: null }))
-    })),
-    upsert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      }))
-    }))
-  })),
-  rpc: vi.fn(() => Promise.resolve({ data: [], error: null }))
-}
-
-// Set up mock globally
-global.mockSupabaseClient = mockSupabaseClient
-
-// Mock the modules with proper factory functions
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => global.mockSupabaseClient
-}))
-
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: () => Promise.resolve(global.mockSupabaseClient)
-}))
+// Remove global mocks - each test file should handle its own mocking

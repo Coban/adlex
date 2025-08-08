@@ -4,8 +4,8 @@ import { describe, it, expect } from 'vitest'
 
 import { Button } from '../../ui/button'
 
-describe('Button Component', () => {
-  it('should render button with text', () => {
+describe('Buttonコンポーネント', () => {
+  it('テキスト付きボタンがレンダリングされること', () => {
     render(<Button>Click me</Button>)
     
     const button = screen.getByRole('button')
@@ -13,7 +13,7 @@ describe('Button Component', () => {
     expect(button).toHaveTextContent('Click me')
   })
 
-  it('should handle click events', async () => {
+  it('クリックイベントを適切に処理すること', async () => {
     const user = userEvent.setup()
     let clicked = false
     const handleClick = () => { clicked = true }
@@ -26,28 +26,28 @@ describe('Button Component', () => {
     expect(clicked).toBe(true)
   })
 
-  it('should be disabled when disabled prop is true', () => {
+  it('disabledプロプがtrueの場合無効化されること', () => {
     render(<Button disabled>Disabled button</Button>)
     
     const button = screen.getByRole('button')
     expect(button).toBeDisabled()
   })
 
-  it('should apply variant classes correctly', () => {
+  it('バリアントクラスが正しく適用されること', () => {
     render(<Button variant="destructive">Delete</Button>)
     
     const button = screen.getByRole('button')
     expect(button).toHaveClass('bg-destructive')
   })
 
-  it('should apply size classes correctly', () => {
+  it('サイズクラスが正しく適用されること', () => {
     render(<Button size="sm">Small button</Button>)
     
     const button = screen.getByRole('button')
     expect(button).toHaveClass('h-9')
   })
 
-  it('should render as child when asChild is true', () => {
+  it('asChildがtrueの場合子要素としてレンダリングされること', () => {
     render(
       <Button asChild>
         <a href="/test">Link button</a>
@@ -59,14 +59,14 @@ describe('Button Component', () => {
     expect(link).toHaveAttribute('href', '/test')
   })
 
-  it('should forward additional props', () => {
+  it('追加プロプを適切に転送すること', () => {
     render(<Button data-testid="custom-button">Test</Button>)
     
     const button = screen.getByTestId('custom-button')
     expect(button).toBeInTheDocument()
   })
 
-  it('should apply custom className along with variant classes', () => {
+  it('カスタムclassNameがバリアントクラスとともに適用されること', () => {
     render(<Button className="custom-class">Custom</Button>)
     
     const button = screen.getByRole('button')

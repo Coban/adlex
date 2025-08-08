@@ -202,4 +202,13 @@ export const handlers = [
       }],
     });
   }),
+
+  // Mock queue status endpoint
+  http.get("/api/checks/queue-status", () => {
+    return HttpResponse.json({
+      queueLength: 0,
+      processing: false,
+      estimatedWait: 0
+    });
+  }),
 ];
