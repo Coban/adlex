@@ -78,8 +78,10 @@ export default function ImageChecker() {
       // Upload via API
       setState('uploading')
       setStatusMessage('アップロード中...')
+      // Client-side preprocessing: resize to max 2000px, convert to JPEG
+      const processedFile = await preprocessForOcr(file, 2000, 0.9)
       const form = new FormData()
-      form.append('image', file)
+      form.append('image', processedFile)
 
       const { data: { session } } = await supabase.auth.getSession()
       const headers: Record<string, string> = {}
@@ -227,6 +229,44 @@ export default function ImageChecker() {
       </div>
     </div>
   )
+}
+
+async function preprocessForOcr(inputFile: File, maxDimension: number, quality: number): Promise<File> {
+  const imgUrl = URL.createObjectURL(inputFile)
+  try {
+    const img = await loadImage(imgUrl)
+    const { width, height } = img
+    const scale = Math.min(1, maxDimension / Math.max(width, height))
+    const targetW = Math.max(1, Math.round(width * scale))
+    const targetH = Math.max(1, Math.round(height * scale))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = targetW
+    canvas.height = targetH
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return inputFile
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(img, 0, 0, targetW, targetH)
+
+    const blob: Blob | null = await new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+    })
+    if (!blob) return inputFile
+    const processedName = inputFile.name.replace(/\.[^.]+$/, '') + '-processed.jpg'
+    return new File([blob], processedName, { type: 'image/jpeg', lastModified: Date.now() })
+  } finally {
+    URL.revokeObjectURL(imgUrl)
+  }
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = (e) => reject(e)
+    img.src = url
+  })
 }
 
 

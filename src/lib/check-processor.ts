@@ -200,13 +200,14 @@ async function performActualCheck(
 
     try {
       // Run OCR via LLM
-      const { extractTextFromImageWithLLM } = await import('@/lib/ai-client')
+      const { extractTextFromImageWithLLM, estimateOcrConfidence } = await import('@/lib/ai-client')
       const start = Date.now()
       const ocr = await extractTextFromImageWithLLM(imageUrl)
       processedText = (ocr.text ?? '').trim()
       if (!processedText) {
         throw new Error('Empty OCR result')
       }
+      const confidence = estimateOcrConfidence(processedText)
 
       // Update with extracted text and OCR completion
       await supabase
@@ -218,7 +219,8 @@ async function performActualCheck(
             provider: ocr.provider,
             model: ocr.model,
             language: 'ja',
-            processing_time_ms: Date.now() - start
+            processing_time_ms: Date.now() - start,
+            confidence
           }
         })
         .eq('id', checkId)

@@ -214,8 +214,12 @@ OCR機能はLLM（Vision）を使用する。
 - [x] ✅ LLMベースOCR（OpenAI gpt-4o / LM Studio dev）🎯
   - 実装: `src/lib/ai-client.ts` の `extractTextFromImageWithLLM`
   - 呼出: `src/lib/check-processor.ts` 画像処理フローから呼び出し
-- [ ] ⏳ 画像前処理機能（ノイズ除去・傾き補正）
-- [ ] ⏳ OCR結果検証機能（言語推定・信頼度推定）
+- [x] ✅ 画像前処理（クライアント）
+  - `src/components/ImageChecker.tsx` でアップロード前に最大2000pxへリサイズ、JPEG変換、画質90%
+- [x] ✅ OCR精度の簡易検証
+  - `src/lib/ai-client.ts` の `estimateOcrConfidence` を用意し、`check-processor` の `ocr_metadata` にconfidenceを記録
+- [ ] ⏳ 追加前処理（傾き補正、ノイズ除去）
+- [ ] ⏳ 言語推定・信頼度の高度化（言語検出/記号率/レイアウト判定）
 
 ### 4.4 画像チェック API
 - [x] ✅ 画像処理ワークフロー（既存 `/api/checks` へ `input_type: "image"` + `image_url` 指定）

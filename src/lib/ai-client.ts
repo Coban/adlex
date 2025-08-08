@@ -316,7 +316,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   const response = await openaiClient.chat.completions.create({
     model: AI_MODELS.chat,
     messages: [
-      { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
+      { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。可能であれば段落・改行を保ち、ノイズを除去して出力してください。' },
       { role: 'user', content: userContent as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }
     ],
     temperature: 0,
@@ -332,6 +332,30 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     provider: 'openai',
     model: AI_MODELS.chat
   }
+}
+
+// Heuristic score for OCR quality (length / unique chars / presence of mojibake)
+/**
+ * OCR結果テキストの簡易信頼度を 0.0〜1.0 で推定するヒューリスティック関数。
+ *
+ * 評価項目:
+ * - 長さスコア: 文字数/50 を上限1.0でクリップ（極端に短い結果は低信頼）
+ * - 多様性スコア: 空白除去後のユニーク文字数/20 を上限1.0でクリップ（単調な繰り返しを低信頼）
+ * - モジバケ系ペナルティ: 置換文字 '�' や U+FFFD の検出で減点
+ *
+ * 合成方法:
+ *   score = clamp01( 0.5*長さ + 0.5*多様性 - ペナルティ ) を小数第2位で丸めて返します。
+ *
+ * 目的: 厳密な品質指標ではなく、UIでの注意喚起や再撮影の推奨に使う軽量指標です。
+ */
+export function estimateOcrConfidence(text: string): number {
+  const lengthScore = Math.min(1, text.length / 50)
+  const uniqueChars = new Set(text.replace(/\s/g, '').split(''))
+  const uniqueScore = Math.min(1, uniqueChars.size / 20)
+  const mojibakePenalty = /�|\ufffd/.test(text) ? 0.3 : 0
+  const punctuationPenalty = (text.match(/[\uFFFD]/g)?.length ?? 0) > 0 ? 0.2 : 0
+  const score = Math.max(0, Math.min(1, 0.5 * lengthScore + 0.5 * uniqueScore - mojibakePenalty - punctuationPenalty))
+  return Number(score.toFixed(2))
 }
 
 // Utility function to create embeddings
@@ -512,7 +536,7 @@ type ViolationData = {
 
 export async function createChatCompletionForCheck(text: string, relevantEntries: DictionaryEntry[]): Promise<{
   type: 'openai' | 'lmstudio'
-  response?: any
+  response?: OpenAI.Chat.Completions.ChatCompletion
   violations: ViolationData[]
   modified: string
 }> {
@@ -628,7 +652,7 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
 
     return {
       type: 'openai',
-      response: response as any,
+      response: response as OpenAI.Chat.Completions.ChatCompletion,
       violations: [], // Will be extracted by caller
       modified: '' // Will be extracted by caller
     }
