@@ -384,10 +384,22 @@ export default function TextChecker() {
             cancelControllers.current.delete(checkId)
             
             if (currentCheck.status === 'completed') {
-              // Get violations
+              // Get violations with dictionary information in one query (N+1 query optimization)
               const { data: violations } = await supabase
                 .from('violations')
-                .select('*')
+                .select(`
+                  id,
+                  start_pos,
+                  end_pos,
+                  reason,
+                  dictionary_id,
+                  dictionaries (
+                    id,
+                    phrase,
+                    category,
+                    notes
+                  )
+                `)
                 .eq('check_id', checkData.id)
               
               // Map violations to component structure
@@ -397,6 +409,12 @@ export default function TextChecker() {
                 end_pos: number
                 reason: string
                 dictionary_id: number | null
+                dictionaries?: {
+                  id: number
+                  phrase: string
+                  category: 'NG' | 'ALLOW'
+                  notes: string | null
+                } | null
               }
               
               const mappedViolations = violations?.map((v: DBViolation) => ({
@@ -406,6 +424,21 @@ export default function TextChecker() {
                 reason: v.reason,
                 dictionary_id: v.dictionary_id ?? undefined
               })) ?? []
+              
+              // Update dictionary info cache for violation details
+              if (violations) {
+                const dictionaryCache: { [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } } = {}
+                violations.forEach((v: DBViolation) => {
+                  if (v.dictionaries && v.dictionary_id) {
+                    dictionaryCache[v.dictionary_id] = {
+                      phrase: v.dictionaries.phrase,
+                      category: v.dictionaries.category,
+                      notes: v.dictionaries.notes
+                    }
+                  }
+                })
+                setDictionaryInfo(prev => ({ ...prev, ...dictionaryCache }))
+              }
               
               const checkResult: CheckResult = {
                 id: currentCheck.id,

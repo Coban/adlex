@@ -171,11 +171,17 @@ AdLex（薬機法チェック & リライト SaaS）の開発進捗を管理す�
 - [x] ✅ 複数チェック同時実行対応（キュー監視・リソース管理・UI表示）
 
 ### 3.5 パフォーマンス最適化
-- [ ] ⏳ データベースクエリ最適化 🎯
-- [ ] ⏳ 同時処理能力向上
-- [ ] ⏳ レスポンス時間短縮（≤5秒）
-- [ ] ⏳ メモリ使用量最適化
-- [ ] ⏳ キャッシュ機能実装
+- [x] ✅ データベースクエリ最適化 🎯
+  - 追補マイグレーション追加: `supabase/migrations/20250808103010_performance_optimization.sql`
+  - 複合/パーシャル/GIN インデックス整備、`get_checks_with_pagination`/`get_combined_similar_phrases` 実装
+- [x] ✅ 同時処理能力向上
+  - `src/lib/queue-manager.ts`: 同時実行数を `ADLEX_MAX_CONCURRENT_CHECKS` 環境変数で制御
+- [x] ✅ レスポンス時間短縮（≤5秒）
+  - `src/lib/check-processor.ts`: 類似フレーズの結果・embedding をメモリキャッシュ（5〜10分TTL）、AI入力の件数を30件に制限
+- [x] ✅ メモリ使用量最適化
+  - キャッシュのTTL/クリーンアップ導入（`src/lib/cache.ts`）と限定的なAI入力で負荷軽減
+- [x] ✅ キャッシュ機能実装
+  - API短寿命キャッシュ: `GET /api/checks/queue-status` を組織単位で2秒キャッシュ
 
 ### 3.6 ファイル・URL対応（将来）
 - [ ] ⏳ ファイルアップロード機能（将来対応）

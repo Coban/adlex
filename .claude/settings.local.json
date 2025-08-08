@@ -64,7 +64,8 @@
       "mcp__serena__replace_regex",
       "mcp__serena__insert_after_symbol",
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --grep \"should perform text check and show results\" --timeout=60000)",
-      "Bash(SKIP_AUTH=true npx playwright test --project=chromium --grep \"should perform text check and show results\" --headed --timeout=60000)"
+      "Bash(SKIP_AUTH=true npx playwright test --project=chromium --grep \"should perform text check and show results\" --headed --timeout=60000)",
+      "mcp__serena__think_about_collected_information"
     ],
     "deny": []
   }

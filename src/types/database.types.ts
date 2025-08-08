@@ -17,10 +17,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
+          extensions?: Json
           operationName?: string
           query?: string
           variables?: Json
-          extensions?: Json
         }
         Returns: Json
       }
@@ -43,10 +43,10 @@ export type Database = {
           extracted_text: string | null
           id: number
           image_url: string | null
-          input_type: string | null
+          input_type: Database["public"]["Enums"]["check_input_type"] | null
           modified_text: string | null
           ocr_metadata: Json | null
-          ocr_status: string | null
+          ocr_status: Database["public"]["Enums"]["ocr_status"] | null
           organization_id: number
           original_text: string
           status: Database["public"]["Enums"]["check_status"] | null
@@ -60,10 +60,10 @@ export type Database = {
           extracted_text?: string | null
           id?: number
           image_url?: string | null
-          input_type?: string | null
+          input_type?: Database["public"]["Enums"]["check_input_type"] | null
           modified_text?: string | null
           ocr_metadata?: Json | null
-          ocr_status?: string | null
+          ocr_status?: Database["public"]["Enums"]["ocr_status"] | null
           organization_id: number
           original_text: string
           status?: Database["public"]["Enums"]["check_status"] | null
@@ -77,10 +77,10 @@ export type Database = {
           extracted_text?: string | null
           id?: number
           image_url?: string | null
-          input_type?: string | null
+          input_type?: Database["public"]["Enums"]["check_input_type"] | null
           modified_text?: string | null
           ocr_metadata?: Json | null
-          ocr_status?: string | null
+          ocr_status?: Database["public"]["Enums"]["ocr_status"] | null
           organization_id?: number
           original_text?: string
           status?: Database["public"]["Enums"]["check_status"] | null
@@ -310,12 +310,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      index_usage_stats: {
+        Row: {
+          index_size: string | null
+          indexname: unknown | null
+          schemaname: unknown | null
+          tablename: unknown | null
+          times_used: number | null
+          tuples_fetched: number | null
+          tuples_read: number | null
+          usage_category: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_invitation: {
         Args: { invitation_token: string; new_user_id: string }
         Returns: undefined
+      }
+      analyze_slow_queries: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          query_text: string
+          calls: number
+          total_time: number
+          avg_time: number
+        }[]
       }
       binary_quantize: {
         Args: { "": string } | { "": unknown }
@@ -325,11 +346,61 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      get_checks_with_pagination: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_organization_id: number
+          p_search?: string
+          p_status?: string
+          p_user_id?: string
+        }
+        Returns: {
+          id: number
+          user_id: string
+          input_type: string
+          original_text: string
+          modified_text: string
+          status: Database["public"]["Enums"]["check_status"]
+          created_at: string
+          completed_at: string
+          total_count: number
+          violation_count: number
+        }[]
+      }
+      get_combined_similar_phrases: {
+        Args: {
+          input_text: string
+          max_results?: number
+          org_id: number
+          query_embedding?: string
+          trgm_threshold?: number
+          vector_threshold?: number
+        }
+        Returns: {
+          id: number
+          phrase: string
+          category: Database["public"]["Enums"]["dictionary_category"]
+          trgm_similarity: number
+          vector_similarity: number
+          combined_score: number
+        }[]
+      }
+      get_organization_performance_stats: {
+        Args: { days_back?: number; org_id: number }
+        Returns: {
+          total_checks: number
+          avg_processing_time_seconds: number
+          success_rate: number
+          most_common_violations: string[]
+          peak_usage_hour: number
+        }[]
+      }
       get_similar_phrases: {
         Args: {
           input_text: string
-          similarity_threshold?: number
           org_id?: number
+          similarity_threshold?: number
         }
         Returns: {
           id: number
@@ -340,9 +411,9 @@ export type Database = {
       }
       get_vector_similar_phrases: {
         Args: {
+          org_id?: number
           query_embedding: string
           similarity_threshold?: number
-          org_id?: number
         }
         Returns: {
           id: number
@@ -425,7 +496,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
+        Returns: string
       }
       process_user_invitation: {
         Args: { invitation_token: string; user_password: string }
@@ -481,8 +552,10 @@ export type Database = {
       }
     }
     Enums: {
+      check_input_type: "text" | "image"
       check_status: "pending" | "processing" | "completed" | "failed"
       dictionary_category: "NG" | "ALLOW"
+      ocr_status: "pending" | "processing" | "completed" | "failed"
       organization_plan: "trial" | "basic"
       user_role: "admin" | "user"
     }
@@ -615,8 +688,10 @@ export const Constants = {
   },
   public: {
     Enums: {
+      check_input_type: ["text", "image"],
       check_status: ["pending", "processing", "completed", "failed"],
       dictionary_category: ["NG", "ALLOW"],
+      ocr_status: ["pending", "processing", "completed", "failed"],
       organization_plan: ["trial", "basic"],
       user_role: ["admin", "user"],
     },

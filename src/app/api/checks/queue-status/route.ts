@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { cache, CacheUtils } from '@/lib/cache'
 import { queueManager } from '@/lib/queue-manager'
 import { createClient } from '@/lib/supabase/server'
 
@@ -37,6 +38,14 @@ export async function GET() {
       .select('organization_id')
       .eq('id', user.id)
       .single()
+
+    // 短寿命キャッシュ（2秒）
+    const orgId = userProfile?.organization_id ?? 0
+    const cacheKey = CacheUtils.queueStatusKey(orgId)
+    const cached = cache.get<{ success: true; queue: Record<string, unknown>; organization: Record<string, unknown>; system: Record<string, unknown> }>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
 
     // 組織の使用制限情報を取得
     const { data: organizationData } = await supabase
@@ -77,6 +86,7 @@ export async function GET() {
       }
     }
 
+    cache.set(cacheKey, response, 2 * 1000)
     return NextResponse.json(response)
   } catch (error) {
     console.error('[QUEUE-STATUS] Unexpected error:', error)

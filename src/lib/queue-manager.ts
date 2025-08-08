@@ -22,7 +22,8 @@ class CheckQueueManager {
   private isProcessing = false
 
   constructor(maxConcurrent = 3) {
-    this.maxConcurrent = maxConcurrent
+    const fromEnv = Number(process.env.ADLEX_MAX_CONCURRENT_CHECKS)
+    this.maxConcurrent = Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : maxConcurrent
   }
 
   /**

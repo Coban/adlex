@@ -1,16 +1,20 @@
 
 
 
+import { cache, CacheUtils } from '@/lib/cache'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 
 // Type definitions for the API
-interface DictionaryEntry {
+type DictionaryCategory = Database['public']['Enums']['dictionary_category']
+
+interface CombinedPhrase {
   id: number
   phrase: string
-  category: Database['public']['Enums']['dictionary_category']
-  similarity?: number
-  notes?: string
+  category: DictionaryCategory
+  trgm_similarity?: number
+  vector_similarity?: number
+  combined_score?: number
 }
 
 interface ViolationData {
@@ -233,92 +237,83 @@ async function performActualCheck(
   // Continue with normal text processing using processedText
   console.log(`[CHECK] Processing text analysis for check ${checkId}`)
 
-  // Get similar phrases using trigram similarity first (performance optimization)
-  const { data: similarPhrases, error: similarError } = await supabase.rpc(
-    'get_similar_phrases',
-    { 
-      input_text: processedText,
-      similarity_threshold: 0.3,
-      org_id: organizationId
-    }
-  )
+  // Cache key for similar phrases per org + text hash
+  const textHash = CacheUtils.hashText(processedText)
+  const similarKey = CacheUtils.similarPhrasesKey(organizationId, textHash)
 
-  if (similarError) {
-    console.error(`[CHECK] Error getting similar phrases for check ${checkId}:`, similarError)
-    throw new Error(`Failed to get similar phrases: ${similarError.message}`)
+  // Try cache first
+  let combinedPhrases = cache.get<CombinedPhrase[]>(similarKey)
+
+  if (!combinedPhrases) {
+    // Create embedding for semantic similarity check (cached by text hash to reduce API calls)
+    const embeddingKey = `emb:${textHash}`
+    let embedding = cache.get<number[]>(embeddingKey)
+
+    if (!embedding) {
+      const { createEmbedding } = await import('@/lib/ai-client')
+      try {
+        embedding = await createEmbedding(processedText)
+        cache.set(embeddingKey, embedding, 10 * 60 * 1000) // 10分TTL
+      } catch (embeddingError) {
+        console.error(`[CHECK] Failed to create embedding for check ${checkId}:`, embeddingError)
+        throw new Error(`Failed to create embedding: ${embeddingError}`)
+      }
+    }
+
+    // Use optimized combined similar phrases function (performance optimization)
+    const { data, error: combinedError } = await (supabase as unknown as {
+      rpc: (
+        fn: 'get_combined_similar_phrases',
+        args: {
+          input_text: string
+          org_id: number
+          trgm_threshold: number
+          vector_threshold: number
+          query_embedding: string
+          max_results: number
+        }
+      ) => Promise<{ data: CombinedPhrase[]; error: { message: string } | null }>
+    }).rpc(
+      'get_combined_similar_phrases',
+      { 
+        input_text: processedText,
+        org_id: organizationId,
+        trgm_threshold: 0.3,
+        vector_threshold: 0.75,
+        query_embedding: JSON.stringify(embedding),
+        max_results: 50
+      }
+    )
+
+    if (combinedError) {
+      console.error(`[CHECK] Error getting combined similar phrases for check ${checkId}:`, combinedError)
+      throw new Error(`Failed to get combined similar phrases: ${combinedError.message}`)
+    }
+
+    combinedPhrases = Array.isArray(data) ? data : []
+    // Cache similar phrases for 5分（同一テキストの再チェック高速化）
+    cache.set(similarKey, combinedPhrases, 5 * 60 * 1000)
+  } else {
+    console.log(`[CHECK] Using cached similar phrases for check ${checkId} (key=${similarKey})`)
   }
 
-  if (!similarPhrases || similarPhrases.length === 0) {
+  if (!combinedPhrases || combinedPhrases.length === 0) {
     console.log(`[CHECK] No similar phrases found for check ${checkId}`)
     await completeCheck(checkId, processedText, [], supabase)
     return
   }
 
-  console.log(`[CHECK] Found ${similarPhrases.length} similar phrases for check ${checkId}`)
+  console.log(`[CHECK] Found ${combinedPhrases.length} combined similar phrases for check ${checkId}`)
 
-  // Create embedding for semantic similarity check
-  const { createEmbedding } = await import('@/lib/ai-client')
-  let embedding: number[]
-
-  try {
-    embedding = await createEmbedding(processedText)
-  } catch (embeddingError) {
-    console.error(`[CHECK] Failed to create embedding for check ${checkId}:`, embeddingError)
-    throw new Error(`Failed to create embedding: ${embeddingError}`)
-  }
-
-  // Get semantically similar phrases
-  const { data: vectorSimilarPhrases, error: vectorError } = await supabase.rpc(
-    'get_vector_similar_phrases',
-    { 
-      query_embedding: JSON.stringify(embedding),
-      similarity_threshold: 0.75,
-      org_id: organizationId
-    }
-  )
-
-  if (vectorError) {
-    console.error(`[CHECK] Error getting vector similar phrases for check ${checkId}:`, vectorError)
-    throw new Error(`Failed to get vector similar phrases: ${vectorError.message}`)
-  }
-
-  if (!vectorSimilarPhrases || vectorSimilarPhrases.length === 0) {
-    console.log(`[CHECK] No vector similar phrases found for check ${checkId}`)
-    await completeCheck(checkId, processedText, [], supabase)
-    return
-  }
-
-  console.log(`[CHECK] Found ${vectorSimilarPhrases.length} vector similar phrases for check ${checkId}`)
-
-  // Combine and deduplicate dictionary entries
-  const combinedEntries = new Map<number, DictionaryEntry>()
-  
-  for (const phrase of similarPhrases) {
-    combinedEntries.set(phrase.id, {
-      id: phrase.id,
-      phrase: phrase.phrase,
-      category: phrase.category,
-      similarity: phrase.similarity
-    })
-  }
-  
-  for (const phrase of vectorSimilarPhrases) {
-    const existing = combinedEntries.get(phrase.id)
-    if (existing) {
-      // Update similarity to higher value
-      existing.similarity = Math.max(existing.similarity ?? 0, phrase.similarity ?? 0)
-    } else {
-      combinedEntries.set(phrase.id, {
-        id: phrase.id,
-        phrase: phrase.phrase,
-        category: phrase.category,
-        similarity: phrase.similarity ?? 0
-      })
-    }
-  }
-
-  const relevantEntries = Array.from(combinedEntries.values())
+  // Filter for NG entries and convert to internal format
+  const relevantEntries = combinedPhrases
     .filter(entry => entry.category === 'NG')
+    .map(entry => ({
+      id: entry.id,
+      phrase: entry.phrase,
+      category: entry.category,
+      similarity: entry.combined_score // Use combined score for relevance
+    }))
     .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
 
   if (relevantEntries.length === 0) {
@@ -327,30 +322,38 @@ async function performActualCheck(
     return
   }
 
-  console.log(`[CHECK] Processing ${relevantEntries.length} relevant NG phrases for check ${checkId}`)
+  // Limit entries passed to AI to reduce token usage and response time
+  const MAX_AI_ENTRIES = 30
+  const limitedEntries = relevantEntries.slice(0, MAX_AI_ENTRIES)
+
+  console.log(`[CHECK] Processing ${limitedEntries.length}/${relevantEntries.length} relevant NG phrases for check ${checkId}`)
 
   // Use AI to analyze and generate violations
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
-    const result = await createChatCompletionForCheck(processedText, relevantEntries)
+    const result = await createChatCompletionForCheck(processedText, limitedEntries)
     
     let violations: ViolationData[]
     let modifiedText: string
 
     if (result.type === 'openai') {
-      const functionCall = (result.response as any)?.choices?.[0]?.message?.function_call
+      const responseAny = result.response as unknown as { choices?: Array<{ message?: { function_call?: { arguments?: string } } }> }
+      const functionCall = responseAny?.choices?.[0]?.message?.function_call
       if (!functionCall) {
         throw new Error('OpenAI did not return expected function call')
       }
       
-      const analysisResult = JSON.parse(functionCall.arguments ?? '{}')
+      const analysisResult = JSON.parse(functionCall.arguments ?? '{}') as {
+        modified?: string
+        violations?: Array<{ start: number; end: number; reason: string; dictionaryId?: number }>
+      }
       // Convert from OpenAI format to internal format
-      violations = (analysisResult.violations ?? []).map((v: unknown) => ({
-        start_pos: (v as any).start,
-        end_pos: (v as any).end,
-        reason: (v as any).reason,
-        dictionary_id: (v as any).dictionaryId
+      violations = (analysisResult.violations ?? []).map((v) => ({
+        start_pos: v.start,
+        end_pos: v.end,
+        reason: v.reason,
+        dictionary_id: v.dictionaryId
       }))
       modifiedText = analysisResult.modified ?? processedText
     } else {

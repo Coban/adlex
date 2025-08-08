@@ -99,7 +99,7 @@ export async function GET(
       startHeartbeat(20000) // 20秒間隔でハートビート開始
 
       // 段階的タイムアウト処理
-      let connectionTimeout: NodeJS.Timeout
+      const connectionTimeout: NodeJS.Timeout
       let progressTimeout: NodeJS.Timeout
       
       // 進捗タイムアウト: 一定時間進捗がない場合の処理
@@ -181,11 +181,7 @@ export async function GET(
         clearTimeout(progressTimeout)
         clearInterval(heartbeatInterval)
         channel.unsubscribe()
-        try {
-          controller.close()
-        } catch (_error) {
-          // Controller already closed
-        }
+        try { controller.close() } catch { /* already closed */ }
       }
       
       // クライアント切断時のクリーンアップ
