@@ -51,6 +51,7 @@ export default function DictionariesPage() {
   })
   const [message, setMessage] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState<number | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const loadDictionaries = useCallback(async () => {
     // Try loading dictionaries even if organization is null
@@ -545,6 +546,76 @@ export default function DictionariesPage() {
           <p className="text-muted-foreground">組織の薬機法チェック辞書を管理します</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <>
+              <Button 
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/dictionaries/export', { method: 'GET' })
+                    if (!res.ok) {
+                      const j = await res.json().catch(() => ({}))
+                      throw new Error(j.error ?? 'エクスポートに失敗しました')
+                    }
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = 'dictionaries.csv'
+                    document.body.appendChild(a)
+                    a.click()
+                    a.remove()
+                    URL.revokeObjectURL(url)
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'エクスポートに失敗しました')
+                  }
+                }}
+                variant="outline"
+                data-testid="export-csv"
+              >
+                エクスポートCSV
+              </Button>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: 'none' }}
+                  onChange={async (ev) => {
+                    const file = ev.target.files?.[0]
+                    if (!file) return
+                    setImporting(true)
+                    try {
+                      const text = await file.text()
+                      const res = await fetch('/api/dictionaries/import', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'text/csv; charset=utf-8',
+                        },
+                        body: text,
+                      })
+                      const json = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        throw new Error(json.error ?? 'インポートに失敗しました')
+                      }
+                      setMessage(`インポート完了: 追加 ${json.inserted ?? 0} 件, スキップ ${json.skipped?.length ?? 0} 件`)
+                      setTimeout(() => setMessage(''), 5000)
+                      loadDictionaries()
+                      loadEmbeddingStats()
+                    } catch (e) {
+                      console.error('CSVインポート失敗', e)
+                      alert(e instanceof Error ? e.message : 'CSVインポートに失敗しました')
+                    } finally {
+                      setImporting(false)
+                      // リセット
+                      ;(ev.target as HTMLInputElement).value = ''
+                    }
+                  }}
+                />
+                <Button asChild disabled={importing} data-testid="import-csv">
+                  <span>{importing ? 'インポート中...' : 'インポートCSV'}</span>
+                </Button>
+              </label>
+            </>
+          )}
           {isAdmin && (
             <Button 
               onClick={() => setShowRegenerateDialog(true)} 
