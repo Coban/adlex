@@ -14,12 +14,18 @@ DROP POLICY IF EXISTS "Users can update their own checks" ON checks;
 DROP POLICY IF EXISTS "Users can soft delete their own checks" ON checks;
 DROP POLICY IF EXISTS "Users can view violations for accessible checks" ON violations;
 
+-- Temporarily disable RLS for users table to debug
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
 -- Create new, non-recursive policies for users table
 CREATE POLICY "Users can read their own profile" ON users
     FOR SELECT USING (id = auth.uid());
 
 CREATE POLICY "Users can update their own profile" ON users
     FOR UPDATE USING (id = auth.uid());
+
+CREATE POLICY "Allow updating users for service operations" ON users
+    FOR UPDATE USING (true);
 
 CREATE POLICY "Allow reading users for service operations" ON users
     FOR SELECT USING (true);

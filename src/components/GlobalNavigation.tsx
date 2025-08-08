@@ -1,9 +1,5 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/contexts/AuthContext'
 import { 
   Home, 
   FileText, 
@@ -12,11 +8,17 @@ import {
   Bug,
   LogIn,
   UserPlus,
+  Clock,
   LogOut,
   Menu,
   X
 } from 'lucide-react'
-import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface NavigationItem {
   name: string
@@ -38,6 +40,13 @@ const navigationItems: NavigationItem[] = [
     name: 'テキストチェック',
     href: '/checker',
     icon: FileText,
+    requireAuth: true,
+    showInMobile: true
+  },
+  {
+    name: 'チェック履歴',
+    href: '/history',
+    icon: Clock,
     requireAuth: true,
     showInMobile: true
   },
@@ -69,6 +78,12 @@ export default function GlobalNavigation() {
   const { user, userProfile, organization, loading, signOut } = useAuth()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -78,6 +93,10 @@ export default function GlobalNavigation() {
   }
 
   const shouldShowItem = (item: NavigationItem) => {
+    // During initial mount, show all non-auth items
+    if (!mounted) {
+      return !item.requireAuth
+    }
     if (item.requireAuth && !user) return false
     if (item.requireRole && userProfile?.role !== item.requireRole) return false
     return true
@@ -101,7 +120,7 @@ export default function GlobalNavigation() {
             </Link>
 
             {/* デスクトップナビゲーション */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-4" data-testid="desktop-nav">
               {visibleItems.map((item) => {
                 const Icon = item.icon
                 return (
@@ -113,6 +132,14 @@ export default function GlobalNavigation() {
                         ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
+                    data-testid={
+                      item.href === '/' ? 'nav-home' :
+                      item.href === '/checker' ? 'nav-checker' :
+                      item.href === '/history' ? 'nav-history' :
+                      item.href === '/admin/users' ? 'nav-admin' : 
+                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      undefined
+                    }
                   >
                     {Icon && <Icon className="w-4 h-4" />}
                     <span>{item.name}</span>
@@ -125,12 +152,12 @@ export default function GlobalNavigation() {
           {/* 右側のユーザー情報とメニュー */}
           <div className="flex items-center space-x-4">
             {/* ローディング中の表示 */}
-            {loading && (
+            {(!mounted || loading) && (
               <div className="text-sm text-gray-500">読み込み中...</div>
             )}
 
             {/* 認証済みユーザーの表示 */}
-            {!loading && user && (
+            {mounted && !loading && user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">{user.email}</div>
@@ -143,8 +170,17 @@ export default function GlobalNavigation() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={signOut}
+                  onClick={async () => {
+                    try {
+                            await signOut()
+                    } catch (error) {
+                      console.error('GlobalNavigation: SignOut failed:', error)
+                      // エラーメッセージを表示（必要に応じて）
+                      alert('サインアウトに失敗しました。もう一度お試しください。')
+                    }
+                  }}
                   className="flex items-center space-x-2"
+                  data-testid="nav-signout"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>サインアウト</span>
@@ -153,16 +189,16 @@ export default function GlobalNavigation() {
             )}
 
             {/* 未認証ユーザーの表示 */}
-            {!loading && !user && (
+            {mounted && !loading && !user && (
               <div className="hidden md:flex items-center space-x-2">
                 <Link href="/auth/signin">
-                  <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" className="flex items-center space-x-2" data-testid="nav-signin">
                     <LogIn className="w-4 h-4" />
                     <span>サインイン</span>
                   </Button>
                 </Link>
                 <Link href="/auth/signup">
-                  <Button size="sm" className="flex items-center space-x-2">
+                  <Button size="sm" className="flex items-center space-x-2" data-testid="nav-signup">
                     <UserPlus className="w-4 h-4" />
                     <span>サインアップ</span>
                   </Button>
@@ -177,6 +213,7 @@ export default function GlobalNavigation() {
                 size="sm"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="p-2"
+                data-testid="mobile-menu-toggle"
               >
                 {mobileMenuOpen ? (
                   <X className="w-5 h-5" />
@@ -190,7 +227,7 @@ export default function GlobalNavigation() {
 
         {/* モバイルメニュー */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
+          <div className="md:hidden py-4 border-t border-gray-200" data-testid="mobile-menu">
             <div className="space-y-2">
               {mobileVisibleItems.map((item) => {
                 const Icon = item.icon
@@ -204,6 +241,14 @@ export default function GlobalNavigation() {
                         ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
+                    data-testid={
+                      item.href === '/' ? 'nav-home' :
+                      item.href === '/checker' ? 'nav-checker' :
+                      item.href === '/history' ? 'nav-history' :
+                      item.href === '/admin/users' ? 'nav-admin' : 
+                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      undefined
+                    }
                   >
                     {Icon && <Icon className="w-4 h-4" />}
                     <span>{item.name}</span>
@@ -227,11 +272,19 @@ export default function GlobalNavigation() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => {
-                      signOut()
-                      setMobileMenuOpen(false)
+                    onClick={async () => {
+                      try {
+                                            await signOut()
+                        setMobileMenuOpen(false)
+                      } catch (error) {
+                        console.error('GlobalNavigation Mobile: SignOut failed:', error)
+                        setMobileMenuOpen(false)
+                        // エラーメッセージを表示（必要に応じて）
+                        alert('サインアウトに失敗しました。もう一度お試しください。')
+                      }
                     }}
                     className="w-full flex items-center justify-center space-x-2"
+                    data-testid="nav-signout"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>サインアウト</span>
@@ -242,13 +295,13 @@ export default function GlobalNavigation() {
               {!loading && !user && (
                 <div className="space-y-2">
                   <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full flex items-center justify-center space-x-2">
+                    <Button variant="outline" size="sm" className="w-full flex items-center justify-center space-x-2" data-testid="nav-signin">
                       <LogIn className="w-4 h-4" />
                       <span>サインイン</span>
                     </Button>
                   </Link>
                   <Link href="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
-                    <Button size="sm" className="w-full flex items-center justify-center space-x-2">
+                    <Button size="sm" className="w-full flex items-center justify-center space-x-2" data-testid="nav-signup">
                       <UserPlus className="w-4 h-4" />
                       <span>サインアップ</span>
                     </Button>

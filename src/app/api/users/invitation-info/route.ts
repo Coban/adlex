@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       email: invitation.email,
       role: invitation.role,
-      organizationName: organization?.name || "不明な組織",
+      organizationName: organization?.name ?? "不明な組織",
     });
   } catch (error) {
     console.error("Get invitation info error:", error);

@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { AuthProvider } from "@/contexts/AuthContext";
-import GlobalNavigation from "@/components/GlobalNavigation";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { Geist, Geist_Mono } from 'next/font/google'
+import { Suspense } from 'react'
+
+import GlobalNavigation from '@/components/GlobalNavigation'
+import MSWInit from '@/components/MSWInit'
+import { AuthProvider } from '@/contexts/AuthContext'
+
+import './globals.css'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,20 +25,29 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="ja">
+    <html lang='ja'>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <GlobalNavigation />
-          <main>
-            {children}
-          </main>
-        </AuthProvider>
+        <div className='min-h-screen bg-background'>
+          <AuthProvider>
+            <Suspense
+              fallback={
+                <div className='flex items-center justify-center min-h-screen'>
+                  <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-primary'></div>
+                </div>
+              }
+            >
+              <GlobalNavigation />
+              <main>{children}</main>
+            </Suspense>
+          </AuthProvider>
+        </div>
+        <MSWInit />
       </body>
     </html>
   );

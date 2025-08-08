@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
+import { createEmbedding } from "@/lib/ai-client";
 import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/types/database.types";
-import { createEmbedding } from "@/lib/ai-client";
 
 type DictionaryUpdate = Database["public"]["Tables"]["dictionaries"]["Update"];
 type DictionaryRow = Database["public"]["Tables"]["dictionaries"]["Row"];
@@ -18,12 +19,13 @@ interface DictionaryUpdateWithVector extends DictionaryUpdate {
 }
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }, { status: 404 });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -103,16 +106,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }
 
-    const body = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     const { phrase, category, notes } = body;
 
     // バリデーション
-    if (!phrase || !phrase.trim()) {
+    if (!phrase?.trim()) {
       return NextResponse.json({ error: "フレーズは必須です" }, {
         status: 400,
       });
@@ -144,10 +153,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (phraseChanged) {
       try {
-        console.log("フレーズが変更されたためembedding再生成を開始:", phrase);
         const newVector = await createEmbedding(phrase.trim());
         vector = JSON.stringify(newVector);
-        console.log("Embedding再生成成功, 次元数:", newVector.length);
       } catch (embeddingError) {
         console.warn("Embedding再生成に失敗しました:", embeddingError);
         // Embedding生成に失敗してもアイテム更新は続行
@@ -157,7 +164,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const updates: DictionaryUpdateWithVector = {
       phrase: phrase.trim(),
       category,
-      notes: notes?.trim() || null,
+      notes: notes?.trim() ?? null,
       updated_at: new Date().toISOString(),
     };
 
@@ -197,6 +204,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
 
@@ -226,7 +234,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    const dictionaryId = parseInt(params.id);
+    const dictionaryId = parseInt(id);
     if (isNaN(dictionaryId)) {
       return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
     }

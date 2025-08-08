@@ -2,11 +2,16 @@
 -- 開発環境でのテスト用アカウントとデータを作成
 
 -- テスト用組織を作成
-INSERT INTO organizations (name, plan, max_checks, used_checks, trial_ends_at) VALUES 
-('テスト組織A', 'trial', 200, 5, NOW() + INTERVAL '30 days'),
-('テスト組織B', 'basic', 1000, 50, NULL),
-('サンプル薬局', 'trial', 200, 0, NOW() + INTERVAL '25 days')
-ON CONFLICT DO NOTHING;
+INSERT INTO organizations (id, name, plan, max_checks, used_checks, trial_ends_at) VALUES 
+(1, 'テスト組織A', 'trial', 200, 5, NOW() + INTERVAL '30 days'),
+(2, 'テスト組織B', 'basic', 1000, 50, NULL),
+(3, 'サンプル薬局', 'trial', 200, 0, NOW() + INTERVAL '25 days')
+ON CONFLICT (id) DO UPDATE SET 
+  name = EXCLUDED.name,
+  plan = EXCLUDED.plan,
+  max_checks = EXCLUDED.max_checks,
+  used_checks = EXCLUDED.used_checks,
+  trial_ends_at = EXCLUDED.trial_ends_at;
 
 -- テスト用ユーザーを auth.users テーブルに作成（開発環境のみ）
 -- 注意: 本番環境では絶対に使用しないでください
@@ -209,7 +214,9 @@ INSERT INTO users (id, email, organization_id, role) VALUES
 ('22222222-2222-2222-2222-222222222222', 'manager@test.com', 2, 'admin'),
 ('33333333-3333-3333-3333-333333333333', 'user1@test.com', 1, 'user'),
 ('44444444-4444-4444-4444-444444444444', 'user2@test.com', 2, 'user')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET 
+  organization_id = EXCLUDED.organization_id,
+  role = EXCLUDED.role;
 
 -- テスト用辞書エントリを追加
 INSERT INTO dictionaries (organization_id, phrase, category, notes) VALUES 

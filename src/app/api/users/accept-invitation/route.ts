@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, password } = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    const { token, password } = body;
 
     if (!token || !password) {
       return NextResponse.json(
@@ -57,7 +65,7 @@ export async function POST(request: NextRequest) {
       password,
       options: {
         emailRedirectTo: `${
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
         }/auth/callback`,
         data: {
           invitationToken: token,

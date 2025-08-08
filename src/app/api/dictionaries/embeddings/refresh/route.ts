@@ -1,18 +1,10 @@
+import { Client as QStashClient } from "@upstash/qstash";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createEmbedding } from "@/lib/ai-client";
 
-interface RefreshResponse {
-  message: string;
-  totalProcessed: number;
-  successCount: number;
-  failureCount: number;
-  failures?: Array<{
-    id: number;
-    phrase: string;
-    error: string;
-  }>;
-}
+import { embeddingQueue } from "@/lib/embedding-queue";
+import { createClient } from "@/lib/supabase/server";
+
+// (unused type removed)
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,102 +37,73 @@ export async function POST(request: NextRequest) {
     }
 
     // リクエストボディから対象IDを取得（省略可能）
-    const body = await request.json().catch(() => ({}));
-    const { dictionaryIds } = body;
-
-    // 対象となる辞書項目を取得
-    let query = supabase
-      .from("dictionaries")
-      .select("id, phrase")
-      .eq("organization_id", userProfile.organization_id);
-
-    // 特定のIDが指定されている場合はフィルタリング
-    if (
-      dictionaryIds && Array.isArray(dictionaryIds) && dictionaryIds.length > 0
-    ) {
-      query = query.in("id", dictionaryIds);
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
     }
+    const { dictionaryIds } = body ?? {};
 
-    const { data: dictionaries, error: fetchError } = await query;
+    // QStashが設定されていればQStashで非同期化、なければアプリ内キューにフォールバック
+    const useQStash = !!process.env.QSTASH_TOKEN && !!process.env.NEXT_PUBLIC_BASE_URL
 
-    if (fetchError) {
-      console.error("辞書項目取得エラー:", fetchError);
-      return NextResponse.json({ error: "辞書項目の取得に失敗しました" }, {
-        status: 500,
-      });
-    }
+    if (useQStash) {
+      const supabase = await createClient()
+      // 送信対象の辞書項目IDを確定
+      let query = supabase
+        .from("dictionaries")
+        .select("id, phrase")
+        .eq("organization_id", userProfile.organization_id)
 
-    if (!dictionaries || dictionaries.length === 0) {
-      return NextResponse.json({
-        message: "対象となる辞書項目が見つかりません",
-        totalProcessed: 0,
-        successCount: 0,
-        failureCount: 0,
-      });
-    }
-
-    console.log(`${dictionaries.length}個の辞書項目のembedding再生成を開始`);
-
-    let successCount = 0;
-    let failureCount = 0;
-    const failures: Array<{ id: number; phrase: string; error: string }> = [];
-
-    // 各辞書項目のembeddingを順次生成
-    for (const dictionary of dictionaries) {
-      try {
-        console.log(
-          `辞書項目 ${dictionary.id} のembedding生成中: "${dictionary.phrase}"`,
-        );
-
-        const vector = await createEmbedding(dictionary.phrase);
-
-        // データベースを更新
-        const { error: updateError } = await supabase
-          .from("dictionaries")
-          .update({
-            vector: JSON.stringify(vector),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", dictionary.id);
-
-        if (updateError) {
-          throw new Error(`データベース更新エラー: ${updateError.message}`);
-        }
-
-        successCount++;
-        console.log(`辞書項目 ${dictionary.id} のembedding生成完了`);
-      } catch (error) {
-        failureCount++;
-        const errorMessage = error instanceof Error
-          ? error.message
-          : "不明なエラー";
-        failures.push({
-          id: dictionary.id,
-          phrase: dictionary.phrase,
-          error: errorMessage,
-        });
-        console.error(
-          `辞書項目 ${dictionary.id} のembedding生成に失敗:`,
-          errorMessage,
-        );
+      if (Array.isArray(dictionaryIds) && dictionaryIds.length > 0) {
+        query = query.in("id", dictionaryIds)
       }
+      const { data: dictionaries, error: fetchError } = await query
+      if (fetchError) {
+        console.error("辞書項目取得エラー:", fetchError)
+        return NextResponse.json({ error: "辞書項目の取得に失敗しました" }, { status: 500 })
+      }
+
+      if (!dictionaries || dictionaries.length === 0) {
+        return NextResponse.json({ message: "対象となる辞書項目が見つかりません" })
+      }
+
+      const client = new QStashClient({ token: process.env.QSTASH_TOKEN! })
+      const targetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/dictionaries/embeddings/qstash`
+
+      // 逐次キュー投入（QStash側の自動リトライに任せる）
+      // バックオフ: 30s, 60s, 120s など（maxRetries 3）
+      const publishPromises = dictionaries.map((d) =>
+        client.publishJSON({
+          url: targetUrl,
+          body: {
+            dictionaryId: d.id,
+            organizationId: userProfile.organization_id,
+            phrase: d.phrase,
+          },
+          retries: 3,
+          backoff: 30, // seconds
+          method: "POST",
+        })
+      )
+      await Promise.allSettled(publishPromises)
+
+      return NextResponse.json({ message: "QStashへ再生成ジョブを投入しました", count: dictionaries.length })
+    } else {
+      // フォールバック: アプリ内キュー
+      const job = await embeddingQueue.enqueueOrganization(
+        userProfile.organization_id,
+        Array.isArray(dictionaryIds) && dictionaryIds.length > 0 ? dictionaryIds : undefined
+      )
+      return NextResponse.json({
+        message: "Embedding再生成ジョブを開始しました",
+        jobId: job.id,
+        total: job.total,
+        status: job.status,
+      })
     }
-
-    const response: RefreshResponse = {
-      message:
-        `Embedding再生成が完了しました。成功: ${successCount}件、失敗: ${failureCount}件`,
-      totalProcessed: dictionaries.length,
-      successCount,
-      failureCount,
-    };
-
-    if (failures.length > 0) {
-      response.failures = failures;
-    }
-
-    console.log("Embedding再生成処理完了:", response);
-
-    return NextResponse.json(response);
   } catch (error) {
     console.error("Embedding再生成API エラー:", error);
     return NextResponse.json({
@@ -152,8 +115,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GETメソッドで組織の辞書項目のembedding状況を確認
-export async function GET() {
+// GETメソッド
+// - ?jobId=... がある場合: 非同期ジョブの進捗を返す
+// - パラメータがない場合: 組織の辞書項目のembedding状況を返す
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -183,7 +148,18 @@ export async function GET() {
       });
     }
 
-    // 組織の辞書項目のembedding状況を取得
+    // ジョブ進捗の問い合わせ
+    const url = new URL(request.url)
+    const jobId = url.searchParams.get('jobId')
+    if (jobId) {
+      const job = embeddingQueue.getJob(jobId)
+      if (!job) {
+        return NextResponse.json({ error: '指定されたジョブが見つかりません' }, { status: 404 })
+      }
+      return NextResponse.json(job)
+    }
+
+    // 組織の辞書項目のembedding統計を取得
     const { data: stats, error: statsError } = await supabase
       .from("dictionaries")
       .select("id, phrase, vector")

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
+import { createEmbedding } from "@/lib/ai-client";
 import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/types/database.types";
-import { createEmbedding } from "@/lib/ai-client";
 
 type DictionaryInsert = Database["public"]["Tables"]["dictionaries"]["Insert"];
 type DictionaryRow = Database["public"]["Tables"]["dictionaries"]["Row"];
@@ -37,8 +38,8 @@ export async function GET(request: NextRequest) {
 
     // 検索クエリパラメータを取得
     const url = new URL(request.url);
-    const searchTerm = url.searchParams.get("search") || "";
-    const category = url.searchParams.get("category") || "ALL";
+    const searchTerm = url.searchParams.get("search") ?? "";
+    const category = url.searchParams.get("category") ?? "ALL";
 
     // 基本クエリ
     let query = supabase
@@ -107,11 +108,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const body = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     const { phrase, category, notes } = body;
 
     // バリデーション
-    if (!phrase || !phrase.trim()) {
+    if (!phrase?.trim()) {
       return NextResponse.json({ error: "フレーズは必須です" }, {
         status: 400,
       });
@@ -126,9 +133,7 @@ export async function POST(request: NextRequest) {
     // Embedding生成
     let vector: number[] | null = null;
     try {
-      console.log("辞書項目のembedding生成を開始:", phrase);
       vector = await createEmbedding(phrase.trim());
-      console.log("Embedding生成成功, 次元数:", vector.length);
     } catch (embeddingError) {
       console.warn("Embedding生成に失敗しました:", embeddingError);
       // Embedding生成に失敗してもアイテム作成は続行
@@ -138,7 +143,7 @@ export async function POST(request: NextRequest) {
       organization_id: userProfile.organization_id,
       phrase: phrase.trim(),
       category,
-      notes: notes?.trim() || null,
+      notes: notes?.trim() ?? null,
       vector: vector ? JSON.stringify(vector) : null,
     };
 

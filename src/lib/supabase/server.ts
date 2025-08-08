@@ -1,16 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+
 import { Database } from '@/types/database.types'
 
 export async function createClient() {
   const cookieStore = await cookies()
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-  console.log('Creating server Supabase client with:', {
-    url: supabaseUrl,
-    keyPrefix: supabaseAnonKey.substring(0, 20) + '...'
-  })
 
   return createServerClient<Database>(
     supabaseUrl,
@@ -33,15 +29,9 @@ export async function createClient() {
         },
       },
       auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      },
-      global: {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
+        persistSession: false, // Don't persist on server
+        autoRefreshToken: false, // Don't auto-refresh on server
+        detectSessionInUrl: false // Don't detect URL on server
       }
     }
   )

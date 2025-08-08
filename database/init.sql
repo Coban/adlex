@@ -47,9 +47,15 @@ CREATE TABLE checks (
     id BIGSERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    input_type TEXT DEFAULT 'text' CHECK (input_type IN ('text', 'image')),
     original_text TEXT NOT NULL,
+    extracted_text TEXT, -- OCR extracted text for images
+    image_url TEXT, -- URL to uploaded image file
+    ocr_status TEXT DEFAULT 'not_required' CHECK (ocr_status IN ('not_required', 'pending', 'processing', 'completed', 'failed')),
+    ocr_metadata JSONB, -- OCR processing details and metadata
     modified_text TEXT,
     status check_status DEFAULT 'pending',
+    error_message TEXT, -- Error message for failed checks
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -78,6 +84,8 @@ CREATE INDEX idx_dictionaries_category ON dictionaries(category);
 CREATE INDEX idx_checks_user_id ON checks(user_id);
 CREATE INDEX idx_checks_organization_id ON checks(organization_id);
 CREATE INDEX idx_checks_status ON checks(status);
+CREATE INDEX idx_checks_input_type ON checks(input_type);
+CREATE INDEX idx_checks_ocr_status ON checks(ocr_status);
 CREATE INDEX idx_checks_created_at ON checks(created_at);
 CREATE INDEX idx_checks_deleted_at ON checks(deleted_at);
 

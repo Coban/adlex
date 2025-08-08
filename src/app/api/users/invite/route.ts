@@ -1,10 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
+
+import { NextRequest, NextResponse } from "next/server";
+
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, role = "user" } = await request.json();
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    const { email, role = "user" } = body;
 
     if (!email) {
       return NextResponse.json(
@@ -118,15 +127,14 @@ export async function POST(request: NextRequest) {
 
     // 招待メールを送信（実装は簡略化）
     const invitationUrl = `${
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
     }/auth/invitation?token=${token}`;
 
     // TODO: 実際のメール送信サービスを統合
-    console.log(`招待メール送信:
-      宛先: ${email}
-      招待URL: ${invitationUrl}
-      ロール: ${role}
-    `);
+    // 招待メール送信予定:
+    // 宛先: ${email}
+    // 招待URL: ${invitationUrl}
+    // ロール: ${role}
 
     return NextResponse.json({
       message: "招待を送信しました",

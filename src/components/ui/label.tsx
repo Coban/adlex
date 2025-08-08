@@ -1,5 +1,6 @@
-import * as React from "react"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+
+import { cn } from '@/lib/utils'
 
 const Label = React.forwardRef<
   React.ElementRef<"label">,

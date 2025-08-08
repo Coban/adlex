@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+
 import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 
@@ -23,19 +24,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const supabase = createClient()
+
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      console.log('AuthContext: Fetching user profile for:', userId)
+      console.log('Starting fetchUserProfile for userId:', userId)
+      
+      // First get the user profile
+      console.log('Querying users table for id:', userId)
       const { data: profile, error } = await supabase
         .from('users')
-        .select(`
-          *,
-          organizations (*)
-        `)
+        .select('*')
         .eq('id', userId)
         .maybeSingle()
+      
+      console.log('Users query result:', { profile, error })
 
       if (error) {
         console.error('Error fetching user profile:', {
@@ -49,20 +58,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrganization(null)
         return
       }
+      
+      if (!profile) {
+        console.log('No profile found for user:', userId)
+        setUserProfile(null)
+        setOrganization(null)
+        return
+      }
 
-      console.log('AuthContext: User profile loaded:', { 
-        role: profile?.role, 
-        orgId: profile?.organization_id,
-        email: profile?.email,
-        isAnonymous: !profile?.email 
-      })
+      console.log('User profile fetched:', profile)
       setUserProfile(profile)
       
-      // Handle organization - it might be null for anonymous users or array
-      const orgData = profile?.organizations
-      setOrganization(Array.isArray(orgData) ? orgData[0] : orgData as Organization || null)
+      // If user has an organization_id, fetch the organization separately
+      if (profile?.organization_id) {
+        console.log('Fetching organization for user:', profile.email, 'organization_id:', profile.organization_id)
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', profile.organization_id)
+          .maybeSingle()
+
+        if (orgError) {
+          console.error('Error fetching organization:', orgError)
+          setOrganization(null)
+        } else {
+          console.log('Organization fetched:', org)
+          setOrganization(org)
+        }
+      } else {
+        console.log('No organization_id in profile:', profile)
+        setOrganization(null)
+      }
       
-      console.log('AuthContext: Profile fetch completed')
+      console.log('fetchUserProfile completed')
+      
     } catch (error) {
       console.error('Failed to fetch user profile:', error)
       setUserProfile(null)
@@ -71,37 +100,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   useEffect(() => {
-    let mounted = true
+    if (!mounted) return
+    
+    let isMounted = true
     
     // Get initial session
     const getSession = async () => {
       try {
-        console.log('AuthContext: Getting initial session...')
         setLoading(true)
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) {
           console.error('Auth session error:', error)
-        } else {
-          console.log('AuthContext: Initial session:', session?.user?.id || 'no user')
         }
         
-        if (mounted) {
+        if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
-            console.log('AuthContext: User found, fetching profile...')
-            await fetchUserProfile(session.user.id)
+            try {
+              await fetchUserProfile(session.user.id)
+            } catch (error) {
+              console.error('Error in fetchUserProfile:', error)
+            }
+            setLoading(false)
           } else {
-            console.log('AuthContext: No user, clearing profile...')
             setUserProfile(null)
             setOrganization(null)
+            setLoading(false)
           }
-          console.log('AuthContext: Setting loading to false (initial)')
-          setLoading(false)
         }
       } catch (error) {
         console.error('Failed to get session:', error)
-        if (mounted) {
-          console.log('AuthContext: Error occurred, setting loading to false')
+        if (isMounted) {
           setUser(null)
           setUserProfile(null)
           setOrganization(null)
@@ -114,48 +143,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Fallback timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
-      if (mounted) {
-        console.warn('AuthContext: Timeout reached, forcing loading to false')
+      if (isMounted) {
+        console.log('Auth loading timeout - forcing loading to false')
         setLoading(false)
       }
-    }, 10000) // 10 seconds timeout
+    }, 5000) // 5 seconds timeout
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('AuthContext: Auth state change:', {
-          event,
-          userId: session?.user?.id || 'no user',
-          hasSession: !!session,
-          timestamp: new Date().toISOString()
-        })
-        
-        if (mounted) {
+        if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
-            console.log('AuthContext: Auth change - fetching profile...')
             await fetchUserProfile(session.user.id)
           } else {
-            console.log('AuthContext: Auth change - clearing profile...')
             setUserProfile(null)
             setOrganization(null)
           }
-          console.log('AuthContext: Setting loading to false (auth change)')
           setLoading(false)
         }
         
         // For sign in events, double check the session
         if (event === 'SIGNED_IN' && session) {
-          console.log('AuthContext: SIGNED_IN event detected, double-checking...')
           setTimeout(async () => {
-            if (mounted) {
+            if (isMounted) {
               try {
-                const { data: { session: currentSession }, error } = await supabase.auth.getSession()
-                console.log('AuthContext: Double-check result:', {
-                  hasSession: !!currentSession,
-                  userId: currentSession?.user?.id || 'no user',
-                  error: error?.message
-                })
+                const { data: { session: currentSession } } = await supabase.auth.getSession()
                 setUser(currentSession?.user ?? null)
                 if (currentSession?.user) {
                   await fetchUserProfile(currentSession.user.id)
@@ -166,25 +179,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }, 100)
         }
-        
-        // 追加のチェック：認証状態が失われる問題を検出
-        if (event === 'SIGNED_OUT' && session === null) {
-          console.warn('AuthContext: Unexpected SIGNED_OUT event detected')
-        }
       }
     )
 
     return () => {
-      mounted = false
+      isMounted = false
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [supabase.auth, fetchUserProfile])
+  }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUserProfile(null)
-    setOrganization(null)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('AuthContext: SignOut error:', error)
+        throw error
+      }
+      setUserProfile(null)
+      setOrganization(null)
+    } catch (error) {
+      console.error('AuthContext: SignOut failed:', error)
+      // エラーが発生してもUIの状態は更新する
+      setUserProfile(null)
+      setOrganization(null)
+      throw error
+    }
+  }
+
+  // Show loading state during SSR and initial mount to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <AuthContext.Provider value={{ user: null, userProfile: null, organization: null, loading: true, signOut }}>
+        {children}
+      </AuthContext.Provider>
+    )
   }
 
   return (

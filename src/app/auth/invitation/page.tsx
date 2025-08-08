@@ -1,17 +1,18 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { signUpWithInvitation } from '@/lib/auth'
 
 function InvitationContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [token] = useState(searchParams.get('token') || '')
+  const [token] = useState(searchParams.get('token') ?? '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -23,17 +24,7 @@ function InvitationContent() {
     role: string
   } | null>(null)
 
-  useEffect(() => {
-    if (!token) {
-      setError('招待トークンが見つかりません')
-      return
-    }
-
-    // 招待情報を取得（実装を簡略化）
-    fetchInvitationInfo()
-  }, [token])
-
-  const fetchInvitationInfo = async () => {
+  const fetchInvitationInfo = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/invitation-info?token=${token}`)
       if (response.ok) {
@@ -45,7 +36,17 @@ function InvitationContent() {
     } catch {
       setError('招待情報の取得に失敗しました')
     }
-  }
+  }, [token])
+
+  useEffect(() => {
+    if (!token) {
+      setError('招待トークンが見つかりません')
+      return
+    }
+
+    // 招待情報を取得（実装を簡略化）
+    fetchInvitationInfo()
+  }, [token, fetchInvitationInfo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
