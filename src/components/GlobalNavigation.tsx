@@ -174,8 +174,6 @@ export default function GlobalNavigation() {
                   onClick={async () => {
                     try {
                       await signOut()
-                      // 反映の猶予をわずかに確保（SSRクッキー伝播対策）
-                      await new Promise((r) => setTimeout(r, 50))
                       router.replace('/auth/signin')
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
