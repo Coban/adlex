@@ -302,8 +302,8 @@ export async function signOut() {
       throw new Error(`サインアウトエラー: ${error.message}`);
     }
     
-    // Force a page refresh to ensure clean state after sign out
-    window.location.href = '/';
+    // Use Next.js router to navigate after sign out for better UX
+    Router.replace('/');
     
   } catch (err) {
     console.error('lib/auth: SignOut exception:', err);
