@@ -104,8 +104,7 @@ export async function POST(request: NextRequest) {
 
     // Bodyはtext/csv想定（ファイルアップロードUIから渡す）
     const contentType = request.headers.get("content-type") ?? ""
-    if (!contentType.includes("text/csv")) {
-      // フォームからのFileの場合はmultipartに対応するのは将来対応
+    if (contentType.includes("text/csv")) {
       const text = await request.text().catch(() => "")
       if (!text) {
         return NextResponse.json({ error: "CSV本文が必要です" }, { status: 400 })

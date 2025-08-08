@@ -52,6 +52,12 @@ export default function DictionariesPage() {
   const [message, setMessage] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState<number | null>(null)
   const [importing, setImporting] = useState(false)
+  // 2.5 追加: 統計/重複/一括編集用の状態
+  interface DictionaryStats { totals: { total: number; ng: number; allow: number }; topUsed: { dictionary_id: number; count: number; phrase: string }[]; since: string }
+  const [dictionaryStats, setDictionaryStats] = useState<DictionaryStats | null>(null)
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false)
+  const [duplicates, setDuplicates] = useState<{ phrase: string; items: Dictionary[] }[] | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   const loadDictionaries = useCallback(async () => {
     // Try loading dictionaries even if organization is null
@@ -142,6 +148,21 @@ export default function DictionariesPage() {
     }
   }, [organization, fallbackOrganization, userProfile])
 
+  // 2.5 追加: 辞書統計の読み込み
+  const loadDictionaryStats = useCallback(async () => {
+    const currentOrg = organization ?? fallbackOrganization
+    if (!currentOrg || !userProfile || userProfile.role !== 'admin') return
+    try {
+      const res = await fetch('/api/dictionaries/stats', { method: 'GET' })
+      if (res.ok) {
+        const data = await res.json()
+        setDictionaryStats(data)
+      }
+    } catch (e) {
+      console.error('辞書統計の読み込みに失敗しました:', e)
+    }
+  }, [organization, fallbackOrganization, userProfile])
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(false)
@@ -152,6 +173,7 @@ export default function DictionariesPage() {
       if (currentOrg) {
         loadDictionaries()
         loadEmbeddingStats()
+        loadDictionaryStats()
       } else {
         // If no organization after auth is done, try fallback loading
         loadDictionaries()
@@ -163,7 +185,7 @@ export default function DictionariesPage() {
     }
 
     return () => clearTimeout(timeout)
-  }, [organization, fallbackOrganization, authLoading, loadDictionaries, loadEmbeddingStats])
+  }, [organization, fallbackOrganization, authLoading, loadDictionaries, loadEmbeddingStats, loadDictionaryStats])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -550,6 +572,79 @@ export default function DictionariesPage() {
             <>
               <Button 
                 onClick={async () => {
+                  setShowDuplicatesDialog(true)
+                  try {
+                    const res = await fetch('/api/dictionaries/duplicates', { method: 'GET' })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.error ?? '重複検出に失敗しました')
+                    setDuplicates(json.duplicates ?? [])
+                  } catch (e) {
+                    console.error('重複検出失敗', e)
+                    setDuplicates([])
+                  }
+                }}
+                variant="outline"
+                data-testid="detect-duplicates"
+              >
+                重複検出
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (selectedIds.size === 0) return alert('項目を選択してください')
+                  const category = window.prompt('一括カテゴリ変更: NG または ALLOW を入力', 'NG')
+                  if (!category) return
+                  const upper = category.toUpperCase()
+                  if (upper !== 'NG' && upper !== 'ALLOW') return alert('NG/ALLOW のいずれかを指定してください')
+                  try {
+                    const updates = Array.from(selectedIds).map(id => ({ id, patch: { category: upper as 'NG' | 'ALLOW' } }))
+                    const res = await fetch('/api/dictionaries/bulk-update', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates })
+                    })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.error ?? '一括更新に失敗しました')
+                    setMessage(`一括更新完了: 成功 ${json.success ?? 0} 件 / 失敗 ${json.failure ?? 0} 件`)
+                    setTimeout(() => setMessage(''), 4000)
+                    setSelectedIds(new Set())
+                    loadDictionaries()
+                    loadDictionaryStats()
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : '一括更新に失敗しました')
+                  }
+                }}
+                variant="outline"
+                data-testid="bulk-category"
+              >一括カテゴリ</Button>
+              <Button
+                onClick={async () => {
+                  if (selectedIds.size === 0) return alert('項目を選択してください')
+                  const notes = window.prompt('一括で備考を設定します。空でクリア。', '')
+                  if (notes === null) return
+                  try {
+                    const value = notes.trim()
+                    const patch = value === '' ? { notes: null } : { notes: value }
+                    const updates = Array.from(selectedIds).map(id => ({ id, patch }))
+                    const res = await fetch('/api/dictionaries/bulk-update', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates })
+                    })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.error ?? '一括更新に失敗しました')
+                    setMessage(`一括更新完了: 成功 ${json.success ?? 0} 件 / 失敗 ${json.failure ?? 0} 件`)
+                    setTimeout(() => setMessage(''), 4000)
+                    setSelectedIds(new Set())
+                    loadDictionaries()
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : '一括更新に失敗しました')
+                  }
+                }}
+                variant="outline"
+                data-testid="bulk-notes"
+              >一括メモ</Button>
+              <Button 
+                onClick={async () => {
                   try {
                     const res = await fetch('/api/dictionaries/export', { method: 'GET' })
                     if (!res.ok) {
@@ -671,6 +766,43 @@ export default function DictionariesPage() {
                 <div className="text-sm text-muted-foreground">カバー率</div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 辞書統計（管理者のみ） */}
+      {isAdmin && dictionaryStats && (
+        <Card>
+          <CardHeader>
+            <CardTitle>辞書統計（最近30日 使用頻度）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{dictionaryStats.totals.total}</div>
+                <div className="text-sm text-muted-foreground">総項目数</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{dictionaryStats.totals.ng}</div>
+                <div className="text-sm text-muted-foreground">NG</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{dictionaryStats.totals.allow}</div>
+                <div className="text-sm text-muted-foreground">許可</div>
+              </div>
+            </div>
+            {dictionaryStats.topUsed.length > 0 ? (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">上位フレーズ（{new Date(dictionaryStats.since).toLocaleDateString('ja-JP')} 以降）</p>
+                <ul className="list-disc pl-6 space-y-1">
+                  {dictionaryStats.topUsed.slice(0, 5).map((t) => (
+                    <li key={t.dictionary_id} className="text-sm">{t.phrase} — {t.count}回</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">最近30日の使用データはありません</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -809,6 +941,8 @@ export default function DictionariesPage() {
         <TabsContent value="all">
           <DictionaryList
             dictionaries={filteredDictionaries}
+            selectedIds={selectedIds}
+            onToggleSelect={(id) => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })}
             onEdit={startEdit}
             onDelete={handleDeleteRequest}
           />
@@ -817,6 +951,8 @@ export default function DictionariesPage() {
         <TabsContent value="ng">
           <DictionaryList
             dictionaries={ngDictionaries}
+            selectedIds={selectedIds}
+            onToggleSelect={(id) => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })}
             onEdit={startEdit}
             onDelete={handleDeleteRequest}
           />
@@ -825,6 +961,8 @@ export default function DictionariesPage() {
         <TabsContent value="allow">
           <DictionaryList
             dictionaries={allowDictionaries}
+            selectedIds={selectedIds}
+            onToggleSelect={(id) => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })}
             onEdit={startEdit}
             onDelete={handleDeleteRequest}
           />
@@ -883,17 +1021,47 @@ export default function DictionariesPage() {
           </div>
         </div>
       )}
+
+      {/* Duplicates Dialog */}
+      {showDuplicatesDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">重複検出</h3>
+            <div className="max-h-80 overflow-auto border rounded">
+              {duplicates === null ? (
+                <div className="p-4 text-sm text-muted-foreground">読み込み中...</div>
+              ) : duplicates.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">重複は見つかりませんでした</div>
+              ) : (
+                <ul className="divide-y">
+                  {duplicates.map((d) => (
+                    <li key={d.phrase} className="p-3">
+                      <div className="font-medium">{d.phrase}</div>
+                      <div className="text-xs text-muted-foreground">{d.items.length} 件</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="outline" onClick={() => setShowDuplicatesDialog(false)}>閉じる</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 interface DictionaryListProps {
   dictionaries: Dictionary[]
+  selectedIds: Set<number>
+  onToggleSelect: (id: number) => void
   onEdit: (dictionary: Dictionary) => void
   onDelete: (id: number) => void
 }
 
-function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps) {
+function DictionaryList({ dictionaries, selectedIds, onToggleSelect, onEdit, onDelete }: DictionaryListProps) {
   if (dictionaries.length === 0) {
     return (
       <div className="space-y-2" data-testid="dictionary-list">
@@ -911,7 +1079,15 @@ function DictionaryList({ dictionaries, onEdit, onDelete }: DictionaryListProps)
       {dictionaries.map((dictionary) => (
         <Card key={dictionary.id} data-testid="dictionary-item">
           <CardContent className="pt-6">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start gap-3">
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  aria-label="select"
+                  checked={selectedIds.has(dictionary.id)}
+                  onChange={() => onToggleSelect(dictionary.id)}
+                />
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-medium" data-testid="phrase-text">{dictionary.phrase}</span>
