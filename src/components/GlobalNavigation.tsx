@@ -172,10 +172,9 @@ export default function GlobalNavigation() {
                   size="sm" 
                   onClick={async () => {
                     try {
-                            await signOut()
+                      await signOut()
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
-                      // エラーメッセージを表示（必要に応じて）
                       alert('サインアウトに失敗しました。もう一度お試しください。')
                     }
                   }}
@@ -274,12 +273,11 @@ export default function GlobalNavigation() {
                     size="sm" 
                     onClick={async () => {
                       try {
-                                            await signOut()
+                        await signOut()
                         setMobileMenuOpen(false)
                       } catch (error) {
                         console.error('GlobalNavigation Mobile: SignOut failed:', error)
                         setMobileMenuOpen(false)
-                        // エラーメッセージを表示（必要に応じて）
                         alert('サインアウトに失敗しました。もう一度お試しください。')
                       }
                     }}

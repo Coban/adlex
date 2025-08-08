@@ -34,17 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      console.log('Starting fetchUserProfile for userId:', userId)
-      
       // First get the user profile
-      console.log('Querying users table for id:', userId)
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
-      
-      console.log('Users query result:', { profile, error })
 
       if (error) {
         console.error('Error fetching user profile:', {
@@ -60,18 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (!profile) {
-        console.log('No profile found for user:', userId)
         setUserProfile(null)
         setOrganization(null)
         return
       }
 
-      console.log('User profile fetched:', profile)
       setUserProfile(profile)
       
       // If user has an organization_id, fetch the organization separately
       if (profile?.organization_id) {
-        console.log('Fetching organization for user:', profile.email, 'organization_id:', profile.organization_id)
         const { data: org, error: orgError } = await supabase
           .from('organizations')
           .select('*')
@@ -82,15 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error fetching organization:', orgError)
           setOrganization(null)
         } else {
-          console.log('Organization fetched:', org)
           setOrganization(org)
         }
       } else {
-        console.log('No organization_id in profile:', profile)
         setOrganization(null)
       }
-      
-      console.log('fetchUserProfile completed')
       
     } catch (error) {
       console.error('Failed to fetch user profile:', error)
@@ -144,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fallback timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       if (isMounted) {
-        console.log('Auth loading timeout - forcing loading to false')
         setLoading(false)
       }
     }, 5000) // 5 seconds timeout
@@ -152,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+
+        
         if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
@@ -163,21 +152,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false)
         }
         
-        // For sign in events, double check the session
-        if (event === 'SIGNED_IN' && session) {
+        // For sign in events, ensure state is fully updated
+        if (event === 'SIGNED_IN' && session && isMounted) {
+          // Give a bit more time for the session to be properly established
           setTimeout(async () => {
             if (isMounted) {
               try {
                 const { data: { session: currentSession } } = await supabase.auth.getSession()
-                setUser(currentSession?.user ?? null)
                 if (currentSession?.user) {
+                  setUser(currentSession.user)
                   await fetchUserProfile(currentSession.user.id)
+
                 }
               } catch (error) {
                 console.error('AuthContext: Double-check error:', error)
               }
             }
-          }, 100)
+          }, 200)
         }
       }
     )
@@ -191,19 +182,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('AuthContext: SignOut error:', error)
-        throw error
-      }
+      // Clear local state first
+      setUser(null)
       setUserProfile(null)
       setOrganization(null)
+      
+      // Try to sign out from Supabase with timeout
+      const signOutPromise = supabase.auth.signOut()
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('SignOut timeout')), 3000)
+      )
+      
+      try {
+        await Promise.race([signOutPromise, timeoutPromise])
+      } catch (signOutError) {
+        console.warn('AuthContext signOut: Supabase signOut failed or timed out:', signOutError)
+        // Continue anyway - we've already cleared local state
+      }
+      
+      // Force clear any remaining auth data in localStorage/sessionStorage
+      try {
+        // Clear all possible Supabase auth keys
+        const keys = Object.keys(localStorage)
+        keys.forEach(key => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            localStorage.removeItem(key)
+          }
+        })
+        
+        // Clear session storage
+        sessionStorage.clear()
+        
+        // Clear any cookies
+        document.cookie.split(";").forEach(cookie => {
+          const eqPos = cookie.indexOf("=")
+          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+          if (name.includes('supabase') || name.includes('sb-')) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+          }
+        })
+        
+
+      } catch (storageError) {
+        console.warn('AuthContext signOut: Storage clear failed:', storageError)
+      }
+      
+      // Force redirect with cache busting
+
+      window.location.href = '/?_=' + Date.now()
+      
     } catch (error) {
       console.error('AuthContext: SignOut failed:', error)
-      // エラーが発生してもUIの状態は更新する
+      // Clear local state even on error
+      setUser(null)
       setUserProfile(null)
       setOrganization(null)
-      throw error
+      
+      // Force redirect anyway
+
+      window.location.href = '/?_=' + Date.now()
     }
   }
 

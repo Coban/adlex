@@ -302,6 +302,9 @@ export async function signOut() {
       throw new Error(`サインアウトエラー: ${error.message}`);
     }
     
+    // Force a page refresh to ensure clean state after sign out
+    window.location.href = '/';
+    
   } catch (err) {
     console.error('lib/auth: SignOut exception:', err);
     if (err instanceof Error) {

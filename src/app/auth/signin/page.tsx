@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -15,7 +14,6 @@ export default function SignInPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,7 +22,12 @@ export default function SignInPage() {
 
     try {
       await signIn({ email, password })
-      router.push('/')
+      
+      // Wait a moment for auth state to be properly updated
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Force a page refresh to ensure auth state is properly loaded
+      window.location.href = '/'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
