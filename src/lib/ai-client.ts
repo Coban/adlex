@@ -46,12 +46,12 @@ export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
 const getChatModel = () => {
   if (!USE_LM_STUDIO) return 'gpt-4o'
   
-  const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? 'microsoft/Phi-3-mini-4k-instruct-gguf'
+  const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? 'openai/gpt-oss-20b'
   
   // Prevent using embedding models for chat
   if (chatModel.includes('embedding') || chatModel.includes('embed')) {
     console.warn(`Warning: Chat model "${chatModel}" appears to be an embedding model. Using default chat model.`)
-    return 'microsoft/Phi-3-mini-4k-instruct-gguf'
+    return 'openai/gpt-oss-20b'
   }
   
   return chatModel

@@ -140,7 +140,7 @@ OPENAI_API_KEY=your-key-here
 USE_LM_STUDIO=true
 LM_STUDIO_BASE_URL=http://localhost:1234/v1
 LM_STUDIO_API_KEY=lm-studio
-LM_STUDIO_CHAT_MODEL=google/gemma-3-12b
+LM_STUDIO_CHAT_MODEL=openai/gpt-oss-20b
 LM_STUDIO_EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
 
 # OCR Configuration
