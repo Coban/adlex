@@ -279,10 +279,10 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   // 本番環境ではOpenAIを優先、開発環境ではUSE_LM_STUDIOフラグに従う
   // ただし、LM StudioがVision対応でない場合は明確なエラーを表示
 
-  // マルチモーダル用のユーザーコンテンツを構築
-  const userContent: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
-    { type: 'input_text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
-    { type: 'input_image', image_url: imageUrl }
+  // マルチモーダル用のユーザーコンテンツを構築（OpenAI Vision 仕様に準拠）
+  const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+    { type: 'text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
+    { type: 'image_url', image_url: { url: imageUrl } }
   ]
 
   // 開発環境でLM Studioが設定されている場合は最初に試行
@@ -291,7 +291,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
       const response: unknown = await createChatCompletion({
         messages: [
           { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
-          { role: 'user', content: userContent as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }
+          { role: 'user', content: userContent }
         ],
         temperature: 0,
         max_tokens: 4000
@@ -329,7 +329,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     model: AI_MODELS.chat,
     messages: [
       { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。可能であれば段落・改行を保ち、ノイズを除去して出力してください。' },
-      { role: 'user', content: userContent as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }
+      { role: 'user', content: userContent }
     ],
     temperature: 0,
     max_tokens: 4000
