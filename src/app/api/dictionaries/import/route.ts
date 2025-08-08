@@ -56,7 +56,8 @@ function parseCsv(text: string): { rows: { phrase: string; category: "NG" | "ALL
 
     const phrase = unescapeCsv(cols[idxPhrase] ?? "").trim()
     const categoryRaw = (unescapeCsv(cols[idxCategory] ?? "").trim().toUpperCase()) as "NG" | "ALLOW"
-    const notes = idxNotes >= 0 ? (unescapeCsv(cols[idxNotes] ?? "").trim() || null) : null
+    const n = idxNotes >= 0 ? unescapeCsv(cols[idxNotes] ?? "").trim() : null
+    const notes = n === "" ? null : n
 
     if (!phrase) {
       errors.push(`${i + 1}行目: phraseが空です`)
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Bodyはtext/csv想定（ファイルアップロードUIから渡す）
-    const contentType = request.headers.get("content-type") || ""
+    const contentType = request.headers.get("content-type") ?? ""
     if (!contentType.includes("text/csv")) {
       // フォームからのFileの場合はmultipartに対応するのは将来対応
       const text = await request.text().catch(() => "")

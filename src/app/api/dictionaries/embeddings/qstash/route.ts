@@ -13,7 +13,7 @@ const receiver = new Receiver({
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
-    const signature = request.headers.get('Upstash-Signature') || ''
+    const signature = request.headers.get('Upstash-Signature') ?? ''
 
     const isValid = await receiver.verify({
       signature,
