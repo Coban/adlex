@@ -32,6 +32,16 @@ export default function DictionariesPage() {
   const [embeddingRefreshLoading, setEmbeddingRefreshLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'NG' | 'ALLOW'>('ALL')
+  const [sortOption, setSortOption] = useState<
+    | 'created_desc'
+    | 'created_asc'
+    | 'updated_desc'
+    | 'updated_asc'
+    | 'phrase_asc'
+    | 'phrase_desc'
+    | 'category_asc'
+    | 'category_desc'
+  >('created_desc')
   const [editingDictionary, setEditingDictionary] = useState<Dictionary | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [formData, setFormData] = useState({
@@ -316,12 +326,143 @@ export default function DictionariesPage() {
     setFormData({ phrase: '', category: 'NG', notes: '' })
   }
 
-  const filteredDictionaries = dictionaries.filter(dict => {
-    const matchesSearch = dict.phrase.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (dict.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-    const matchesCategory = selectedCategory === 'ALL' || dict.category === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  // --- 高度な検索クエリの解析・評価 ---
+  function tokenizeAdvancedQuery(query: string) {
+    const result = {
+      includeGroups: [] as string[][], // AND of groups, OR within group (split by '|')
+      excludes: [] as string[],
+    }
+
+    if (!query.trim()) return result
+
+    const lower = query.toLowerCase()
+
+    // Extract quoted phrases
+    const quoted: string[] = []
+    const remainder = lower.replace(/"([^\"]+)"/g, (_m, p1) => {
+      quoted.push(`\"${p1.trim()}\"`)
+      return ' '
+    })
+
+    const rawTokens = [
+      ...quoted,
+      ...remainder
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(Boolean),
+    ]
+
+    for (const token of rawTokens) {
+      if (!token) continue
+      if (token.startsWith('-')) {
+        const t = token.slice(1)
+        if (t) result.excludes.push(t)
+        continue
+      }
+
+      // OR grouping within a single space-separated token using '|'
+      const group = token.split('|').map(t => t.trim()).filter(Boolean)
+      if (group.length > 0) {
+        result.includeGroups.push(group)
+      }
+    }
+
+    return result
+  }
+
+  function fieldMatch(value: string | null | undefined, token: string) {
+    if (!value) return false
+    const v = value.toLowerCase()
+    // Exact phrase: "..."
+    if (token.startsWith('"') && token.endsWith('"')) {
+      const phrase = token.slice(1, -1)
+      return v.includes(phrase)
+    }
+    return v.includes(token)
+  }
+
+  function matchesToken(dict: Dictionary, token: string) {
+    // Field specific: phrase:xxx or notes:xxx
+    if (token.startsWith('phrase:')) {
+      return fieldMatch(dict.phrase, token.replace(/^phrase:/, ''))
+    }
+    if (token.startsWith('notes:')) {
+      return fieldMatch(dict.notes ?? '', token.replace(/^notes:/, ''))
+    }
+    // Category specific: category:ng or category:allow (case-insensitive)
+    if (token.startsWith('category:')) {
+      const val = token.replace(/^category:/, '').toUpperCase()
+      return dict.category.toUpperCase() === val
+    }
+    // Default: match in phrase or notes
+    return fieldMatch(dict.phrase, token) || fieldMatch(dict.notes ?? '', token)
+  }
+
+  function matchesAdvancedQuery(dict: Dictionary, query: string) {
+    const { includeGroups, excludes } = tokenizeAdvancedQuery(query)
+
+    // AND across groups: each group needs at least one token match
+    for (const group of includeGroups) {
+      let any = false
+      for (const token of group) {
+        if (matchesToken(dict, token)) {
+          any = true
+          break
+        }
+      }
+      if (!any) return false
+    }
+
+    // Excludes: if any exclude token matches, reject
+    for (const token of excludes) {
+      if (matchesToken(dict, token)) return false
+    }
+
+    return true
+  }
+
+  const filteredDictionaries = dictionaries
+    .filter(dict => {
+      // Category filter first
+      const matchesCategory = selectedCategory === 'ALL' || dict.category === selectedCategory
+      if (!matchesCategory) return false
+
+      // Advanced search on searchTerm
+      if (!searchTerm.trim()) return true
+      return matchesAdvancedQuery(dict, searchTerm)
+    })
+    .sort((a, b) => {
+      switch (sortOption) {
+        case 'created_desc':
+          return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+        case 'created_asc':
+          return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+        case 'updated_desc': {
+          const au = a.updated_at ?? a.created_at ?? ''
+          const bu = b.updated_at ?? b.created_at ?? ''
+          return new Date(bu).getTime() - new Date(au).getTime()
+        }
+        case 'updated_asc': {
+          const au = a.updated_at ?? a.created_at ?? ''
+          const bu = b.updated_at ?? b.created_at ?? ''
+          return new Date(au).getTime() - new Date(bu).getTime()
+        }
+        case 'phrase_asc':
+          return (a.phrase ?? '').localeCompare(b.phrase ?? '', 'ja', { sensitivity: 'base' })
+        case 'phrase_desc':
+          return (b.phrase ?? '').localeCompare(a.phrase ?? '', 'ja', { sensitivity: 'base' })
+        case 'category_asc': {
+          const order = { NG: 0, ALLOW: 1 } as const
+          return order[a.category] - order[b.category]
+        }
+        case 'category_desc': {
+          const order = { NG: 0, ALLOW: 1 } as const
+          return order[b.category] - order[a.category]
+        }
+        default:
+          return 0
+      }
+    })
 
   const ngDictionaries = filteredDictionaries.filter(d => d.category === 'NG')
   const allowDictionaries = filteredDictionaries.filter(d => d.category === 'ALLOW')
@@ -430,7 +571,7 @@ export default function DictionariesPage() {
       {/* 検索・フィルター */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 md:flex-row">
             <div className="flex-1">
               <Label htmlFor="search">検索</Label>
               <div className="flex gap-2">
@@ -445,8 +586,11 @@ export default function DictionariesPage() {
                   検索
                 </Button>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                引用句: &quot;高濃度&quot; / 除外: -臨床 / フィールド指定: phrase:薬機 notes:注意 / OR: 効果|効能
+              </p>
             </div>
-            <div className="w-48">
+            <div className="w-full md:w-48">
               <Label htmlFor="category">カテゴリ</Label>
               <select
                 id="category"
@@ -458,6 +602,25 @@ export default function DictionariesPage() {
                 <option value="ALL">すべて</option>
                 <option value="NG">NG</option>
                 <option value="ALLOW">許可</option>
+              </select>
+            </div>
+            <div className="w-full md:w-64">
+              <Label htmlFor="sort">ソート</Label>
+              <select
+                id="sort"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background"
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as typeof sortOption)}
+                data-testid="sort-option"
+              >
+                <option value="created_desc">作成日: 新しい順</option>
+                <option value="created_asc">作成日: 古い順</option>
+                <option value="updated_desc">更新日: 新しい順</option>
+                <option value="updated_asc">更新日: 古い順</option>
+                <option value="phrase_asc">フレーズ: A→Z</option>
+                <option value="phrase_desc">フレーズ: Z→A</option>
+                <option value="category_asc">カテゴリ: NG→許可</option>
+                <option value="category_desc">カテゴリ: 許可→NG</option>
               </select>
             </div>
           </div>
