@@ -119,24 +119,55 @@ class CheckQueueManager {
     const { processCheck } = await import('@/lib/check-processor')
     
     try {
+      console.log(`[QUEUE] Processing check ${item.id} (${item.inputType ?? 'text'})`)
       await processCheck(item.id, item.text, item.organizationId, item.inputType, item.imageUrl)
+      console.log(`[QUEUE] Successfully processed check ${item.id}`)
     } catch (error) {
-      console.error(`[QUEUE] Error processing check ${item.id}:`, error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
+      console.error(`[QUEUE] Error processing check ${item.id}:`, {
+        error: errorMessage,
+        inputType: item.inputType,
+        textLength: item.text.length,
+        retryCount: item.retryCount,
+        organizationId: item.organizationId
+      })
       
-      // Retry logic
+      // Retry logic with exponential backoff
       if (item.retryCount < item.maxRetries) {
         item.retryCount++
-        console.log(`[QUEUE] Retrying check ${item.id} (attempt ${item.retryCount}/${item.maxRetries})`)
+        const retryDelay = Math.min(Math.pow(2, item.retryCount) * 1000, 30000) // Max 30s delay
         
-        // Add back to queue with delay
+        console.log(`[QUEUE] Scheduling retry for check ${item.id} (attempt ${item.retryCount}/${item.maxRetries}) in ${retryDelay}ms`)
+        
         setTimeout(() => {
-          this.queue.push(item)
+          // Add back to queue with higher priority for retries
+          const retryPriority: 'high' | 'normal' | 'low' = item.retryCount >= 2 ? 'high' : item.priority
+          this.queue.unshift({ ...item, priority: retryPriority })
+          
           if (!this.isProcessing) {
             this.processQueue()
           }
-        }, Math.pow(2, item.retryCount) * 1000) // Exponential backoff
+        }, retryDelay)
       } else {
-        console.error(`[QUEUE] Max retries exceeded for check ${item.id}`)
+        console.error(`[QUEUE] Max retries exceeded for check ${item.id}, marking as failed`)
+        
+        // Mark check as permanently failed
+        try {
+          const { createClient } = await import('@/lib/supabase/server')
+          const supabase = await createClient()
+          
+          await supabase
+            .from('checks')
+            .update({ 
+              status: 'failed',
+              error_message: `処理に失敗しました (${item.retryCount}回再試行済み): ${errorMessage}`,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', item.id)
+            
+        } catch (updateError) {
+          console.error(`[QUEUE] Failed to mark check ${item.id} as failed:`, updateError)
+        }
       }
     }
   }

@@ -339,7 +339,7 @@ async function performActualCheck(
     let modifiedText: string
 
     if (result.type === 'openai') {
-      const functionCall = (result.response as unknown)?.choices?.[0]?.message?.function_call
+      const functionCall = (result.response as any)?.choices?.[0]?.message?.function_call
       if (!functionCall) {
         throw new Error('OpenAI did not return expected function call')
       }

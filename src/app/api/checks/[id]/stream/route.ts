@@ -25,13 +25,13 @@ export async function GET(
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const { data: checkData, error: checkError } = await supabase
+  const { data: checkRecord, error: checkError } = await supabase
     .from('checks')
     .select('id, user_id, organization_id')
     .eq('id', checkId)
     .single()
 
-  if (checkError || !checkData) {
+  if (checkError || !checkRecord) {
     return new Response('Check not found', { status: 404 })
   }
   
@@ -42,48 +42,87 @@ export async function GET(
     .eq('id', user.id)
     .single()
 
-  if (!userProfile || (userProfile.role === 'user' && checkData.user_id !== user.id) || (userProfile.organization_id !== checkData.organization_id)) {
+  if (!userProfile || (userProfile.role === 'user' && checkRecord.user_id !== user.id) || (userProfile.organization_id !== checkRecord.organization_id)) {
       return new Response('Forbidden', { status: 403 })
   }
 
 
-  // Set up SSE headers with timeout configuration
+  // Set up SSE headers with optimized timeout configuration
   const headers = new Headers({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Cache-Control',
-    'Keep-Alive': 'timeout=90, max=100', // 90秒のキープアライブ
+    'Keep-Alive': 'timeout=60, max=10', // 最適化: 60秒タイムアウト、最大10リクエスト
+    'X-Accel-Buffering': 'no' // Nginxプロキシバッファリング無効化
   })
+
+  // 処理タイプを事前にチェックしてタイムアウト値を決定
+  const { data: checkTypeData } = await supabase
+    .from('checks')
+    .select('input_type')
+    .eq('id', checkId)
+    .single()
+  
+  // 段階的タイムアウト値: 画像処理は長めの設定
+  const maxConnectionTime = checkTypeData?.input_type === 'image' ? 180000 : 90000  // 画像: 3分、テキスト: 1.5分
+  const maxProgressTime = checkTypeData?.input_type === 'image' ? 60000 : 30000     // 画像: 1分、テキスト: 30秒
 
   // Create a readable stream with timeout handling
   const stream = new ReadableStream({
     start(controller) {
       const channel = supabase.channel(`check-updates-${checkId}`)
-      // Send heartbeat every 30 seconds to keep connection alive
-      const heartbeatInterval = setInterval(() => {
-        try {
-          controller.enqueue(new TextEncoder().encode(`: heartbeat\n\n`))
-        } catch (error) {
-          console.error(`[SSE] Heartbeat error for check ${checkId}:`, error)
-          clearInterval(heartbeatInterval)
-        }
-      }, 30000)
+      // 最適化されたハートビート: 接続状態に応じた間隔調整
+      let heartbeatInterval: NodeJS.Timeout
+      let heartbeatCount = 0
+      const maxHeartbeats = 4 // 最大4回のハートビート（2分間）
+      
+      const startHeartbeat = (intervalMs = 20000) => {
+        if (heartbeatInterval) clearInterval(heartbeatInterval)
+        heartbeatInterval = setInterval(() => {
+          try {
+            heartbeatCount++
+            if (heartbeatCount > maxHeartbeats) {
+              console.log(`[SSE] Max heartbeats reached for check ${checkId}`)
+              clearInterval(heartbeatInterval)
+              return
+            }
+            controller.enqueue(new TextEncoder().encode(`: heartbeat-${heartbeatCount}\\n\\n`))
+          } catch (error) {
+            console.error(`[SSE] Heartbeat error for check ${checkId}:`, error)
+            clearInterval(heartbeatInterval)
+          }
+        }, intervalMs)
+      }
+      
+      startHeartbeat(20000) // 20秒間隔でハートビート開始
 
-      // Set connection timeout (2 minutes)
-      const connectionTimeout = setTimeout(() => {
-        console.log(`[SSE] Connection timeout for check ${checkId}`)
+      // 段階的タイムアウト処理
+      let connectionTimeout: NodeJS.Timeout
+      let progressTimeout: NodeJS.Timeout
+      
+      // 進捗タイムアウト: 一定時間進捗がない場合の処理
+      progressTimeout = setTimeout(() => {
+        console.log(`[SSE] Progress timeout for check ${checkId} - checking status`)
+        // 進捗タイムアウト時はハートビート間隔を短くして接続維持
+        startHeartbeat(10000) // 10秒間隔に変更
+      }, maxProgressTime)
+      
+      // 最終接続タイムアウト
+      connectionTimeout = setTimeout(() => {
+        console.log(`[SSE] Final connection timeout for check ${checkId}`)
         const timeoutData = JSON.stringify({
           id: checkId,
           status: 'failed',
-          error: 'SSE接続がタイムアウトしました'
+          error: 'SSE接続がタイムアウトしました（処理時間制限）'
         })
-        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\n\n`))
+        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\\n\\n`))
         controller.close()
         channel.unsubscribe()
         clearInterval(heartbeatInterval)
-      }, 120000) // 2分
+        clearTimeout(progressTimeout)
+      }, maxConnectionTime)
 
       channel
         .on('postgres_changes', { 
@@ -96,11 +135,19 @@ export async function GET(
             
             if (updatedCheck.status === 'completed' || updatedCheck.status === 'failed') {
                 clearTimeout(connectionTimeout)
+                clearTimeout(progressTimeout)
                 clearInterval(heartbeatInterval)
                 await sendFinalData(controller, checkId, supabase)
                 controller.close()
                 channel.unsubscribe()
             } else {
+                // 進捗更新時は進捗タイムアウトをリセット
+                clearTimeout(progressTimeout)
+                progressTimeout = setTimeout(() => {
+                  console.log(`[SSE] Progress timeout reset for check ${checkId}`)
+                  startHeartbeat(10000)
+                }, maxProgressTime)
+                
                 // Send progress data including OCR status for images
                 const progressData = JSON.stringify({
                     id: checkId,
@@ -119,19 +166,33 @@ export async function GET(
             if (err) {
                 console.error(`[SSE] Subscription error for check ${checkId}:`, err)
                 clearTimeout(connectionTimeout)
+                clearTimeout(progressTimeout)
                 clearInterval(heartbeatInterval)
                 controller.close()
+            } else if (status === 'SUBSCRIBED') {
+                console.log(`[SSE] Successfully subscribed to check ${checkId} updates`)
             }
         })
 
-      // Clean up on client disconnect
-      request.signal.addEventListener('abort', () => {
-        console.log(`[SSE] Client disconnected for check ${checkId}`)
+      // 最適化されたクリーンアップ処理
+      const cleanup = () => {
+        console.log(`[SSE] Cleaning up resources for check ${checkId}`)
         clearTimeout(connectionTimeout)
+        clearTimeout(progressTimeout)
         clearInterval(heartbeatInterval)
         channel.unsubscribe()
-        controller.close()
-      })
+        try {
+          controller.close()
+        } catch (_error) {
+          // Controller already closed
+        }
+      }
+      
+      // クライアント切断時のクリーンアップ
+      request.signal.addEventListener('abort', cleanup)
+      
+      // 追加の安全対策: 5分後の強制クリーンアップ
+      setTimeout(cleanup, 300000) // 5分
     }
   })
 

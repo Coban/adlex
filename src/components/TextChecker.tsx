@@ -14,7 +14,7 @@ interface CheckItem {
   id: string
   originalText: string
   result: CheckResult | null
-  status: 'queued' | 'processing' | 'completed' | 'failed'
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
   statusMessage: string
   timestamp: number
   queuePosition?: number
@@ -24,6 +24,28 @@ interface QueueStatus {
   queueLength: number
   processingCount: number
   maxConcurrent: number
+  databaseProcessingCount: number
+  availableSlots: number
+  processingStats: {
+    text: number
+    image: number
+  }
+  canStartNewCheck: boolean
+}
+
+interface OrganizationStatus {
+  monthlyLimit: number
+  currentMonthChecks: number
+  remainingChecks: number
+  canPerformCheck: boolean
+}
+
+interface SystemStatus {
+  timestamp: string
+  serverLoad: {
+    queue: 'idle' | 'busy'
+    processing: 'available' | 'full'
+  }
 }
 
 interface Violation {
@@ -35,7 +57,7 @@ interface Violation {
 }
 
 interface CheckStreamData {
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   error?: string
   id?: number
   original_text?: string
@@ -71,7 +93,21 @@ export default function TextChecker() {
   const [queueStatus, setQueueStatus] = useState<QueueStatus>({
     queueLength: 0,
     processingCount: 0,
-    maxConcurrent: 3
+    maxConcurrent: 3,
+    databaseProcessingCount: 0,
+    availableSlots: 3,
+    processingStats: { text: 0, image: 0 },
+    canStartNewCheck: true
+  })
+  const [organizationStatus, setOrganizationStatus] = useState<OrganizationStatus>({
+    monthlyLimit: 0,
+    currentMonthChecks: 0,
+    remainingChecks: 0,
+    canPerformCheck: true
+  })
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
+    timestamp: new Date().toISOString(),
+    serverLoad: { queue: 'idle', processing: 'available' }
   })
   const supabase = useMemo(() => createClient(), [])
   const [activeTab, setActiveTab] = useState('side-by-side')
@@ -79,19 +115,35 @@ export default function TextChecker() {
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [dictionaryInfo, setDictionaryInfo] = useState<{ [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }>({})
   const originalTextRef = useRef<HTMLDivElement | null>(null)
+  // キャンセル機能用のref
+  const cancelControllers = useRef<Map<string, { eventSource: EventSource; pollInterval: NodeJS.Timeout; timeout: NodeJS.Timeout }>>(new Map())
   // アクティブなチェック結果を取得（早期に定義してHooks依存関係で参照可能に）
   const activeCheck = useMemo(() => (
     activeCheckId ? checks.find(check => check.id === activeCheckId) : null
   ), [activeCheckId, checks])
   const hasActiveCheck = activeCheck?.result
 
-  // Monitor queue status
+  // 最適化されたキューステータス監視
   const checkQueueStatus = async () => {
     try {
       const response = await fetch('/api/checks/queue-status')
       if (response.ok) {
         const data = await response.json()
-        setQueueStatus(data.queue)
+        if (data.success) {
+          setQueueStatus(data.queue)
+          setOrganizationStatus(data.organization)
+          setSystemStatus(data.system)
+          
+          // デバッグ情報ログ
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[QUEUE-STATUS]', {
+              available: data.queue.availableSlots,
+              processing: data.queue.processingCount,
+              queue: data.queue.queueLength,
+              canStart: data.queue.canStartNewCheck
+            })
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to get queue status:', error)
@@ -190,18 +242,42 @@ export default function TextChecker() {
       return
     }
 
+    // 組織の月間制限チェック
+    if (!organizationStatus.canPerformCheck) {
+      setErrorMessage('月間チェック回数の上限に達しました。プランのアップグレードを検討してください。')
+      return
+    }
+
+    // キューの可用性チェック（警告のみ）
+    if (!queueStatus.canStartNewCheck) {
+      toast({
+        title: 'キューが満月です',
+        description: `現在 ${queueStatus.processingCount}/${queueStatus.maxConcurrent} のチェックが処理中です。キューに追加されますが、待機時間が発生する可能性があります。`,
+        variant: 'default'
+      })
+    }
+
     setErrorMessage(null)
 
     // 新しいチェックアイテムを作成（SSR/CSR で一致するIDを生成）
     checkCounter.current += 1
     const checkId = `${componentId}-${checkCounter.current}`
+    // キュー位置の推定
+    const estimatedQueuePosition = queueStatus.queueLength + 1
+    const estimatedWaitTime = queueStatus.availableSlots > 0 
+      ? 0 
+      : Math.ceil(estimatedQueuePosition / queueStatus.maxConcurrent) * 2 // 2分/バッチと仮定
+    
     const newCheckItem: CheckItem = {
       id: checkId,
       originalText: text,
       result: null,
       status: 'queued',
-      statusMessage: 'チェックをキューに追加しています...',
-      timestamp: checkCounter.current // カウンターを使用して一意性を保つ
+      statusMessage: queueStatus.availableSlots > 0 
+        ? 'チェックを開始しています...'
+        : `キュー位置: ${estimatedQueuePosition}番目（推定待機時間: ${estimatedWaitTime}分）`,
+      timestamp: checkCounter.current, // カウンターを使用して一意性を保つ
+      queuePosition: estimatedQueuePosition
     }
 
     // チェックリストに追加
@@ -275,11 +351,19 @@ export default function TextChecker() {
       // SSEで結果を待機
       const eventSource = new EventSource(`/api/checks/${checkData.id}/stream`)
       
-      // ポーリングによるフォールバック機能
+      // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0
-      const maxPolls = 120 // 120秒（2分）
+      // デフォルトはテキスト処理用、画像処理は動的に調整
+      const maxPolls = 90 // 1.5分（テキスト処理）
+      const pollIntervalMs = 1000 // 1秒間隔
       
-      const pollInterval = setInterval(async () => {
+      // TODO: 将来的には画像処理の場合はより長いタイムアウトを設定
+      // if (isImageCheck) {
+      //   maxPolls = 180 // 3分（画像処理）
+      //   pollIntervalMs = 2000 // 2秒間隔
+      // }
+      
+      const pollingIntervalId = setInterval(async () => {
         pollCount++
         try {
           const { data: currentCheck, error: pollError } = await supabase
@@ -294,9 +378,10 @@ export default function TextChecker() {
           }
           
           if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
-            clearInterval(pollInterval)
+            clearInterval(pollingIntervalId)
             clearTimeout(timeout)
             eventSource.close()
+            cancelControllers.current.delete(checkId)
             
             if (currentCheck.status === 'completed') {
               // Get violations
@@ -370,9 +455,10 @@ export default function TextChecker() {
         }
         
         if (pollCount >= maxPolls) {
-          clearInterval(pollInterval)
+          clearInterval(pollingIntervalId)
           clearTimeout(timeout)
           eventSource.close()
+          cancelControllers.current.delete(checkId)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
               ? { 
@@ -384,11 +470,12 @@ export default function TextChecker() {
           ))
           setErrorMessage('処理がタイムアウトしました。もう一度お試しください。')
         }
-      }, 1000) // 1秒ごとにポーリング
+      }, pollIntervalMs) // 最適化されたポーリング間隔
       
-      // タイムアウト設定（120秒）
+      // 最適化されたタイムアウト設定
+      const timeoutMs = maxPolls * pollIntervalMs // ポーリング回数と連動
       const timeout = setTimeout(() => {
-        clearInterval(pollInterval)
+        clearInterval(pollingIntervalId)
         eventSource.close()
         setChecks(prev => prev.map(check => 
           check.id === checkId 
@@ -399,8 +486,15 @@ export default function TextChecker() {
               }
             : check
         ))
-        setErrorMessage('処理がタイムアウトしました（2分）。LM Studioの応答が遅い可能性があります。もう一度お試しください。')
-      }, 120000)
+        setErrorMessage(`処理がタイムアウトしました（${Math.round(timeoutMs/60000)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
+      }, timeoutMs)
+
+      // キャンセル機能用のcontrollerを登録
+      cancelControllers.current.set(checkId, {
+        eventSource,
+        pollInterval: pollingIntervalId,
+        timeout
+      })
       
       eventSource.onmessage = (event) => {
         try {
@@ -412,8 +506,9 @@ export default function TextChecker() {
           const data: CheckStreamData = JSON.parse(event.data)
           
           if (data.status === 'completed') {
-            clearInterval(pollInterval)
+            clearInterval(pollingIntervalId)
             clearTimeout(timeout)
+            cancelControllers.current.delete(checkId)
             
             // Map database structure to component structure
             const mappedViolations = data.violations?.map((v) => ({
@@ -444,8 +539,9 @@ export default function TextChecker() {
             ))
             eventSource.close()
           } else if (data.status === 'failed') {
-            clearInterval(pollInterval)
+            clearInterval(pollingIntervalId)
             clearTimeout(timeout)
+            cancelControllers.current.delete(checkId)
             const errorMessage = data.error ?? 'チェック処理が失敗しました'
             console.error('Check failed:', errorMessage)
             setChecks(prev => prev.map(check => 
@@ -471,8 +567,9 @@ export default function TextChecker() {
             ))
           }
         } catch (parseError) {
-          clearInterval(pollInterval)
+          clearInterval(pollingIntervalId)
           clearTimeout(timeout)
+          cancelControllers.current.delete(checkId)
           console.error('Failed to parse SSE data:', parseError, 'Raw data:', event.data)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
@@ -488,8 +585,9 @@ export default function TextChecker() {
       }
 
       eventSource.onerror = (error) => {
-        clearInterval(pollInterval)
+        clearInterval(pollingIntervalId)
         clearTimeout(timeout)
+        cancelControllers.current.delete(checkId)
         console.error('SSE connection error:', error)
         setChecks(prev => prev.map(check => 
           check.id === checkId 
@@ -523,6 +621,41 @@ export default function TextChecker() {
 
   const copyToClipboard = (text: string) => {
     handleCopy(text)
+  }
+  // キャンセル機能
+  const handleCancel = async (checkId: string) => {
+    const controllers = cancelControllers.current.get(checkId)
+    if (controllers) {
+      // EventSource と polling を停止
+      controllers.eventSource.close()
+      clearInterval(controllers.pollInterval)
+      clearTimeout(controllers.timeout)
+      cancelControllers.current.delete(checkId)
+
+      // 状態を更新
+      setChecks(prev => prev.map(check => 
+        check.id === checkId 
+          ? { 
+              ...check, 
+              status: 'cancelled',
+              statusMessage: 'チェックがキャンセルされました' 
+            }
+          : check
+      ))
+
+      // サーバーサイドでのキャンセル処理（APIを呼び出し）
+      try {
+        const dbCheckId = checkId.split('-').pop() // extract database ID if needed
+        if (dbCheckId && !isNaN(Number(dbCheckId))) {
+          await fetch(`/api/checks/${dbCheckId}/cancel`, {
+            method: 'POST',
+            credentials: 'same-origin'
+          })
+        }
+      } catch (error) {
+        console.error('Failed to cancel on server:', error)
+      }
+    }
   }
 
   const highlightText = (text: string, violations: Violation[], selectedId: number | null) => {
@@ -774,17 +907,64 @@ export default function TextChecker() {
               </div>
             )}
             
-            {/* キュー状態表示 */}
-            {queueStatus && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="text-sm text-blue-800">
-                  <div className="flex justify-between items-center">
-                    <span>キュー状態</span>
-                    <span className="text-xs">
-                      処理中: {queueStatus.processingCount}/{queueStatus.maxConcurrent} | 
-                      待機中: {queueStatus.queueLength}
-                    </span>
+            {/* 最適化されたキュー状態表示 */}
+            {(queueStatus.processingCount > 0 || queueStatus.queueLength > 0 || !organizationStatus.canPerformCheck) && (
+              <div className="mt-4 p-3 border rounded-md">
+                <div className="text-sm">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium">システム状態</span>
+                    <div className="flex items-center space-x-1">
+                      <div className={`w-2 h-2 rounded-full ${
+                        systemStatus.serverLoad.processing === 'full' 
+                          ? 'bg-red-500 animate-pulse' 
+                          : systemStatus.serverLoad.queue === 'busy'
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                      }`}></div>
+                      <span className="text-xs text-gray-600">
+                        {systemStatus.serverLoad.processing === 'full' ? '満負荷' : 
+                         systemStatus.serverLoad.queue === 'busy' ? '処理中' : '利用可能'}
+                      </span>
+                    </div>
                   </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <div className="text-gray-600">処理スロット</div>
+                      <div className="font-medium">
+                        {queueStatus.processingCount}/{queueStatus.maxConcurrent}
+                        <span className="text-gray-500 ml-1">
+                          (利用可能: {queueStatus.availableSlots})
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">キュー待機</div>
+                      <div className="font-medium">{queueStatus.queueLength}件</div>
+                    </div>
+                  </div>
+                  
+                  {(queueStatus.processingStats.text > 0 || queueStatus.processingStats.image > 0) && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="text-xs text-gray-600 mb-1">処理中のチェック</div>
+                      <div className="flex space-x-4 text-xs">
+                        {queueStatus.processingStats.text > 0 && (
+                          <div>テキスト: {queueStatus.processingStats.text}件</div>
+                        )}
+                        {queueStatus.processingStats.image > 0 && (
+                          <div>画像: {queueStatus.processingStats.image}件</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!organizationStatus.canPerformCheck && (
+                    <div className="mt-2 pt-2 border-t border-red-200 bg-red-50 -m-3 mt-2 p-3 rounded-b-md">
+                      <div className="text-xs text-red-700">
+                        月間制限に達しました: {organizationStatus.currentMonthChecks}/{organizationStatus.monthlyLimit}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -810,7 +990,7 @@ export default function TextChecker() {
                           {check.originalText.length > 50 ? '...' : ''}
                         </div>
                         <div className="flex items-center space-x-2 mt-1">
-                          <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-1 flex-1">
                             {check.status === 'queued' && (
                               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                             )}
@@ -823,12 +1003,38 @@ export default function TextChecker() {
                             {check.status === 'failed' && (
                               <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                             )}
-                            <span className="text-xs text-gray-500" data-testid="status-message">{check.statusMessage}</span>
+                            {check.status === 'cancelled' && (
+                              <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs text-gray-500" data-testid="status-message">{check.statusMessage}</span>
+                              {check.queuePosition && check.status === 'queued' && (
+                                <div className="text-xs text-blue-600 mt-0.5">
+                                  キュー位置: {check.queuePosition}番目
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        チェック #{check.timestamp}
+                      <div className="flex items-center space-x-2">
+                        <div className="text-xs text-gray-400">
+                          チェック #{check.timestamp}
+                        </div>
+                        {(check.status === 'queued' || check.status === 'processing') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCancel(check.id)
+                            }}
+                            className="text-xs px-2 py-1 h-6"
+                            data-testid="cancel-button"
+                          >
+                            キャンセル
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
