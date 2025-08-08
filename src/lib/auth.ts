@@ -301,9 +301,7 @@ export async function signOut() {
       });
       throw new Error(`サインアウトエラー: ${error.message}`);
     }
-    
-    // Use Next.js router to navigate after sign out for better UX
-    Router.replace('/');
+    // Navigation after sign out should be handled by the caller (e.g., components using useRouter)
     
   } catch (err) {
     console.error('lib/auth: SignOut exception:', err);
