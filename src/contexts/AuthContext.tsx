@@ -180,74 +180,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
+    // Try server-side signout first, but never abort the flow on failure
     try {
-      // Sign out via server to ensure SSR cookies are cleared atomically
       const res = await fetch('/api/auth/signout', { method: 'POST' })
       if (!res.ok) {
-        const { error: apiError } = await res.json().catch(() => ({ error: 'Signout failed' }))
-        throw new Error(apiError ?? 'Signout failed')
+        const msg = await res
+          .json()
+          .then((j) => j?.error as string)
+          .catch(() => 'Signout API failed')
+        console.warn('AuthContext signOut: Server signout failed:', msg)
       }
-      // Client-side signOut as a safety net (no-op if already signed out on server)
+    } catch (error) {
+      console.warn('AuthContext signOut: Server signout request error:', error)
+    }
+
+    // Always attempt client-side signout to clear browser-held session
+    try {
       const { error: signOutError } = await supabase.auth.signOut()
       if (signOutError) {
         console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
-        throw signOutError
       }
-      
-      // Cleanup residual auth data after successful sign out
-      try {
-        // Clear all possible Supabase auth keys
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-          const keys = Object.keys(localStorage)
-          keys.forEach(key => {
-            if (key.includes('supabase') || key.includes('sb-')) {
-              localStorage.removeItem(key)
-            }
-          })
-        }
-        
-        // Clear session storage (selectively for Supabase-related keys)
-        if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
-          const sessionKeys = Object.keys(sessionStorage)
-          sessionKeys.forEach(key => {
-            if (key.includes('supabase') || key.includes('sb-')) {
-              sessionStorage.removeItem(key)
-            }
-          })
-        }
-        
-        // Clear any cookies
-        if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.cookie === 'string') {
-          document.cookie.split(";").forEach(cookie => {
-            const eqPos = cookie.indexOf("=")
-            const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
-            if (name.includes('supabase') || name.includes('sb-')) {
-              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-            }
-          })
-        }
-        
-      } catch (storageError) {
-        console.warn('AuthContext signOut: Storage clear failed:', storageError)
-      }
-      
-      // Clear local state after successful sign out
-      setUser(null)
-      setUserProfile(null)
-      setOrganization(null)
-      
-      // Let the auth state change event handle the UI update naturally
-      // Navigation is handled by callers (e.g., GlobalNavigation)
-      
     } catch (error) {
-      console.error('AuthContext: SignOut failed:', error)
-      // Clear local state even on error
-      setUser(null)
-      setUserProfile(null)
-      setOrganization(null)
-      // Re-throw to allow callers to handle the failure
-      throw error
+      console.warn('AuthContext signOut: Supabase signOut threw:', error)
     }
+
+    // Best-effort cleanup of any residual client storage/cookies
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const keys = Object.keys(localStorage)
+        keys.forEach((key) => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            localStorage.removeItem(key)
+          }
+        })
+      }
+      if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+        const sessionKeys = Object.keys(sessionStorage)
+        sessionKeys.forEach((key) => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            sessionStorage.removeItem(key)
+          }
+        })
+      }
+      if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.cookie === 'string') {
+        document.cookie.split(';').forEach((cookie) => {
+          const eqPos = cookie.indexOf('=')
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
+          if (name.includes('supabase') || name.includes('sb-')) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+          }
+        })
+      }
+    } catch (storageError) {
+      console.warn('AuthContext signOut: Storage clear failed:', storageError)
+    }
+
+    // Clear local state no matter what
+    setUser(null)
+    setUserProfile(null)
+    setOrganization(null)
   }
 
   // Show loading state during SSR and initial mount to prevent hydration mismatch
