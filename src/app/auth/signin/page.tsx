@@ -32,22 +32,20 @@ export default function SignInPage() {
     setError('')
 
     try {
-      console.log('Starting sign in process...')
       const result = await signIn({ email, password })
       
-      console.log('Sign in result:', result)
+      
+      
       
       // Verify sign in was successful
       if (result?.user) {
-        console.log('Sign in successful, redirecting...')
         router.replace('/')
         
+        
       } else {
-        console.error('No user in sign in result')
         throw new Error('サインインに失敗しました')
       }
     } catch (err) {
-      console.error('Sign in error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setIsLoading(false)
