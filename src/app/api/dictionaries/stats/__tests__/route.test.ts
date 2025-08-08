@@ -26,7 +26,7 @@ describe("/api/dictionaries/stats", () => {
         return { 
           select: vi.fn(() => ({ 
             eq: vi.fn(() => ({ data: [{ id: 1, category: 'NG', phrase: 'A' }, { id: 2, category: 'ALLOW', phrase: 'B' }], error: null })),
-            in: vi.fn((_col: string, _vals: number[]) => ({ data: [{ id: 1, phrase: 'A' }, { id: 2, phrase: 'B' }], error: null })),
+            in: vi.fn(() => ({ data: [{ id: 1, phrase: 'A' }, { id: 2, phrase: 'B' }], error: null })),
           })) 
         }
       }
@@ -34,7 +34,7 @@ describe("/api/dictionaries/stats", () => {
         return { select: vi.fn(() => ({ eq: vi.fn(() => ({ gte: vi.fn(() => ({ data: [{ id: 10 }], error: null })) })) })) }
       }
       if (table === 'violations') {
-        return { select: vi.fn(() => ({ in: vi.fn((_col: string, _vals: number[]) => ({ data: [{ dictionary_id: 1, check_id: 10 }], error: null })) })) }
+        return { select: vi.fn(() => ({ in: vi.fn(() => ({ data: [{ dictionary_id: 1, check_id: 10 }], error: null })) })) }
       }
       return { select: vi.fn(() => ({})) }
     })

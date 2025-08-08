@@ -101,11 +101,18 @@ export async function GET(
                 controller.close()
                 channel.unsubscribe()
             } else {
+                // Send progress data including OCR status for images
                 const progressData = JSON.stringify({
                     id: checkId,
-                    status: updatedCheck.status
+                    status: updatedCheck.status,
+                    input_type: updatedCheck.input_type,
+                    ocr_status: updatedCheck.ocr_status,
+                    extracted_text: updatedCheck.extracted_text,
+                    error_message: updatedCheck.error_message
                 })
-                controller.enqueue(new TextEncoder().encode(`data: ${progressData}\n\n`))
+                controller.enqueue(new TextEncoder().encode(`data: ${progressData}
+
+`))
             }
         })
         .subscribe((status, err) => {
@@ -147,41 +154,54 @@ async function sendFinalData(
           start_pos,
           end_pos,
           reason,
-          dictionary_id
+          dictionary_id,
+          dictionaries (
+            id,
+            phrase,
+            category,
+            notes
+          )
         )
       `)
       .eq('id', checkId)
       .single()
 
     if (error || !checkData) {
-        console.error(`[SSE] Error getting final data for check ${checkId}:`, error)
-        throw new Error(error?.message ?? 'Failed to retrieve final check data')
-    }
-
-    if (checkData.status === 'failed') {
-      const errorMessage = checkData.error_message ?? 'チェック処理が失敗しました'
+      console.error(`[SSE] Error fetching final data for check ${checkId}:`, error)
       const errorData = JSON.stringify({
-        id: checkData.id,
+        id: checkId,
         status: 'failed',
-        error: errorMessage
+        error: 'データの取得に失敗しました'
       })
       controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
-    } else {
-      const finalData = JSON.stringify({
-        id: checkData.id,
-        status: checkData.status,
-        original_text: checkData.original_text,
-        modified_text: checkData.modified_text,
-        violations: checkData.violations || []
-      })
-      controller.enqueue(new TextEncoder().encode(`data: ${finalData}\n\n`))
+      return
     }
+
+    // Prepare the response data based on input type
+    const responseData = {
+      id: checkId,
+      status: checkData.status,
+      input_type: checkData.input_type,
+      original_text: checkData.original_text,
+      extracted_text: checkData.extracted_text, // For images
+      image_url: checkData.image_url,
+      ocr_status: checkData.ocr_status,
+      ocr_metadata: checkData.ocr_metadata,
+      modified_text: checkData.modified_text,
+      violations: checkData.violations,
+      error_message: checkData.error_message,
+      completed_at: checkData.completed_at
+    }
+
+    // Send final data
+    const finalData = JSON.stringify(responseData)
+    controller.enqueue(new TextEncoder().encode(`data: ${finalData}\n\n`))
   } catch (error) {
-    console.error(`[SSE] Error sending final data for check ${checkId}:`, error)
+    console.error(`[SSE] Unexpected error in sendFinalData for check ${checkId}:`, error)
     const errorData = JSON.stringify({
       id: checkId,
       status: 'failed',
-      error: 'Failed to retrieve results'
+      error: '予期しないエラーが発生しました'
     })
     controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
   }

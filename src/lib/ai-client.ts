@@ -404,3 +404,143 @@ export function getEmbeddingDimension(): number {
     return 1536 // OpenAI text-embedding-3-small
   }
 }
+
+// Legacy createChatCompletion for check-processor compatibility  
+type DictionaryEntry = {
+  id: number
+  phrase: string
+  category: string
+  similarity?: number
+}
+
+type ViolationData = {
+  start_pos: number
+  end_pos: number
+  reason: string
+  dictionary_id?: number
+}
+
+export async function createChatCompletionForCheck(text: string, relevantEntries: DictionaryEntry[]): Promise<{
+  type: 'openai' | 'lmstudio'
+  response?: any
+  violations: ViolationData[]
+  modified: string
+}> {
+
+  const messages = [
+    {
+      role: 'system' as const,
+      content: `あなたは薬機法コンプライアンスの専門家です。与えられた広告テキストを分析し、薬機法違反の可能性がある表現を特定して修正してください。
+
+以下の辞書項目を参考に、テキスト内の違反箇所を特定し、適切な表現に修正してください：
+
+辞書項目:
+${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similarity ?? 0).toFixed(2)})`).join('\n')}
+
+分析結果は以下のJSON形式で返してください：
+{
+  "modified": "修正されたテキスト",
+  "violations": [
+    {
+      "start_pos": 開始位置,
+      "end_pos": 終了位置,
+      "reason": "違反理由",
+      "dictionary_id": 辞書項目ID（該当する場合）
+    }
+  ]
+}`
+    },
+    {
+      role: 'user' as const,
+      content: text
+    }
+  ]
+
+  if (USE_LM_STUDIO) {
+    // LM Studio mode - parse JSON from content
+    const response = await createChatCompletion({
+      messages,
+      temperature: 0.1,
+      max_tokens: 2000
+    })
+
+    const content = (response as any).choices[0]?.message?.content
+    if (!content) {
+      throw new Error('LM Studio did not return content')
+    }
+
+    // Extract JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('No JSON found in LM Studio response')
+    }
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0])
+      
+      if (!parsed.modified || typeof parsed.modified !== 'string') {
+        throw new Error('Invalid modified field in response')
+      }
+      
+      if (!Array.isArray(parsed.violations)) {
+        throw new Error('Invalid violations field in response')
+      }
+
+      return {
+        type: 'lmstudio',
+        violations: parsed.violations,
+        modified: parsed.modified
+      }
+    } catch (error) {
+      throw new Error(`Failed to parse LM Studio JSON response: ${error}`)
+    }
+  } else {
+    // OpenAI mode - use function calling
+    const tools = [{
+      type: 'function' as const,
+      function: {
+        name: 'apply_yakukiho_rules',
+        description: '薬機法ルールを適用してテキストを分析・修正する',
+        parameters: {
+          type: 'object',
+          properties: {
+            modified: {
+              type: 'string',
+              description: '薬機法に準拠するよう修正されたテキスト'
+            },
+            violations: {
+              type: 'array',
+              description: '検出された違反項目のリスト',
+              items: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number', description: '違反箇所の開始位置' },
+                  end: { type: 'number', description: '違反箇所の終了位置' },
+                  reason: { type: 'string', description: '違反理由' },
+                  dictionaryId: { type: 'number', description: '対応する辞書項目ID' }
+                },
+                required: ['start', 'end', 'reason']
+              }
+            }
+          },
+          required: ['modified', 'violations']
+        }
+      }
+    }]
+
+    const response = await createChatCompletion({
+      messages,
+      tools,
+      tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
+      temperature: 0.1,
+      max_tokens: 2000
+    })
+
+    return {
+      type: 'openai',
+      response: response as any,
+      violations: [], // Will be extracted by caller
+      modified: '' // Will be extracted by caller
+    }
+  }
+}

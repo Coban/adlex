@@ -11,6 +11,8 @@ interface QueueItem {
   createdAt: Date
   retryCount: number
   maxRetries: number
+  inputType?: 'text' | 'image'
+  imageUrl?: string
 }
 
 class CheckQueueManager {
@@ -30,7 +32,9 @@ class CheckQueueManager {
     checkId: number,
     text: string,
     organizationId: number,
-    priority: 'high' | 'normal' | 'low' = 'normal'
+    priority: 'high' | 'normal' | 'low' = 'normal',
+    inputType: 'text' | 'image' = 'text',
+    imageUrl?: string
   ): Promise<void> {
     const queueItem: QueueItem = {
       id: checkId,
@@ -39,7 +43,9 @@ class CheckQueueManager {
       priority,
       createdAt: new Date(),
       retryCount: 0,
-      maxRetries: 2
+      maxRetries: 2,
+      inputType,
+      imageUrl
     }
 
     // Insert based on priority
@@ -51,7 +57,7 @@ class CheckQueueManager {
 
     // Debug logging
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[Queue] Added check ${checkId} to queue. Queue length: ${this.queue.length}`)
+      console.log(`[Queue] Added check ${checkId} (${inputType}) to queue. Queue length: ${this.queue.length}`)
     }
 
     // Start processing if not already running
@@ -113,7 +119,7 @@ class CheckQueueManager {
     const { processCheck } = await import('@/lib/check-processor')
     
     try {
-      await processCheck(item.id, item.text, item.organizationId)
+      await processCheck(item.id, item.text, item.organizationId, item.inputType, item.imageUrl)
     } catch (error) {
       console.error(`[QUEUE] Error processing check ${item.id}:`, error)
       

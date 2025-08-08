@@ -40,8 +40,13 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           error_message: string | null
+          extracted_text: string | null
           id: number
+          image_url: string | null
+          input_type: string | null
           modified_text: string | null
+          ocr_metadata: Json | null
+          ocr_status: string | null
           organization_id: number
           original_text: string
           status: Database["public"]["Enums"]["check_status"] | null
@@ -52,8 +57,13 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           error_message?: string | null
+          extracted_text?: string | null
           id?: number
+          image_url?: string | null
+          input_type?: string | null
           modified_text?: string | null
+          ocr_metadata?: Json | null
+          ocr_status?: string | null
           organization_id: number
           original_text: string
           status?: Database["public"]["Enums"]["check_status"] | null
@@ -64,8 +74,13 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           error_message?: string | null
+          extracted_text?: string | null
           id?: number
+          image_url?: string | null
+          input_type?: string | null
           modified_text?: string | null
+          ocr_metadata?: Json | null
+          ocr_status?: string | null
           organization_id?: number
           original_text?: string
           status?: Database["public"]["Enums"]["check_status"] | null

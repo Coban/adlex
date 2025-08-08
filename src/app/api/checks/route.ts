@@ -83,7 +83,8 @@ export async function POST(request: NextRequest) {
       }, { status: 429 })
     }
 
-    const { text } = await request.json()
+    const body = await request.json()
+    const { text, input_type = 'text', image_url } = body
 
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })
@@ -106,7 +107,10 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         organization_id: userData.organization_id!,
+        input_type: input_type,
         original_text: cleanText,
+        image_url: image_url,
+        ocr_status: input_type === 'image' ? 'pending' : 'not_required',
         status: 'pending'
       })
       .select()
@@ -118,7 +122,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Add to queue for processing
-    await queueManager.addToQueue(checkData.id, cleanText, userData.organization_id!)
+    await queueManager.addToQueue(
+      checkData.id, 
+      cleanText, 
+      userData.organization_id!,
+      'normal',
+      input_type,
+      image_url
+    )
 
     return NextResponse.json({
       id: checkData.id,
