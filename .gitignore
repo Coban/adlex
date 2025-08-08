@@ -48,3 +48,6 @@ test-results
 
 # log
 *.log
+
+# serena
+.serena
