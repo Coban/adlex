@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.error('AuthContext: Double-check error:', error)
               }
             }
-          }, 200)
+          }, AUTH_STATE_DELAY)
         }
       }
     )
