@@ -103,8 +103,8 @@ AdLex（薬機法チェック & リライト SaaS）の開発進捗を管理す�
 - [x] ✅ 類似度閾値設定
 - [x] ✅ 辞書登録時の自動embedding生成
 - [x] ✅ `POST /api/dictionaries/embeddings/refresh` API実装
-- [ ] ⏳ Embedding 再生成機能
-- [ ] ⏳ embedding更新の非同期処理
+- [x] ✅ Embedding 再生成機能（UI/管理者向け、進捗表示付き）
+- [x] ✅ embedding更新の非同期処理（アプリ内簡易キュー）
 - [ ] ⏳ Upstash QStash によるリトライ機構
 
 ### 2.4 辞書インポート・エクスポート

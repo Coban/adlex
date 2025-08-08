@@ -12,7 +12,10 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: ["src/app/api/**/__tests__/**/*.ts"],
+    ignores: [
+      "src/app/api/**/__tests__/**/*.ts",
+      "src/**/__tests__/**/*.ts"
+    ],
     languageOptions: {
       parserOptions: {
         project: "./tsconfig.json",

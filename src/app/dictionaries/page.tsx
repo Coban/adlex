@@ -270,6 +270,8 @@ export default function DictionariesPage() {
 
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
+  // ジョブIDはUI表示には未使用。内部進捗管理用に保持
+  const [, setRegenerateJobId] = useState<string | null>(null)
 
   const handleRefreshAllEmbeddings = async () => {
     setShowRegenerateDialog(false)
@@ -292,15 +294,16 @@ export default function DictionariesPage() {
         throw new Error(result.error ?? 'Embedding再生成に失敗しました')
       }
 
-      setMessage('埋め込みの再生成が完了しました')
-      setTimeout(() => setMessage(''), 5000)
-      
-      if (result.failures && result.failures.length > 0) {
-        console.warn('Embedding生成に失敗した項目:', result.failures)
+      if (result.jobId) {
+        setRegenerateJobId(result.jobId)
+        pollEmbeddingJob(result.jobId)
+      } else {
+        // 後方互換: 同期レスポンスの場合
+        setMessage('埋め込みの再生成が完了しました')
+        setTimeout(() => setMessage(''), 5000)
+        loadDictionaries()
+        loadEmbeddingStats()
       }
-
-      loadDictionaries()
-      loadEmbeddingStats()
     } catch (error) {
       console.error('Embedding再生成に失敗しました:', error)
       setMessage('Embedding再生成に失敗しました')
@@ -308,6 +311,39 @@ export default function DictionariesPage() {
     } finally {
       setEmbeddingRefreshLoading(false)
       setIsRegenerating(false)
+    }
+  }
+
+  const pollEmbeddingJob = async (jobId: string) => {
+    let finished = false
+    try {
+      while (!finished) {
+        const res = await fetch(`/api/dictionaries/embeddings/refresh?jobId=${encodeURIComponent(jobId)}`, {
+          method: 'GET'
+        })
+        const status = await res.json()
+        if (!res.ok) throw new Error(status.error ?? 'ジョブの取得に失敗しました')
+        if (status.status === 'completed') {
+          setMessage(`埋め込みの再生成が完了しました（成功: ${status.success}, 失敗: ${status.failure}）`)
+          setTimeout(() => setMessage(''), 5000)
+          finished = true
+          setRegenerateJobId(null)
+          loadDictionaries()
+          loadEmbeddingStats()
+        } else if (status.status === 'failed') {
+          setMessage('Embedding再生成ジョブが失敗しました')
+          setTimeout(() => setMessage(''), 5000)
+          finished = true
+          setRegenerateJobId(null)
+        } else {
+          // queued / processing
+          setMessage(`埋め込みを再生成中... (${status.processed}/${status.total})`)
+          await new Promise(r => setTimeout(r, 1500))
+        }
+      }
+    } catch (e) {
+      console.error('ジョブポーリングに失敗:', e)
+      setRegenerateJobId(null)
     }
   }
 

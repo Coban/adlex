@@ -36,10 +36,8 @@ LM_STUDIO_EMBEDDING_MODEL=nomic-embed-text-v1.5
 
 #### Embeddingモデル
 - 多言語対応のembeddingモデルを推奨
-- 384次元のモデルを使用する場合：
-  - all-MiniLM-L6-v2
-  - nomic-embed-text-v1.5
-- **重要**: データベースのvector列は384次元で設定されています
+- 既定は OpenAI `text-embedding-3-small`（1536次元）に合わせています
+- LM Studio で代替モデルを使う場合は、モデルの次元に合わせてDBを変更してください
 
 ### 4. データベース設定の調整
 
@@ -54,7 +52,7 @@ LM Studioで異なる次元のembeddingモデルを使用する場合は、デ�
 ALTER TABLE dictionaries ALTER COLUMN vector TYPE VECTOR(768);
 ```
 
-#### 1536次元のモデルを使用する場合
+#### 1536次元のモデルを使用する場合（既定）
 
 ```sql
 ALTER TABLE dictionaries ALTER COLUMN vector TYPE VECTOR(1536);
@@ -65,22 +63,9 @@ ALTER TABLE dictionaries ALTER COLUMN vector TYPE VECTOR(1536);
 supabase db reset
 ```
 
-### 5. ai-client.tsの設定調整
+### 5. ai-clientの設定
 
-`src/lib/ai-client.ts`の`getEmbeddingDimension()`関数で、使用するembeddingモデルの次元を正しく設定してください：
-
-```typescript
-export function getEmbeddingDimension(): number {
-  if (USE_LM_STUDIO) {
-    // 使用するLM Studioのembeddingモデルに合わせて調整
-    return 384 // all-MiniLM-L6-v2の場合
-    // return 768 // nomic-embed-text-v1.5の場合
-    // return 1536 // OpenAI text-embedding-3-largeの場合
-  } else {
-    return 1536 // OpenAI text-embedding-3-small
-  }
-}
-```
+既定では OpenAI `text-embedding-3-small`（1536次元）を使用します。LM Studio を使う場合は `LM_STUDIO_EMBEDDING_MODEL` を設定し、DBの `VECTOR(<dims>)` をモデル次元に合わせてください。
 
 ## 推奨構成
 
