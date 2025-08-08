@@ -174,6 +174,8 @@ export default function GlobalNavigation() {
                   onClick={async () => {
                     try {
                       await signOut()
+                      // 反映の猶予をわずかに確保（SSRクッキー伝播対策）
+                      await new Promise((r) => setTimeout(r, 50))
                       router.replace('/auth/signin')
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
@@ -274,13 +276,13 @@ export default function GlobalNavigation() {
                     variant="outline" 
                     size="sm" 
                     onClick={async () => {
+                      setMobileMenuOpen(false)
                       try {
                         await signOut()
-                        setMobileMenuOpen(false)
+                        await new Promise((r) => setTimeout(r, 50))
                         router.replace('/auth/signin')
                       } catch (error) {
                         console.error('GlobalNavigation Mobile: SignOut failed:', error)
-                        setMobileMenuOpen(false)
                         alert('サインアウトに失敗しました。もう一度お試しください。')
                       }
                     }}

@@ -181,12 +181,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Clear local state first
-      setUser(null)
-      setUserProfile(null)
-      setOrganization(null)
+      // Sign out via server to ensure SSR cookies are cleared atomically
+      const res = await fetch('/api/auth/signout', { method: 'POST' })
+      if (!res.ok) {
+        const { error: apiError } = await res.json().catch(() => ({ error: 'Signout failed' }))
+        throw new Error(apiError ?? 'Signout failed')
+      }
+      // Client-side signOut as a safety net (no-op if already signed out on server)
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) {
+        console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
+        throw signOutError
+      }
       
-      // Force clear any remaining auth data in localStorage/sessionStorage
+      // Cleanup residual auth data after successful sign out
       try {
         // Clear all possible Supabase auth keys
         if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -223,15 +231,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('AuthContext signOut: Storage clear failed:', storageError)
       }
       
-      // Sign out from Supabase and propagate errors to callers
-      const { error: signOutError } = await supabase.auth.signOut()
-      if (signOutError) {
-        console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
-        throw signOutError
-      }
+      // Clear local state after successful sign out
+      setUser(null)
+      setUserProfile(null)
+      setOrganization(null)
       
       // Let the auth state change event handle the UI update naturally
-      // No forced redirect needed
+      // Navigation is handled by callers (e.g., GlobalNavigation)
       
     } catch (error) {
       console.error('AuthContext: SignOut failed:', error)
