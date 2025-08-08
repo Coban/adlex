@@ -127,13 +127,30 @@ export default function TextChecker() {
   ), [activeCheckId, checks])
   const hasActiveCheck = activeCheck?.result
 
-  // 最適化されたキューステータス監視
-  const checkQueueStatus = async () => {
-    try {
-      const response = await fetch('/api/checks/queue-status')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
+  // キューステータス監視用SSE接続
+  const globalStreamRef = useRef<EventSource | null>(null)
+
+  // キューステータス監視を開始
+  useEffect(() => {
+    if (globalStreamRef.current) {
+      globalStreamRef.current.close()
+    }
+
+    // 統合SSEエンドポイントに接続
+    const eventSource = new EventSource('/api/checks/stream')
+    globalStreamRef.current = eventSource
+
+    eventSource.onmessage = (event) => {
+      try {
+        // ハートビートメッセージをスキップ
+        if (event.data.startsWith(': heartbeat')) {
+          return
+        }
+
+        const data = JSON.parse(event.data)
+
+        if (data.type === 'queue_status') {
+          // キュー状況の更新
           setQueueStatus(data.queue)
           setOrganizationStatus(data.organization)
           setSystemStatus(data.system)
@@ -148,20 +165,21 @@ export default function TextChecker() {
             })
           }
         }
+        // 他のメッセージタイプ（check_progress等）は将来的に追加可能
+      } catch (error) {
+        console.error('Failed to parse global SSE data:', error)
       }
-    } catch (error) {
-      console.error('Failed to get queue status:', error)
     }
-  }
 
-  // Periodically check queue status
-  useEffect(() => {
-    // Initial check
-    checkQueueStatus()
-    
-    // Then check every 2 seconds
-    const interval = setInterval(checkQueueStatus, 2000)
-    return () => clearInterval(interval)
+    eventSource.onerror = (error) => {
+      console.error('Global SSE connection error:', error)
+      globalStreamRef.current = null
+    }
+
+    return () => {
+      eventSource.close()
+      globalStreamRef.current = null
+    }
   }, [])
 
   const handlePdfExport = async () => {
@@ -315,8 +333,7 @@ export default function TextChecker() {
           : check
       ))
 
-      // Check queue status
-      checkQueueStatus()
+      // キュー状況は既にSSEで監視されているため、ここでの手動チェックは不要
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
