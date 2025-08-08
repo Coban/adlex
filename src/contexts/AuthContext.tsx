@@ -9,6 +9,8 @@ import { Database } from '@/types/database.types'
 type UserProfile = Database['public']['Tables']['users']['Row']
 type Organization = Database['public']['Tables']['organizations']['Row']
 
+const AUTH_STATE_DELAY = 200
+
 interface AuthContextType {
   user: User | null
   userProfile: UserProfile | null
