@@ -1,7 +1,7 @@
 'use client'
 
 import { Loader2, Copy, Download } from 'lucide-react'
-import { useState, useEffect, useId, useRef } from 'react'
+import { useState, useEffect, useId, useRef, useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -73,8 +73,17 @@ export default function TextChecker() {
     processingCount: 0,
     maxConcurrent: 3
   })
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [activeTab, setActiveTab] = useState('side-by-side')
+  // 違反ハイライト選択/辞書詳細用
+  const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
+  const [dictionaryInfo, setDictionaryInfo] = useState<{ [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }>({})
+  const originalTextRef = useRef<HTMLDivElement | null>(null)
+  // アクティブなチェック結果を取得（早期に定義してHooks依存関係で参照可能に）
+  const activeCheck = useMemo(() => (
+    activeCheckId ? checks.find(check => check.id === activeCheckId) : null
+  ), [activeCheckId, checks])
+  const hasActiveCheck = activeCheck?.result
 
   // Monitor queue status
   const checkQueueStatus = async () => {
@@ -516,7 +525,7 @@ export default function TextChecker() {
     handleCopy(text)
   }
 
-  const highlightText = (text: string, violations: Violation[]) => {
+  const highlightText = (text: string, violations: Violation[], selectedId: number | null) => {
     if (!violations.length) return text
     
     let highlightedText = text
@@ -585,12 +594,84 @@ export default function TextChecker() {
       const highlighted = highlightedText.substring(finalStartPos, finalEndPos)
       const after = highlightedText.substring(finalEndPos)
       
+      const isSelected = selectedId !== null && (violation.id === selectedId)
+      const baseClass = 'violation-span underline decoration-2 underline-offset-2 px-0.5 rounded-sm transition-colors'
+      const colorClass = isSelected
+        ? 'bg-red-300 text-red-900 decoration-red-700 ring-2 ring-red-400'
+        : 'bg-red-100 text-red-800 decoration-red-600 hover:bg-red-200'
+      const vidAttr = typeof violation.id === 'number' ? `data-vid="${violation.id}"` : ''
       highlightedText = before + 
-        `<span class="bg-red-200 text-red-800 px-1 rounded" title="${violation.reason}">${highlighted}</span>` + 
+        `<span class="${baseClass} ${colorClass}" ${vidAttr} title="${violation.reason}">${highlighted}</span>` + 
         after
     })
     
     return highlightedText
+  }
+
+  // 原文表示領域のクリックで詳細を表示
+  useEffect(() => {
+    const el = originalTextRef.current
+    if (!el) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const span = target.closest('.violation-span') as HTMLElement | null
+      if (span?.dataset.vid) {
+        const vid = Number(span.dataset.vid)
+        if (!Number.isNaN(vid)) setSelectedViolationId(vid)
+      }
+    }
+    el.addEventListener('click', handler)
+    return () => el.removeEventListener('click', handler)
+  }, [originalTextRef])
+
+  // 違反にひも付く辞書情報を取得（表示強化用）
+  useEffect(() => {
+    const loadDict = async () => {
+      const v = activeCheck?.result?.violations ?? []
+      const ids = Array.from(new Set(v.map(x => x.dictionary_id).filter((x): x is number => typeof x === 'number')))
+      if (ids.length === 0) return
+      try {
+        const { data } = await supabase
+          .from('dictionaries')
+          .select('id, phrase, category, notes')
+          .in('id', ids)
+        type DictionaryRow = { id: number; phrase: string; category: 'NG' | 'ALLOW'; notes: string | null }
+        const rows = (data ?? []) as DictionaryRow[]
+        const map: Record<number, { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null }> = {}
+        for (const row of rows) {
+          map[row.id] = { phrase: row.phrase, category: row.category, notes: row.notes ?? null }
+        }
+        setDictionaryInfo(map)
+      } catch {
+        // ignore errors in UI enrichment
+      }
+    }
+    loadDict()
+  }, [activeCheckId, supabase, activeCheck?.result?.violations])
+
+  // 便利関数: 違反テキストを推定
+  function extractViolationText(text: string, v: Violation) {
+    const startPos = Math.max(0, Math.min(v.startPos, text.length))
+    const endPos = Math.max(startPos, Math.min(v.endPos, text.length))
+    const violationText = text.substring(startPos, endPos)
+    const isInferredViolation = v.reason.startsWith('[INFERRED]')
+    if (!isInferredViolation && (startPos >= endPos || !violationText.trim())) {
+      const patterns = [/「(.+?)」/, /：(.+?)→/, /：(.+?)は/]
+      for (const pattern of patterns) {
+        const match = v.reason.match(pattern)
+        if (match?.[1]) {
+          const searchText = match[1].trim()
+          const foundIndex = text.indexOf(searchText)
+          if (foundIndex !== -1) return searchText
+          const cleanText = searchText.replace(/(になる|する|を出す|に|が|は|の)$/, '')
+          if (cleanText && cleanText !== searchText) {
+            const cleanIndex = text.indexOf(cleanText)
+            if (cleanIndex !== -1) return cleanText
+          }
+        }
+      }
+    }
+    return violationText
   }
 
   const getDiffView = (result: CheckResult) => {
@@ -626,10 +707,6 @@ export default function TextChecker() {
     )
   }
 
-  // アクティブなチェック結果を取得
-  const activeCheck = activeCheckId ? checks.find(check => check.id === activeCheckId) : null
-  const hasActiveCheck = activeCheck?.result
-  
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
@@ -825,11 +902,41 @@ export default function TextChecker() {
                         </Button>
                       </div>
                       <div 
+                        ref={originalTextRef}
                         className="border rounded p-4 min-h-[300px] bg-gray-50 text-base leading-relaxed font-medium text-gray-900"
                         dangerouslySetInnerHTML={{
-                          __html: highlightText(activeCheck.result!.original_text, activeCheck.result!.violations)
+                          __html: highlightText(activeCheck.result!.original_text, activeCheck.result!.violations, selectedViolationId)
                         }}
                       />
+                      {selectedViolationId !== null && (
+                        (() => {
+                          const v = activeCheck.result!.violations.find(x => x.id === selectedViolationId)
+                          if (!v) return null
+                          const dictId = typeof v.dictionary_id === 'number' ? v.dictionary_id : undefined
+                          const dict = dictId !== undefined ? dictionaryInfo[dictId] : undefined
+                          const text = extractViolationText(activeCheck.result!.original_text, v)
+                          return (
+                            <div className="mt-3 border rounded-md p-3 bg-red-50">
+                              <div className="flex items-start justify-between">
+                                <div className="text-sm text-red-800 font-semibold">選択中の違反詳細</div>
+                                <Button size="sm" variant="ghost" onClick={() => setSelectedViolationId(null)}>閉じる</Button>
+                              </div>
+                              <div className="mt-2 space-y-1 text-sm text-gray-900">
+                                <div><span className="text-gray-600">該当:</span> 「{text || '不明'}」</div>
+                                <div><span className="text-gray-600">位置:</span> {v.startPos} - {v.endPos}</div>
+                                <div><span className="text-gray-600">理由:</span> {v.reason}</div>
+                                {dict && (
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full border ${dict.category === 'NG' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-green-100 text-green-800 border-green-200'}`}>{dict.category}</span>
+                                    <span className="text-xs text-gray-600">辞書ID: {v.dictionary_id}</span>
+                                    {dict.notes && <span className="text-xs text-gray-600">備考: {dict.notes}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })()
+                      )}
                     </div>
                     <div>
                       <h3 className="font-medium mb-2">修正されたテキスト</h3>
@@ -913,45 +1020,35 @@ export default function TextChecker() {
                           <div className="text-base mb-2 leading-relaxed text-gray-900">
                             <strong>該当テキスト:</strong>{' '}
                             &ldquo;{(() => {
-                              const startPos = Math.max(0, Math.min(violation.startPos, activeCheck.result!.original_text.length))
-                              const endPos = Math.max(startPos, Math.min(violation.endPos, activeCheck.result!.original_text.length))
-                              
-                              let violationText = activeCheck.result!.original_text.substring(startPos, endPos)
-                              
-                              // For inferred violations, always use the position-based text
-                              const isInferredViolation = violation.reason.startsWith('[INFERRED]')
-                              
-                              // If positions are invalid and it's not an inferred violation, try to extract from reason
-                              if (!isInferredViolation && (startPos >= endPos || !violationText.trim())) {
-                                const patterns = [/「(.+?)」/, /：(.+?)→/, /：(.+?)は/]
-                                for (const pattern of patterns) {
-                                  const match = violation.reason.match(pattern)
-                                  if (match?.[1]) {
-                                    const searchText = match[1].trim()
-                                    const foundIndex = activeCheck.result!.original_text.indexOf(searchText)
-                                    if (foundIndex !== -1) {
-                                      violationText = searchText
-                                      break
-                                    }
-                                    // Try without suffixes
-                                    const cleanText = searchText.replace(/(になる|する|を出す|に|が|は|の)$/, '')
-                                    if (cleanText && cleanText !== searchText) {
-                                      const cleanIndex = activeCheck.result!.original_text.indexOf(cleanText)
-                                      if (cleanIndex !== -1) {
-                                        violationText = cleanText
-                                        break
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                              
-                              return violationText || '不明'
+                              return extractViolationText(activeCheck.result!.original_text, violation) || '不明'
                             })()}&rdquo;
                           </div>
                           <div className="text-base leading-relaxed text-gray-900">
                             <strong>理由:</strong> {violation.reason}
                           </div>
+                          {typeof violation.dictionary_id === 'number' && dictionaryInfo[violation.dictionary_id] && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full border ${dictionaryInfo[violation.dictionary_id].category === 'NG' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-green-100 text-green-800 border-green-200'}`}>
+                                {dictionaryInfo[violation.dictionary_id].category}
+                              </span>
+                              <span className="text-xs text-gray-600">辞書ID: {violation.dictionary_id}</span>
+                              {dictionaryInfo[violation.dictionary_id].notes && (
+                                <span className="text-xs text-gray-600">備考: {dictionaryInfo[violation.dictionary_id].notes}</span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setActiveTab('side-by-side')
+                                  setSelectedViolationId(violation.id)
+                                  setTimeout(() => {
+                                    const el = originalTextRef.current?.querySelector(`.violation-span[data-vid="${violation.id}"]`) as HTMLElement | null
+                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                  }, 0)
+                                }}
+                              >該当箇所へ移動</Button>
+                            </div>
+                          )}
                         </div>
                       ))
                     ) : (
