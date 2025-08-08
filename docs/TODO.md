@@ -269,7 +269,10 @@ OCR機能はLLM（Vision）を使用する。
 
 ### 5.3 データエクスポート
 - [x] ✅ 修正文のコピー機能
-- [ ] ⏳ PDF レポート生成 🎯
+- [x] ✅ PDF レポート生成 🎯
+  - API: `GET /api/checks/{id}/pdf`（`pdfkit` 利用、サーバー側生成）
+  - UI: `src/components/CheckHistoryDetail.tsx` の「PDF出力」ボタンからダウンロード
+  - 備考: 日本語フォントを同梱する場合は `public/fonts/NotoSansJP-Regular.ttf` を配置
 - [ ] ⏳ CSV エクスポート機能
 - [ ] ⏳ Excel エクスポート機能
 - [ ] ⏳ ハイライト付きPDF

@@ -187,77 +187,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
     return highlightedText
   }
 
-  const exportToPDF = () => {
-    // Simple PDF export implementation
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>チェック結果 #${check?.id}</title>
-          <style>
-            body { font-family: "Noto Sans JP", sans-serif; margin: 40px; }
-            .header { border-bottom: 2px solid #ccc; padding-bottom: 20px; margin-bottom: 30px; }
-            .section { margin-bottom: 30px; }
-            .text-box { border: 1px solid #ddd; padding: 20px; margin: 10px 0; border-radius: 8px; }
-            .original { background-color: #f9f9f9; }
-            .modified { background-color: #f0f8ff; }
-            .violation { background-color: #fee; color: #c00; padding: 2px 4px; border-radius: 3px; }
-            .meta { color: #666; font-size: 14px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>薬機法チェック結果</h1>
-            <div class="meta">
-              <p>チェック ID: #${check?.id}</p>
-              <p>実行日時: ${format(new Date(check?.createdAt ?? ''), 'yyyy年MM月dd日 HH:mm:ss', { locale: ja })}</p>
-              ${check?.completedAt ? `<p>完了日時: ${format(new Date(check.completedAt), 'yyyy年MM月dd日 HH:mm:ss', { locale: ja })}</p>` : ''}
-              <p>ステータス: ${statusLabels[check?.status ?? 'pending'].label}</p>
-            </div>
-          </div>
-          
-          <div class="section">
-            <h2>原文</h2>
-            <div class="text-box original">
-              ${check?.originalText ?? ''}
-            </div>
-          </div>
-          
-          ${check?.modifiedText ? `
-            <div class="section">
-              <h2>修正文</h2>
-              <div class="text-box modified">
-                ${check.modifiedText}
-              </div>
-            </div>
-          ` : ''}
-          
-          ${check?.violations && check.violations.length > 0 ? `
-            <div class="section">
-              <h2>検出された違反</h2>
-              <ul>
-                ${check.violations.map(v => `
-                  <li>
-                    <strong>違反箇所:</strong> &quot;${check.originalText.substring(v.startPos, v.endPos)}&quot;<br>
-                    <strong>理由:</strong> ${v.reason}
-                    ${v.dictionaryPhrase ? `<br><strong>辞書語句:</strong> ${v.dictionaryPhrase}` : ''}
-                  </li>
-                `).join('')}
-              </ul>
-            </div>
-          ` : ''}
-        </body>
-      </html>
-    `
-
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.focus()
-    printWindow.print()
-  }
+  // 以前のクライアント側印刷出力（未使用）
 
   if (loading) {
     return (
@@ -359,7 +289,30 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               </>
             )}
           </Button>
-          <Button variant="outline" size="sm" onClick={exportToPDF} data-testid="pdf-download">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await fetch(`/api/checks/${check?.id}/pdf`)
+                if (!res.ok) {
+                  throw new Error('PDFの生成に失敗しました')
+                }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `check_${check?.id}.pdf`
+                document.body.appendChild(a)
+                a.click()
+                a.remove()
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                toast({ title: 'PDF出力エラー', description: e instanceof Error ? e.message : '不明なエラー', variant: 'destructive' })
+              }
+            }}
+            data-testid="pdf-download"
+          >
             <Download className="h-4 w-4 mr-2" />
             PDF出力
           </Button>
