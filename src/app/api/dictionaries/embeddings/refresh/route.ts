@@ -1,3 +1,4 @@
+import { Client as QStashClient } from "@upstash/qstash";
 import { NextRequest, NextResponse } from "next/server";
 
 import { embeddingQueue } from "@/lib/embedding-queue";
@@ -45,18 +46,64 @@ export async function POST(request: NextRequest) {
     }
     const { dictionaryIds } = body ?? {};
 
-    // 非同期ジョブを開始
-    const job = await embeddingQueue.enqueueOrganization(
-      userProfile.organization_id,
-      Array.isArray(dictionaryIds) && dictionaryIds.length > 0 ? dictionaryIds : undefined
-    )
+    // QStashが設定されていればQStashで非同期化、なければアプリ内キューにフォールバック
+    const useQStash = !!process.env.QSTASH_TOKEN && !!process.env.NEXT_PUBLIC_BASE_URL
 
-    return NextResponse.json({
-      message: "Embedding再生成ジョブを開始しました",
-      jobId: job.id,
-      total: job.total,
-      status: job.status,
-    })
+    if (useQStash) {
+      const supabase = await createClient()
+      // 送信対象の辞書項目IDを確定
+      let query = supabase
+        .from("dictionaries")
+        .select("id, phrase")
+        .eq("organization_id", userProfile.organization_id)
+
+      if (Array.isArray(dictionaryIds) && dictionaryIds.length > 0) {
+        query = query.in("id", dictionaryIds)
+      }
+      const { data: dictionaries, error: fetchError } = await query
+      if (fetchError) {
+        console.error("辞書項目取得エラー:", fetchError)
+        return NextResponse.json({ error: "辞書項目の取得に失敗しました" }, { status: 500 })
+      }
+
+      if (!dictionaries || dictionaries.length === 0) {
+        return NextResponse.json({ message: "対象となる辞書項目が見つかりません" })
+      }
+
+      const client = new QStashClient({ token: process.env.QSTASH_TOKEN! })
+      const targetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/dictionaries/embeddings/qstash`
+
+      // 逐次キュー投入（QStash側の自動リトライに任せる）
+      // バックオフ: 30s, 60s, 120s など（maxRetries 3）
+      const publishPromises = dictionaries.map((d) =>
+        client.publishJSON({
+          url: targetUrl,
+          body: {
+            dictionaryId: d.id,
+            organizationId: userProfile.organization_id,
+            phrase: d.phrase,
+          },
+          retries: 3,
+          backoff: 30, // seconds
+          method: "POST",
+        })
+      )
+      await Promise.allSettled(publishPromises)
+
+      return NextResponse.json({ message: "QStashへ再生成ジョブを投入しました", count: dictionaries.length })
+    } else {
+      // フォールバック: アプリ内キュー
+      const job = await embeddingQueue.enqueueOrganization(
+        userProfile.organization_id,
+        Array.isArray(dictionaryIds) && dictionaryIds.length > 0 ? dictionaryIds : undefined
+      )
+      return NextResponse.json({
+        message: "Embedding再生成ジョブを開始しました",
+        jobId: job.id,
+        total: job.total,
+        status: job.status,
+      })
+    }
   } catch (error) {
     console.error("Embedding再生成API エラー:", error);
     return NextResponse.json({
