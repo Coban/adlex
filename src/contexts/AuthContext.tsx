@@ -200,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Clear any cookies
         document.cookie.split(";").forEach(cookie => {
           const eqPos = cookie.indexOf("=")
-          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
           if (name.includes('supabase') || name.includes('sb-')) {
             document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
           }
