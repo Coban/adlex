@@ -194,8 +194,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         })
         
-        // Clear session storage
-        sessionStorage.clear()
+        // Clear session storage (selectively for Supabase-related keys)
+        const sessionKeys = Object.keys(sessionStorage)
+        sessionKeys.forEach(key => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            sessionStorage.removeItem(key)
+          }
+        })
         
         // Clear any cookies
         document.cookie.split(";").forEach(cookie => {
@@ -210,10 +215,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('AuthContext signOut: Storage clear failed:', storageError)
       }
       
-      // Try to sign out from Supabase (but don't wait for it)
-      supabase.auth.signOut().catch(signOutError => {
+      // Sign out from Supabase and propagate errors to callers
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) {
         console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
-      })
+        throw signOutError
+      }
       
       // Let the auth state change event handle the UI update naturally
       // No forced redirect needed
@@ -224,6 +231,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setUserProfile(null)
       setOrganization(null)
+      // Re-throw to allow callers to handle the failure
+      throw error
     }
   }
 
