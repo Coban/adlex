@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
           
           // 前回のデータと同じ場合は送信をスキップ（帯域幅節約）
           if (queueDataStr !== lastQueueStatus) {
-            controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\\n\\n`))
+            controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
             lastQueueStatus = queueDataStr
           }
         } catch (error) {
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       // ハートビート（30秒間隔）
       const heartbeatInterval = setInterval(() => {
         try {
-          controller.enqueue(new TextEncoder().encode(`: heartbeat\\n\\n`))
+          controller.enqueue(new TextEncoder().encode(`: heartbeat\n\n`))
         } catch (error) {
           console.error('[SSE] Heartbeat error:', error)
           clearInterval(heartbeatInterval)
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
                 error_message: updatedCheck.error_message
               }
             }
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(progressData)}\\n\\n`))
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(progressData)}\n\n`))
           }
 
           // キュー状況も更新（チェック数に変動があるため）
