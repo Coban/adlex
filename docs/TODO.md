@@ -192,34 +192,37 @@ AdLex（薬機法チェック & リライト SaaS）の開発進捗を管理す�
 ---
 
 ## 🎯 Phase 4: 画像アップロード・OCR機能
+OCR機能はLLM（Vision）を使用する。
+ローカルではLM Studio（Vision対応モデル推奨、非対応時はエラー表示）を使用する。
+本番ではOpenAI（gpt-4o）を使用する。
 
 ### 4.1 画像アップロードUI
-- [ ] 🚨 ImageChecker コンポーネント作成 🎯
-- [ ] ⏳ ドラッグ&ドロップ機能 (react-dropzone)
-- [ ] ⏳ 画像プレビュー機能
-- [ ] ⏳ ファイル形式・サイズ検証
-- [ ] ⏳ 進捗表示UI
+- [x] ✅ ImageChecker コンポーネント作成 🎯 (`src/components/ImageChecker.tsx`)
+- [x] ✅ ドラッグ&ドロップ/クリック選択
+- [x] ✅ 画像プレビュー
+- [x] ✅ ファイル形式・サイズ検証（JPEG/PNG/WebP, ≤10MB）
+- [x] ✅ 進捗表示UI（アップロード/OCR/解析）
 
 ### 4.2 画像ストレージ
-- [ ] ⏳ Supabase Storage 設定
-- [ ] ⏳ 画像アップロード API
-- [ ] ⏳ 一時ファイル管理
+- [x] ✅ Supabase Storage 連携（バケット: `uploads` 前提）
+- [x] ✅ 画像アップロード API (`POST /api/images/upload`)
+- [x] ✅ 署名付きURL発行（1時間）による一時アクセス
 - [ ] ⏳ 自動削除機能（1時間後）
-- [ ] ⏳ アクセス制御設定
+- [ ] ⏳ アクセス制御の詳細設定（RLS/バケットポリシーの整備）
 
 ### 4.3 OCR処理システム
-- [ ] ⏳ Tesseract.js 統合 (MVP) 🎯
-- [ ] ⏳ Google Vision API 統合 (本格運用)
-- [ ] ⏳ OCR クライアント抽象化
-- [ ] ⏳ 画像前処理機能
-- [ ] ⏳ OCR結果検証機能
+- [x] ✅ LLMベースOCR（OpenAI gpt-4o / LM Studio dev）🎯
+  - 実装: `src/lib/ai-client.ts` の `extractTextFromImageWithLLM`
+  - 呼出: `src/lib/check-processor.ts` 画像処理フローから呼び出し
+- [ ] ⏳ 画像前処理機能（ノイズ除去・傾き補正）
+- [ ] ⏳ OCR結果検証機能（言語推定・信頼度推定）
 
 ### 4.4 画像チェック API
-- [ ] ⏳ POST /api/ocr エンドポイント 🎯
-- [ ] ⏳ 画像処理ワークフロー
-- [ ] ⏳ OCR→テキストチェック連携
-- [ ] ⏳ 処理状況管理
-- [ ] ⏳ エラーハンドリング
+- [x] ✅ 画像処理ワークフロー（既存 `/api/checks` へ `input_type: "image"` + `image_url` 指定）
+- [x] ✅ OCR→テキストチェック連携（`check-processor` 内で連携）
+- [x] ✅ 処理状況管理（SSEにOCR進捗送出）
+- [x] ✅ エラーハンドリング（LLM未対応/タイムアウト含む）
+- [ ] ⏳ 画像アップロード専用 `POST /api/ocr` 検討（将来）
 
 ### 4.5 データベース拡張
 - [x] ✅ checks テーブル拡張 🎯

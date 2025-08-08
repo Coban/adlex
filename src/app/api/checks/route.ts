@@ -86,18 +86,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { text, input_type = 'text', image_url } = body
 
-    if (!text || typeof text !== 'string') {
-      return NextResponse.json({ error: 'Text is required' }, { status: 400 })
+    // Validate inputs by type
+    if (input_type === 'image') {
+      if (!image_url || typeof image_url !== 'string') {
+        return NextResponse.json({ error: 'image_url is required for image checks' }, { status: 400 })
+      }
+    } else {
+      if (!text || typeof text !== 'string') {
+        return NextResponse.json({ error: 'Text is required' }, { status: 400 })
+      }
     }
 
-    // Validate text length
-    if (text.length > 10000) {
+    // Validate text length (text mode only)
+    if (input_type !== 'image' && text.length > 10000) {
       return NextResponse.json({ error: 'Text too long (max 10000 characters)' }, { status: 400 })
     }
 
     // Clean and validate text
-    const cleanText = text.trim()
-    if (!cleanText) {
+    const cleanText = input_type === 'image' ? '' : String(text).trim()
+    if (input_type !== 'image' && !cleanText) {
       return NextResponse.json({ error: 'Text cannot be empty' }, { status: 400 })
     }
 
@@ -108,9 +115,9 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         organization_id: userData.organization_id!,
         input_type: input_type,
-        original_text: cleanText,
+        original_text: input_type === 'image' ? '' : cleanText,
         image_url: image_url,
-        ocr_status: input_type === 'image' ? 'pending' : 'not_required',
+        ocr_status: input_type === 'image' ? 'pending' : null,
         status: 'pending'
       })
       .select()

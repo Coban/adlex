@@ -12,21 +12,21 @@ const USE_LM_STUDIO = !isProduction && !isTest && process.env.USE_LM_STUDIO === 
 const USE_MOCK = isMockMode
 
 // AI Client Configuration logged only in development
-if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-  console.log('AI Client Configuration:', {
-    isProduction,
-    isTest,
-    hasValidOpenAIKey,
-    USE_LM_STUDIO,
-    USE_MOCK,
-    isMockMode,
-    environment: process.env.NODE_ENV,
-    openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10) + '...',
-    lm_studio_chat_model: process.env.LM_STUDIO_CHAT_MODEL,
-    lm_studio_embedding_model: process.env.LM_STUDIO_EMBEDDING_MODEL,
-    lm_studio_base_url: process.env.LM_STUDIO_BASE_URL
-  })
-}
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    console.log('AI Client Configuration:', {
+      isProduction,
+      isTest,
+      hasValidOpenAIKey,
+      USE_LM_STUDIO,
+      USE_MOCK,
+      isMockMode,
+      environment: process.env.NODE_ENV,
+      openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10)?.concat('...'),
+      lm_studio_chat_model: process.env.LM_STUDIO_CHAT_MODEL,
+      lm_studio_embedding_model: process.env.LM_STUDIO_EMBEDDING_MODEL,
+      lm_studio_base_url: process.env.LM_STUDIO_BASE_URL
+    })
+  }
 
 // OpenAI client (for production)
 const openaiClient = hasValidOpenAIKey ? new OpenAI({
@@ -66,6 +66,16 @@ const getEmbeddingModel = () => {
 export const AI_MODELS = {
   chat: getChatModel(),
   embedding: getEmbeddingModel()
+}
+
+// Basic utility to sanitize plain text from model outputs (strip code fences)
+function sanitizePlainText(text: string | null | undefined): string {
+  if (!text) return ''
+  const trimmed = text.trim()
+  // Remove ``` blocks if present
+  const fenced = trimmed.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/)
+  if (fenced?.[1]) return fenced[1].trim()
+  return trimmed
 }
 
 // Utility function to create chat completion
@@ -241,6 +251,86 @@ export async function createChatCompletion(params: {
     }
     
     throw new Error(`Failed to create chat completion: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+/**
+ * Extract text from an image using an LLM with vision capability.
+ * - Production: OpenAI (gpt-4o)
+ * - Development: LM Studio if available; may not support vision → throws with guidance
+ */
+export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
+  text: string
+  provider: 'openai' | 'lmstudio'
+  model: string
+}> {
+  // Prefer OpenAI in production; in development, follow USE_LM_STUDIO flag
+  // However, if LM Studio is enabled but cannot process images, we surface a clear error.
+
+  // Helper to build multi-modal user content
+  const userContent: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
+    { type: 'input_text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
+    { type: 'input_image', image_url: imageUrl }
+  ]
+
+  // Try LM Studio first if configured for dev
+  if (isUsingLMStudio()) {
+    try {
+      const response: unknown = await createChatCompletion({
+        messages: [
+          { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
+          { role: 'user', content: userContent as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }
+        ],
+        temperature: 0,
+        max_tokens: 4000
+      })
+
+      const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
+      if (!content || typeof content !== 'string') {
+        throw new Error('LM Studio did not return textual content for vision request')
+      }
+      return {
+        text: sanitizePlainText(content),
+        provider: 'lmstudio',
+        model: AI_MODELS.chat
+      }
+    } catch (error) {
+      // Surface a helpful error if model lacks vision support
+      if (error instanceof Error && (
+        error.message.includes('image') ||
+        error.message.toLowerCase().includes('vision') ||
+        error.message.includes('not supported') ||
+        error.message.includes('unsupported')
+      )) {
+        throw new Error('LM Studioの現在のモデルは画像入力（Vision）をサポートしていません。Vision対応のモデルをロードするか、本番同等のOpenAI環境で実行してください。')
+      }
+      throw error
+    }
+  }
+
+  // Fallback / production path: OpenAI GPT-4o
+  if (!openaiClient) {
+    throw new Error('OpenAIクライアントが利用できません。OPENAI_API_KEY を設定するか LM Studio をVision対応モデルで起動してください。')
+  }
+
+  const response = await openaiClient.chat.completions.create({
+    model: AI_MODELS.chat,
+    messages: [
+      { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
+      { role: 'user', content: userContent as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }
+    ],
+    temperature: 0,
+    max_tokens: 4000
+  })
+
+  const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
+  if (!content || typeof content !== 'string') {
+    throw new Error('OpenAI応答にテキストが含まれていません')
+  }
+  return {
+    text: sanitizePlainText(content),
+    provider: 'openai',
+    model: AI_MODELS.chat
   }
 }
 
@@ -464,7 +554,7 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
       max_tokens: 2000
     })
 
-    const content = (response as any).choices[0]?.message?.content
+    const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
     if (!content) {
       throw new Error('LM Studio did not return content')
     }

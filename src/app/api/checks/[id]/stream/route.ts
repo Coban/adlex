@@ -99,7 +99,6 @@ export async function GET(
       startHeartbeat(20000) // 20秒間隔でハートビート開始
 
       // 段階的タイムアウト処理
-      const connectionTimeout: NodeJS.Timeout
       let progressTimeout: NodeJS.Timeout
       
       // 進捗タイムアウト: 一定時間進捗がない場合の処理
@@ -110,7 +109,7 @@ export async function GET(
       }, maxProgressTime)
       
       // 最終接続タイムアウト
-      connectionTimeout = setTimeout(() => {
+      const connectionTimeout = setTimeout((): void => {
         console.log(`[SSE] Final connection timeout for check ${checkId}`)
         const timeoutData = JSON.stringify({
           id: checkId,
