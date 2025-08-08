@@ -3,6 +3,10 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 
+/**
+ * Server-Sent Events (SSE) を使用してチェック処理の進捗をリアルタイムでストリーミングする
+ * チェックの状態変更を監視し、クライアントに即座に更新を送信する
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,7 +20,7 @@ export async function GET(
 
   const supabase = await createClient()
 
-  // Verify user has access to this check
+  // ユーザーがこのチェックにアクセス権があるかを検証
   const authResult = await supabase.auth.getUser()
   const user = authResult.data.user
   const authError = authResult.error
@@ -35,7 +39,7 @@ export async function GET(
     return new Response('Check not found', { status: 404 })
   }
   
-  // Further validation to ensure user can access this check
+  // ユーザーがこのチェックにアクセス可能かさらに検証
   const { data: userProfile } = await supabase
     .from('users')
     .select('id, organization_id, role')
@@ -47,7 +51,7 @@ export async function GET(
   }
 
 
-  // Set up SSE headers with optimized timeout configuration
+  // 最適化されたタイムアウト設定でSSEヘッダーを設定
   const headers = new Headers({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -69,7 +73,7 @@ export async function GET(
   const maxConnectionTime = checkTypeData?.input_type === 'image' ? 180000 : 90000  // 画像: 3分、テキスト: 1.5分
   const maxProgressTime = checkTypeData?.input_type === 'image' ? 60000 : 30000     // 画像: 1分、テキスト: 30秒
 
-  // Create a readable stream with timeout handling
+  // タイムアウト処理付きのReadableStreamを作成
   const stream = new ReadableStream({
     start(controller) {
       const channel = supabase.channel(`check-updates-${checkId}`)
@@ -147,7 +151,7 @@ export async function GET(
                   startHeartbeat(10000)
                 }, maxProgressTime)
                 
-                // Send progress data including OCR status for images
+                // 画像の場合はOCR状態を含む進捗データを送信
                 const progressData = JSON.stringify({
                     id: checkId,
                     status: updatedCheck.status,
@@ -156,9 +160,7 @@ export async function GET(
                     extracted_text: updatedCheck.extracted_text,
                     error_message: updatedCheck.error_message
                 })
-                controller.enqueue(new TextEncoder().encode(`data: ${progressData}
-
-`))
+                controller.enqueue(new TextEncoder().encode(`data: ${progressData}\n\n`))
             }
         })
         .subscribe((status, err) => {
@@ -194,13 +196,20 @@ export async function GET(
   return new Response(stream, { headers })
 }
 
+/**
+ * チェック処理完了時に最終データをSSEストリームに送信する
+ * 違反情報や関連する辞書データを含む完全なレスポンスを構築
+ * @param controller SSEストリームのコントローラー
+ * @param checkId 対象のチェックID
+ * @param supabase Supabaseクライアントインスタンス
+ */
 async function sendFinalData(
   controller: ReadableStreamDefaultController<Uint8Array>,
   checkId: number,
   supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
 ) {
   try {
-    // Get complete check data with violations
+    // 違反情報を含む完全なチェックデータを取得
     const { data: checkData, error } = await supabase
       .from('checks')
       .select(`
@@ -229,17 +238,17 @@ async function sendFinalData(
         status: 'failed',
         error: 'データの取得に失敗しました'
       })
-      controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
+      controller.enqueue(new TextEncoder().encode(`data: ${errorData}\\n\\n`))
       return
     }
 
-    // Prepare the response data based on input type
+    // 入力タイプに基づいてレスポンスデータを準備
     const responseData = {
       id: checkId,
       status: checkData.status,
       input_type: checkData.input_type,
       original_text: checkData.original_text,
-      extracted_text: checkData.extracted_text, // For images
+      extracted_text: checkData.extracted_text, // 画像の場合のOCR結果
       image_url: checkData.image_url,
       ocr_status: checkData.ocr_status,
       ocr_metadata: checkData.ocr_metadata,
@@ -249,9 +258,9 @@ async function sendFinalData(
       completed_at: checkData.completed_at
     }
 
-    // Send final data
+    // 最終データをSSEストリームに送信
     const finalData = JSON.stringify(responseData)
-    controller.enqueue(new TextEncoder().encode(`data: ${finalData}\n\n`))
+    controller.enqueue(new TextEncoder().encode(`data: ${finalData}\\n\\n`))
   } catch (error) {
     console.error(`[SSE] Unexpected error in sendFinalData for check ${checkId}:`, error)
     const errorData = JSON.stringify({
@@ -259,6 +268,6 @@ async function sendFinalData(
       status: 'failed',
       error: '予期しないエラーが発生しました'
     })
-    controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
+    controller.enqueue(new TextEncoder().encode(`data: ${errorData}\\n\\n`))
   }
 }

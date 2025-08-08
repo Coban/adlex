@@ -3,26 +3,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { queueManager } from '@/lib/queue-manager'
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * 薬機法チェック処理を開始するAPIエンドポイント
+ * テキストまたは画像の入力を受け取り、非同期でチェック処理をキューに追加する
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Get user session - try both cookie and header authentication
+    // ユーザーセッションの取得 - Cookieとヘッダーの両方で認証を試行
     let user, authError
     
-    // First try getting user from cookies (SSR approach)
+    // まずCookieからユーザーを取得（SSRアプローチ）
     const authResult = await supabase.auth.getUser()
     user = authResult.data.user
     authError = authResult.error
     
-    // If no user found from cookies, try Authorization header
+    // Cookieでユーザーが見つからない場合、Authorizationヘッダーを確認
     if (!user) {
       const authHeader = request.headers.get('Authorization')
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.substring(7)
         
         try {
-          // Use service role client to verify token
+          // サービスロールクライアントを使用してトークンを検証
           const { createClient: createServiceClient } = await import('@supabase/supabase-js')
           const supabaseService = createServiceClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data including organization
+    // 組織情報を含むユーザーデータを取得
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select(`
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check usage limits
+    // 使用量制限のチェック
     const organization = userData.organizations
     const currentUsage = organization.used_checks ?? 0
     const maxChecks = organization.max_checks ?? 1000
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { text, input_type = 'text', image_url } = body
 
-    // Validate inputs by type
+    // 入力タイプ別のバリデーション
     if (input_type === 'image') {
       if (!image_url || typeof image_url !== 'string') {
         return NextResponse.json({ error: 'image_url is required for image checks' }, { status: 400 })
@@ -97,18 +101,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate text length (text mode only)
+    // テキスト長のバリデーション（テキストモードのみ）
     if (input_type !== 'image' && text.length > 10000) {
       return NextResponse.json({ error: 'Text too long (max 10000 characters)' }, { status: 400 })
     }
 
-    // Clean and validate text
+    // テキストのクリーンアップとバリデーション
     const cleanText = input_type === 'image' ? '' : String(text).trim()
     if (input_type !== 'image' && !cleanText) {
       return NextResponse.json({ error: 'Text cannot be empty' }, { status: 400 })
     }
 
-    // Create check record
+    // チェックレコードの作成
     const { data: checkData, error: checkError } = await supabase
       .from('checks')
       .insert({
@@ -128,7 +132,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create check' }, { status: 500 })
     }
 
-    // Add to queue for processing
+    // 処理キューに追加
     await queueManager.addToQueue(
       checkData.id, 
       cleanText, 

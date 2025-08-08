@@ -24,6 +24,14 @@ interface ViolationData {
   dictionary_id?: number
 }
 
+/**
+ * チェック処理を完了し結果をデータベースに保存する
+ * 違反データの挿入、チェックステータスの更新、組織使用量の増加を行う
+ * @param checkId チェックID
+ * @param modifiedText 修正されたテキスト
+ * @param violations 検出された違反データ
+ * @param supabase Supabaseクライアント
+ */
 async function completeCheck(
   checkId: number,
   modifiedText: string,
@@ -32,7 +40,7 @@ async function completeCheck(
 ) {
   console.log(`[CHECK] Completing check ${checkId} with ${violations.length} violations`)
 
-  // Insert violations
+  // 違反データを挿入
   if (violations.length > 0) {
     const violationRows = violations.map(violation => ({
       check_id: checkId,
@@ -52,7 +60,7 @@ async function completeCheck(
     }
   }
 
-  // Update check status to completed
+  // チェックステータスを完了に更新
   const { error: updateError } = await supabase
     .from('checks')
     .update({
@@ -67,7 +75,7 @@ async function completeCheck(
     throw new Error(`Failed to update check status: ${updateError.message}`)
   }
 
-  // Increment organization usage
+  // 組織の使用量を増加
   const organizationId = await getCheckOrganizationId(checkId, supabase)
   const { error: usageError } = await supabase.rpc('increment_organization_usage', { 
     org_id: organizationId 
@@ -100,6 +108,15 @@ async function getCheckOrganizationId(
 // Helper function to manually extract fields from malformed responses
 
 
+/**
+ * チェック処理のメイン関数
+ * タイムアウト保護を含む包括的なエラーハンドリングを提供
+ * @param checkId チェックID
+ * @param text 処理対象のテキスト
+ * @param organizationId 組織ID
+ * @param inputType 入力タイプ（'text' | 'image'）
+ * @param imageUrl 画像URLオプション（画像処理時）
+ */
 export async function processCheck(
   checkId: number, 
   text: string, 
@@ -109,7 +126,7 @@ export async function processCheck(
 ) {
   const supabase = await createClient()
   
-  // Set up timeout protection (60 seconds for images, 30 for text)
+  // タイムアウト保護設定（画像処理: 60秒、テキスト処理: 30秒）
   const timeoutMs = inputType === 'image' ? 60000 : 30000
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -118,7 +135,7 @@ export async function processCheck(
   })
 
   try {
-    // Wrap the entire processing in a timeout
+    // 全処理をタイムアウトでラップ
     await Promise.race([
       performActualCheck(checkId, text, organizationId, supabase, inputType, imageUrl),
       timeoutPromise
@@ -126,7 +143,7 @@ export async function processCheck(
   } catch (error) {
     console.error(`[CHECK] Error processing check ${checkId}:`, error)
 
-    // Get a more descriptive error message
+    // より具体的なエラーメッセージを生成
     let errorMessage = 'チェック処理中にエラーが発生しました'
     if (error instanceof Error) {
       if (error.message.includes('処理がタイムアウトしました')) {
@@ -154,7 +171,7 @@ export async function processCheck(
       }
     }
 
-    // Update status to failed with error message
+    // ステータスを失敗に更新（エラーメッセージ付き）
     const { error: updateError } = await supabase
       .from('checks')
       .update({ 
@@ -167,10 +184,20 @@ export async function processCheck(
       console.error(`[CHECK] Failed to update check ${checkId} status:`, updateError)
     }
     
-    throw error // Re-throw to be handled by caller
+    throw error // 呼び出し元でのハンドリングのため再スロー
   }
 }
 
+/**
+ * 実際のチェック処理を実行する内部関数
+ * OCR処理（画像の場合）、類似フレーズ検索、AI分析を順次実行
+ * @param checkId チェックID
+ * @param text 処理対象のテキスト
+ * @param organizationId 組織ID
+ * @param supabase Supabaseクライアント
+ * @param inputType 入力タイプ
+ * @param imageUrl 画像URL（画像処理時）
+ */
 async function performActualCheck(
   checkId: number,
   text: string,
@@ -181,25 +208,25 @@ async function performActualCheck(
 ) {
   console.log(`[CHECK] Starting check ${checkId} (${inputType})`)
 
-  // Set status to processing
+  // ステータスを処理中に更新
   await supabase
     .from('checks')
     .update({ status: 'processing' })
     .eq('id', checkId)
 
-  // For images, handle OCR processing first
+  // 画像の場合、最初にOCR処理を実行
   let processedText = text
   if (inputType === 'image' && imageUrl) {
     console.log(`[CHECK] Processing image OCR for check ${checkId}`)
     
-    // Update OCR status to processing
+    // OCRステータスを処理中に更新
     await supabase
       .from('checks')
       .update({ ocr_status: 'processing' })
       .eq('id', checkId)
 
     try {
-      // Run OCR via LLM
+      // LLMによるOCR実行
       const { extractTextFromImageWithLLM, estimateOcrConfidence } = await import('@/lib/ai-client')
       const start = Date.now()
       const ocr = await extractTextFromImageWithLLM(imageUrl)
@@ -209,7 +236,7 @@ async function performActualCheck(
       }
       const confidence = estimateOcrConfidence(processedText)
 
-      // Update with extracted text and OCR completion
+      // 抽出テキストとOCR完了をデータベースに記録
       await supabase
         .from('checks')
         .update({ 
@@ -242,18 +269,18 @@ async function performActualCheck(
     }
   }
 
-  // Continue with normal text processing using processedText
+  // 処理済みテキストを使用して通常のテキスト処理を継続
   console.log(`[CHECK] Processing text analysis for check ${checkId}`)
 
-  // Cache key for similar phrases per org + text hash
+  // 組織+テキストハッシュごとの類似フレーズキャッシュキー
   const textHash = CacheUtils.hashText(processedText)
   const similarKey = CacheUtils.similarPhrasesKey(organizationId, textHash)
 
-  // Try cache first
+  // まずキャッシュを確認
   let combinedPhrases = cache.get<CombinedPhrase[]>(similarKey)
 
   if (!combinedPhrases) {
-    // Create embedding for semantic similarity check (cached by text hash to reduce API calls)
+    // 意味的類似性チェック用の埋め込みを作成（テキストハッシュでキャッシュしてAPI呼び出し削減）
     const embeddingKey = `emb:${textHash}`
     let embedding = cache.get<number[]>(embeddingKey)
 
@@ -268,7 +295,7 @@ async function performActualCheck(
       }
     }
 
-    // Use optimized combined similar phrases function (performance optimization)
+    // 最適化された統合類似フレーズ関数を使用（パフォーマンス最適化）
     const { data, error: combinedError } = await (supabase as unknown as {
       rpc: (
         fn: 'get_combined_similar_phrases',
@@ -299,7 +326,7 @@ async function performActualCheck(
     }
 
     combinedPhrases = Array.isArray(data) ? data : []
-    // Cache similar phrases for 5分（同一テキストの再チェック高速化）
+    // 類似フレーズを5分キャッシュ（同一テキストの再チェック高速化）
     cache.set(similarKey, combinedPhrases, 5 * 60 * 1000)
   } else {
     console.log(`[CHECK] Using cached similar phrases for check ${checkId} (key=${similarKey})`)
@@ -313,14 +340,14 @@ async function performActualCheck(
 
   console.log(`[CHECK] Found ${combinedPhrases.length} combined similar phrases for check ${checkId}`)
 
-  // Filter for NG entries and convert to internal format
+  // NGエントリーをフィルターして内部形式に変換
   const relevantEntries = combinedPhrases
     .filter(entry => entry.category === 'NG')
     .map(entry => ({
       id: entry.id,
       phrase: entry.phrase,
       category: entry.category,
-      similarity: entry.combined_score // Use combined score for relevance
+      similarity: entry.combined_score // 関連性には統合スコアを使用
     }))
     .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
 
@@ -330,13 +357,13 @@ async function performActualCheck(
     return
   }
 
-  // Limit entries passed to AI to reduce token usage and response time
+  // AIに渡すエントリー数を制限してトークン使用量と応答時間を削減
   const MAX_AI_ENTRIES = 30
   const limitedEntries = relevantEntries.slice(0, MAX_AI_ENTRIES)
 
   console.log(`[CHECK] Processing ${limitedEntries.length}/${relevantEntries.length} relevant NG phrases for check ${checkId}`)
 
-  // Use AI to analyze and generate violations
+  // AIを使用して分析し違反を生成
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
@@ -356,7 +383,7 @@ async function performActualCheck(
         modified?: string
         violations?: Array<{ start: number; end: number; reason: string; dictionaryId?: number }>
       }
-      // Convert from OpenAI format to internal format
+      // OpenAI形式から内部形式に変換
       violations = (analysisResult.violations ?? []).map((v) => ({
         start_pos: v.start,
         end_pos: v.end,

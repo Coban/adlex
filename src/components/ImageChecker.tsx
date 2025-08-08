@@ -13,6 +13,10 @@ type UploadState = 'idle' | 'ready' | 'validating' | 'uploading' | 'uploaded' | 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 const ACCEPT_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
+/**
+ * 画像アップロード・OCR・薬機法チェックを行うコンポーネント
+ * 画像の前処理、OCR実行、結果表示までを一貫して処理
+ */
 export default function ImageChecker() {
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
@@ -35,6 +39,10 @@ export default function ImageChecker() {
     }
   }, [previewUrl])
 
+  /**
+   * ファイル選択時の処理
+   * ファイル形式・サイズ検証とプレビューURL生成
+   */
   const onSelectFiles = (files: FileList | null) => {
     setError(null)
     if (!files || files.length === 0) return
@@ -67,6 +75,10 @@ export default function ImageChecker() {
     e.stopPropagation()
   }
 
+  /**
+   * 画像チェック処理の開始
+   * 画像前処理 → アップロード → チェック実行 → SSE結果受信
+   */
   const handleStart = async () => {
     try {
       setError(null)
@@ -75,10 +87,10 @@ export default function ImageChecker() {
       setState('validating')
       setStatusMessage('ファイルを検証中...')
 
-      // Upload via API
+      // API経由でアップロード
       setState('uploading')
       setStatusMessage('アップロード中...')
-      // Client-side preprocessing: resize to max 2000px, convert to JPEG
+      // クライアントサイドの前処理: 最大2000pxにリサイズ、JPEG変換
       const processedFile = await preprocessForOcr(file, 2000, 0.9)
       const form = new FormData()
       form.append('image', processedFile)
@@ -95,7 +107,7 @@ export default function ImageChecker() {
       const uploadData = await uploadRes.json() as { signedUrl: string }
       if (!uploadData?.signedUrl) throw new Error('署名付きURLの取得に失敗しました')
 
-      // Start check with input_type=image
+      // input_type=imageでチェック開始
       setState('starting_check')
       setStatusMessage('画像チェックを開始しています...')
       const checksRes = await fetch('/api/checks', {
@@ -115,7 +127,7 @@ export default function ImageChecker() {
       if (!checkData?.id) throw new Error('チェックIDの取得に失敗しました')
       // dbCheckIdは現在のUIでは未使用
 
-      // Connect SSE for progress & result
+      // 進捗と結果のためのSSE接続
       setState('processing')
       setStatusMessage('OCRおよび薬機法チェックを実行中...')
       const es = new EventSource(`/api/checks/${checkData.id}/stream`)
@@ -231,11 +243,20 @@ export default function ImageChecker() {
   )
 }
 
+/**
+ * OCR精度向上のための画像前処理
+ * 指定サイズへのリサイズとJPEG変換を行う
+ * @param inputFile 元の画像ファイル
+ * @param maxDimension 最大寸法（幅または高さ）
+ * @param quality JPEG品質（0-1）
+ * @returns 処理済みのファイル
+ */
 async function preprocessForOcr(inputFile: File, maxDimension: number, quality: number): Promise<File> {
   const imgUrl = URL.createObjectURL(inputFile)
   try {
     const img = await loadImage(imgUrl)
     const { width, height } = img
+    // アスペクト比を維持してリサイズ倍率を計算
     const scale = Math.min(1, maxDimension / Math.max(width, height))
     const targetW = Math.max(1, Math.round(width * scale))
     const targetH = Math.max(1, Math.round(height * scale))
@@ -245,10 +266,12 @@ async function preprocessForOcr(inputFile: File, maxDimension: number, quality: 
     canvas.height = targetH
     const ctx = canvas.getContext('2d')
     if (!ctx) return inputFile
+    // 高品質なスムージングを有効化
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(img, 0, 0, targetW, targetH)
 
+    // JPEG形式でブロブを生成
     const blob: Blob | null = await new Promise((resolve) => {
       canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
     })

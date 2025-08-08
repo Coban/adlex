@@ -79,6 +79,12 @@ function sanitizePlainText(text: string | null | undefined): string {
 }
 
 // Utility function to create chat completion
+/**
+ * AIクライアントを使用してチャット完了を作成する
+ * OpenAIまたはLM Studioのクライアントを使用してLLMとの対話を行う
+ * @param params チャット完了のパラメータ（メッセージ、ツール、設定など）
+ * @returns チャット完了のレスポンス
+ */
 export async function createChatCompletion(params: {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[]
@@ -86,11 +92,11 @@ export async function createChatCompletion(params: {
   temperature?: number
   max_tokens?: number
 }) {
-  // Return mock response in test/mock mode
+  // テスト/モックモードの場合はモックレスポンスを返す
   if (USE_MOCK) {
-    // Check if this is a function calling request
+    // ファンクション呼び出しリクエストかどうかをチェック
     if (params.tools && params.tools.length > 0) {
-      // Return function call response
+      // ファンクション呼び出しレスポンスを返す
       return {
         id: 'mock-chat-completion',
         object: 'chat.completion' as const,
@@ -135,7 +141,7 @@ export async function createChatCompletion(params: {
         }
       }
     } else {
-      // Return regular content response
+      // 通常のコンテンツレスポンスを返す
       return {
         id: 'mock-chat-completion',
         object: 'chat.completion' as const,
@@ -179,19 +185,19 @@ export async function createChatCompletion(params: {
   }
 
   try {
-    // For LM Studio, simplify parameters and avoid unsupported features
+    // LM Studio用のパラメータ簡略化（サポートされていない機能を回避）
     if (USE_LM_STUDIO) {
       const lmParams = {
         model: AI_MODELS.chat,
         messages: params.messages,
         temperature: params.temperature ?? 0.7,
         max_tokens: params.max_tokens,
-        // LM Studio may not support tools/tool_choice, so omit them
+        // LM Studioはtools/tool_choiceをサポートしていない可能性があるため除外
       }
       
       console.log('LM Studio chat completion request with model:', AI_MODELS.chat)
       
-      // Add timeout handling for LM Studio requests
+      // LM Studioリクエスト用のタイムアウト処理を追加
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('LM Studio chat completion timed out (90 seconds)')), 90000)
       })
@@ -206,7 +212,7 @@ export async function createChatCompletion(params: {
         console.error('LM Studio specific error:', error)
         
         if (error instanceof Error) {
-          // Handle common LM Studio model-related errors
+          // LM Studioの一般的なモデル関連エラーを処理
           if (error.message.includes('Failed to load model') && error.message.includes('not llm')) {
             throw new Error(`LM Studio model error: "${AI_MODELS.chat}" is not a chat/LLM model. Please load a chat model in LM Studio (e.g., microsoft/Phi-3-mini-4k-instruct-gguf, google/gemma-2-2b-it-gguf). Current model appears to be an embedding model. Check /api/debug/model-validation for configuration help.`)
           }
@@ -228,7 +234,7 @@ export async function createChatCompletion(params: {
       }
     }
     
-    // For OpenAI, use full parameters
+    // OpenAI用の完全なパラメータを使用
     const response = await aiClient.chat.completions.create({
       model: AI_MODELS.chat,
       ...params,
@@ -237,7 +243,7 @@ export async function createChatCompletion(params: {
   } catch (error) {
     console.error('Error in createChatCompletion:', error)
     
-    // Log detailed error information for debugging
+    // デバッグ用の詳細なエラー情報をログに出力
     if (error instanceof Error) {
       console.error('Error details:', {
         message: error.message,
@@ -259,21 +265,27 @@ export async function createChatCompletion(params: {
  * - Production: OpenAI (gpt-4o)
  * - Development: LM Studio if available; may not support vision → throws with guidance
  */
+/**
+ * LLMを使用して画像からテキストを抽出する（OCR処理）
+ * LM StudioまたはOpenAIのVision機能を使用
+ * @param imageUrl 処理対象の画像URL
+ * @returns 抽出されたテキストと使用されたプロバイダー情報
+ */
 export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   text: string
   provider: 'openai' | 'lmstudio'
   model: string
 }> {
-  // Prefer OpenAI in production; in development, follow USE_LM_STUDIO flag
-  // However, if LM Studio is enabled but cannot process images, we surface a clear error.
+  // 本番環境ではOpenAIを優先、開発環境ではUSE_LM_STUDIOフラグに従う
+  // ただし、LM StudioがVision対応でない場合は明確なエラーを表示
 
-  // Helper to build multi-modal user content
+  // マルチモーダル用のユーザーコンテンツを構築
   const userContent: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
     { type: 'input_text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
     { type: 'input_image', image_url: imageUrl }
   ]
 
-  // Try LM Studio first if configured for dev
+  // 開発環境でLM Studioが設定されている場合は最初に試行
   if (isUsingLMStudio()) {
     try {
       const response: unknown = await createChatCompletion({
@@ -295,7 +307,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
         model: AI_MODELS.chat
       }
     } catch (error) {
-      // Surface a helpful error if model lacks vision support
+      // モデルがVision機能をサポートしていない場合の分かりやすいエラーメッセージ
       if (error instanceof Error && (
         error.message.includes('image') ||
         error.message.toLowerCase().includes('vision') ||
@@ -308,7 +320,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     }
   }
 
-  // Fallback / production path: OpenAI GPT-4o
+  // フォールバック / 本番パス：OpenAI GPT-4o
   if (!openaiClient) {
     throw new Error('OpenAIクライアントが利用できません。OPENAI_API_KEY を設定するか LM Studio をVision対応モデルで起動してください。')
   }
@@ -348,19 +360,40 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
  *
  * 目的: 厳密な品質指標ではなく、UIでの注意喚起や再撮影の推奨に使う軽量指標です。
  */
+/**
+ * OCR結果テキストの信頼度を推定する
+ * テキストの長さ、文字の多様性、文字化けの有無などから算出
+ * @param text OCR処理されたテキスト
+ * @returns 0.0-1.0の範囲の信頼度スコア
+ */
 export function estimateOcrConfidence(text: string): number {
+  // テキスト長に基づくスコア（最大50文字で1.0）
   const lengthScore = Math.min(1, text.length / 50)
+  
+  // 一意文字数に基づくスコア（最大20文字で1.0）
   const uniqueChars = new Set(text.replace(/\s/g, '').split(''))
   const uniqueScore = Math.min(1, uniqueChars.size / 20)
-  const mojibakePenalty = /�|\ufffd/.test(text) ? 0.3 : 0
+  
+  // 文字化け文字によるペナルティ
+  const mojibakePenalty = /\ufffd|\ufffd/.test(text) ? 0.3 : 0
+  
+  // 句読点異常によるペナルティ
   const punctuationPenalty = (text.match(/[\uFFFD]/g)?.length ?? 0) > 0 ? 0.2 : 0
+  
+  // 最終スコア算出（0.0-1.0の範囲で制限）
   const score = Math.max(0, Math.min(1, 0.5 * lengthScore + 0.5 * uniqueScore - mojibakePenalty - punctuationPenalty))
   return Number(score.toFixed(2))
 }
 
 // Utility function to create embeddings
+/**
+ * テキストの埋め込みベクトルを生成する
+ * 辞書エントリの類似性検索に使用される
+ * @param input 埋め込みベクトルを生成するテキスト
+ * @returns 埋め込みベクトルの数値配列
+ */
 export async function createEmbedding(input: string): Promise<number[]> {
-  // Return mock embedding in test/mock mode
+  // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
     console.log('辞書項目のembedding生成を開始:', input)
     const mockEmbedding = new Array(384).fill(0).map(() => Math.random() - 0.5)
@@ -373,7 +406,7 @@ export async function createEmbedding(input: string): Promise<number[]> {
   }
 
   try {
-    // For LM Studio, use direct fetch to avoid OpenAI SDK parsing issues
+    // LM Studio用：OpenAI SDKのパース問題を回避するため直接fetchを使用
     if (USE_LM_STUDIO) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000) // 60秒タイムアウト
@@ -414,7 +447,7 @@ export async function createEmbedding(input: string): Promise<number[]> {
       }
     }
     
-    // For OpenAI, use the SDK
+    // OpenAI用：SDKを使用
     const response = await aiClient.embeddings.create({
       model: AI_MODELS.embedding,
       input,

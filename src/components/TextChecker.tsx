@@ -79,6 +79,10 @@ interface CheckResult {
   violations: Violation[]
 }
 
+/**
+ * 薬機法チェッカーのメインコンポーネント
+ * テキスト入力、チェック実行、結果表示、違反ハイライトなどの機能を提供
+ */
 export default function TextChecker() {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -234,6 +238,10 @@ export default function TextChecker() {
     }
   }
 
+  /**
+   * チェック処理を実行するメインハンドラー
+   * テキスト検証、API呼び出し、SSE接続、結果処理を行う
+   */
   const handleCheck = async () => {
     if (!text.trim()) return
     
@@ -691,6 +699,13 @@ export default function TextChecker() {
     }
   }
 
+  /**
+   * テキスト内の違反箇所をハイライト表示する
+   * @param text 元のテキスト
+   * @param violations 違反データの配列
+   * @param selectedId 選択中の違反ID
+   * @returns ハイライトされたHTML文字列
+   */
   const highlightText = (text: string, violations: Violation[], selectedId: number | null) => {
     if (!violations.length) return text
     
@@ -992,7 +1007,7 @@ export default function TextChecker() {
                   )}
                   
                   {!organizationStatus.canPerformCheck && (
-                    <div className="mt-2 pt-2 border-t border-red-200 bg-red-50 -m-3 mt-2 p-3 rounded-b-md">
+                    <div className="mt-2 pt-2 border-t border-red-200 bg-red-50 -m-3 p-3 rounded-b-md">
                       <div className="text-xs text-red-700">
                         月間制限に達しました: {organizationStatus.currentMonthChecks}/{organizationStatus.monthlyLimit}
                       </div>
