@@ -187,29 +187,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force clear any remaining auth data in localStorage/sessionStorage
       try {
         // Clear all possible Supabase auth keys
-        const keys = Object.keys(localStorage)
-        keys.forEach(key => {
-          if (key.includes('supabase') || key.includes('sb-')) {
-            localStorage.removeItem(key)
-          }
-        })
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          const keys = Object.keys(localStorage)
+          keys.forEach(key => {
+            if (key.includes('supabase') || key.includes('sb-')) {
+              localStorage.removeItem(key)
+            }
+          })
+        }
         
         // Clear session storage (selectively for Supabase-related keys)
-        const sessionKeys = Object.keys(sessionStorage)
-        sessionKeys.forEach(key => {
-          if (key.includes('supabase') || key.includes('sb-')) {
-            sessionStorage.removeItem(key)
-          }
-        })
+        if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+          const sessionKeys = Object.keys(sessionStorage)
+          sessionKeys.forEach(key => {
+            if (key.includes('supabase') || key.includes('sb-')) {
+              sessionStorage.removeItem(key)
+            }
+          })
+        }
         
         // Clear any cookies
-        document.cookie.split(";").forEach(cookie => {
-          const eqPos = cookie.indexOf("=")
-          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
-          if (name.includes('supabase') || name.includes('sb-')) {
-            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-          }
-        })
+        if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.cookie === 'string') {
+          document.cookie.split(";").forEach(cookie => {
+            const eqPos = cookie.indexOf("=")
+            const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
+            if (name.includes('supabase') || name.includes('sb-')) {
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+            }
+          })
+        }
         
       } catch (storageError) {
         console.warn('AuthContext signOut: Storage clear failed:', storageError)
