@@ -14,7 +14,7 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -77,6 +77,7 @@ const navigationItems: NavigationItem[] = [
 export default function GlobalNavigation() {
   const { user, userProfile, organization, loading, signOut } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -173,6 +174,7 @@ export default function GlobalNavigation() {
                   onClick={async () => {
                     try {
                       await signOut()
+                      router.replace('/auth/signin')
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
                       alert('サインアウトに失敗しました。もう一度お試しください。')
@@ -275,6 +277,7 @@ export default function GlobalNavigation() {
                       try {
                         await signOut()
                         setMobileMenuOpen(false)
+                        router.replace('/auth/signin')
                       } catch (error) {
                         console.error('GlobalNavigation Mobile: SignOut failed:', error)
                         setMobileMenuOpen(false)

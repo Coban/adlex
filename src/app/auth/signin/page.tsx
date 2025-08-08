@@ -1,19 +1,30 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useAuth } from '@/contexts/AuthContext'
 import { signIn } from '@/lib/auth'
 
 export default function SignInPage() {
+  const router = useRouter()
+  const { user, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // 既にサインイン済み、またはサインイン直後の状態変化を検知して遷移
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace('/')
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,14 +32,22 @@ export default function SignInPage() {
     setError('')
 
     try {
-      await signIn({ email, password })
+      console.log('Starting sign in process...')
+      const result = await signIn({ email, password })
       
-      // Wait a moment for auth state to be properly updated
-      await new Promise(resolve => setTimeout(resolve, 100))
+      console.log('Sign in result:', result)
       
-      // Force a page refresh to ensure auth state is properly loaded
-      window.location.href = '/'
+      // Verify sign in was successful
+      if (result?.user) {
+        console.log('Sign in successful, redirecting...')
+        router.replace('/')
+        
+      } else {
+        console.error('No user in sign in result')
+        throw new Error('サインインに失敗しました')
+      }
     } catch (err) {
+      console.error('Sign in error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setIsLoading(false)

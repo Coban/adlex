@@ -139,8 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-
-        
         if (isMounted) {
           setUser(session?.user ?? null)
           if (session?.user) {
@@ -162,7 +160,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (currentSession?.user) {
                   setUser(currentSession.user)
                   await fetchUserProfile(currentSession.user.id)
-
                 }
               } catch (error) {
                 console.error('AuthContext: Double-check error:', error)
@@ -187,19 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserProfile(null)
       setOrganization(null)
       
-      // Try to sign out from Supabase with timeout
-      const signOutPromise = supabase.auth.signOut()
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('SignOut timeout')), 3000)
-      )
-      
-      try {
-        await Promise.race([signOutPromise, timeoutPromise])
-      } catch (signOutError) {
-        console.warn('AuthContext signOut: Supabase signOut failed or timed out:', signOutError)
-        // Continue anyway - we've already cleared local state
-      }
-      
       // Force clear any remaining auth data in localStorage/sessionStorage
       try {
         // Clear all possible Supabase auth keys
@@ -222,14 +206,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         })
         
-
       } catch (storageError) {
         console.warn('AuthContext signOut: Storage clear failed:', storageError)
       }
       
-      // Force redirect with cache busting
-
-      window.location.href = '/?_=' + Date.now()
+      // Try to sign out from Supabase (but don't wait for it)
+      supabase.auth.signOut().catch(signOutError => {
+        console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
+      })
+      
+      // Let the auth state change event handle the UI update naturally
+      // No forced redirect needed
       
     } catch (error) {
       console.error('AuthContext: SignOut failed:', error)
@@ -237,10 +224,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setUserProfile(null)
       setOrganization(null)
-      
-      // Force redirect anyway
-
-      window.location.href = '/?_=' + Date.now()
     }
   }
 
