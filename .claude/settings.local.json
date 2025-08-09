@@ -68,7 +68,8 @@
       "mcp__serena__think_about_collected_information",
       "Bash(supabase status:*)",
       "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium --grep \"should display.*dashboard\" --timeout=60000)",
-      "mcp__serena__think_about_whether_you_are_done"
+      "mcp__serena__think_about_whether_you_are_done",
+      "Bash(cat:*)"
     ],
     "deny": []
   }
