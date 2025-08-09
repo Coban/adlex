@@ -14,7 +14,7 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -77,6 +77,7 @@ const navigationItems: NavigationItem[] = [
 export default function GlobalNavigation() {
   const { user, userProfile, organization, loading, signOut } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -172,10 +173,10 @@ export default function GlobalNavigation() {
                   size="sm" 
                   onClick={async () => {
                     try {
-                            await signOut()
+                      await signOut()
+                      router.replace('/auth/signin')
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
-                      // エラーメッセージを表示（必要に応じて）
                       alert('サインアウトに失敗しました。もう一度お試しください。')
                     }
                   }}
@@ -273,13 +274,13 @@ export default function GlobalNavigation() {
                     variant="outline" 
                     size="sm" 
                     onClick={async () => {
+                      setMobileMenuOpen(false)
                       try {
-                                            await signOut()
-                        setMobileMenuOpen(false)
+                        await signOut()
+                        await new Promise((r) => setTimeout(r, 50))
+                        router.replace('/auth/signin')
                       } catch (error) {
                         console.error('GlobalNavigation Mobile: SignOut failed:', error)
-                        setMobileMenuOpen(false)
-                        // エラーメッセージを表示（必要に応じて）
                         alert('サインアウトに失敗しました。もう一度お試しください。')
                       }
                     }}

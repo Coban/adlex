@@ -119,6 +119,17 @@ export default function TextChecker() {
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [dictionaryInfo, setDictionaryInfo] = useState<{ [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }>({})
   const originalTextRef = useRef<HTMLDivElement | null>(null)
+  // EventSource を安全にクローズするユーティリティ（テスト環境で close が未実装の場合に備える）
+  function safeCloseEventSource(source: EventSource | null | undefined) {
+    try {
+      const maybeClose = (source as unknown as { close?: unknown })?.close
+      if (typeof maybeClose === 'function') {
+        maybeClose.call(source)
+      }
+    } catch {
+      // ignore errors in cleanup
+    }
+  }
   // キャンセル機能用のref
   const cancelControllers = useRef<Map<string, { eventSource: EventSource; pollInterval: NodeJS.Timeout; timeout: NodeJS.Timeout }>>(new Map())
   // アクティブなチェック結果を取得（早期に定義してHooks依存関係で参照可能に）
@@ -133,7 +144,7 @@ export default function TextChecker() {
   // キューステータス監視を開始
   useEffect(() => {
     if (globalStreamRef.current) {
-      globalStreamRef.current.close()
+      safeCloseEventSource(globalStreamRef.current)
     }
 
     // 統合SSEエンドポイントに接続
@@ -177,7 +188,7 @@ export default function TextChecker() {
     }
 
     return () => {
-      eventSource.close()
+      safeCloseEventSource(eventSource)
       globalStreamRef.current = null
     }
   }, [])
@@ -405,7 +416,7 @@ export default function TextChecker() {
           if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
             clearInterval(pollingIntervalId)
             clearTimeout(timeout)
-            eventSource.close()
+            safeCloseEventSource(eventSource)
             cancelControllers.current.delete(checkId)
             
             if (currentCheck.status === 'completed') {
@@ -515,7 +526,7 @@ export default function TextChecker() {
         if (pollCount >= maxPolls) {
           clearInterval(pollingIntervalId)
           clearTimeout(timeout)
-          eventSource.close()
+          safeCloseEventSource(eventSource)
           cancelControllers.current.delete(checkId)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
@@ -534,7 +545,7 @@ export default function TextChecker() {
       const timeoutMs = maxPolls * pollIntervalMs // ポーリング回数と連動
       const timeout = setTimeout(() => {
         clearInterval(pollingIntervalId)
-        eventSource.close()
+        safeCloseEventSource(eventSource)
         setChecks(prev => prev.map(check => 
           check.id === checkId 
             ? { 
@@ -595,7 +606,7 @@ export default function TextChecker() {
                   }
                 : check
             ))
-            eventSource.close()
+            safeCloseEventSource(eventSource)
           } else if (data.status === 'failed') {
             clearInterval(pollingIntervalId)
             clearTimeout(timeout)
@@ -612,7 +623,7 @@ export default function TextChecker() {
                 : check
             ))
             setErrorMessage(`エラー: ${errorMessage}`)
-            eventSource.close()
+            safeCloseEventSource(eventSource)
           } else if (data.status === 'processing') {
             setChecks(prev => prev.map(check => 
               check.id === checkId 
@@ -638,7 +649,7 @@ export default function TextChecker() {
                 }
               : check
           ))
-          eventSource.close()
+          safeCloseEventSource(eventSource)
         }
       }
 
@@ -656,7 +667,7 @@ export default function TextChecker() {
               }
             : check
         ))
-        eventSource.close()
+        safeCloseEventSource(eventSource)
         setErrorMessage('サーバーとの接続でエラーが発生しました。もう一度お試しください。')
       }
 
@@ -685,7 +696,7 @@ export default function TextChecker() {
     const controllers = cancelControllers.current.get(checkId)
     if (controllers) {
       // EventSource と polling を停止
-      controllers.eventSource.close()
+      safeCloseEventSource(controllers.eventSource)
       clearInterval(controllers.pollInterval)
       clearTimeout(controllers.timeout)
       cancelControllers.current.delete(checkId)

@@ -9,6 +9,8 @@ import { Database } from '@/types/database.types'
 type UserProfile = Database['public']['Tables']['users']['Row']
 type Organization = Database['public']['Tables']['organizations']['Row']
 
+const AUTH_STATE_DELAY = 200
+
 interface AuthContextType {
   user: User | null
   userProfile: UserProfile | null
@@ -34,17 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      console.log('Starting fetchUserProfile for userId:', userId)
-      
       // First get the user profile
-      console.log('Querying users table for id:', userId)
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
-      
-      console.log('Users query result:', { profile, error })
 
       if (error) {
         console.error('Error fetching user profile:', {
@@ -60,18 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (!profile) {
-        console.log('No profile found for user:', userId)
         setUserProfile(null)
         setOrganization(null)
         return
       }
 
-      console.log('User profile fetched:', profile)
       setUserProfile(profile)
       
       // If user has an organization_id, fetch the organization separately
       if (profile?.organization_id) {
-        console.log('Fetching organization for user:', profile.email, 'organization_id:', profile.organization_id)
         const { data: org, error: orgError } = await supabase
           .from('organizations')
           .select('*')
@@ -82,15 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error fetching organization:', orgError)
           setOrganization(null)
         } else {
-          console.log('Organization fetched:', org)
           setOrganization(org)
         }
       } else {
-        console.log('No organization_id in profile:', profile)
         setOrganization(null)
       }
-      
-      console.log('fetchUserProfile completed')
       
     } catch (error) {
       console.error('Failed to fetch user profile:', error)
@@ -144,7 +134,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fallback timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       if (isMounted) {
-        console.log('Auth loading timeout - forcing loading to false')
         setLoading(false)
       }
     }, 5000) // 5 seconds timeout
@@ -163,21 +152,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false)
         }
         
-        // For sign in events, double check the session
-        if (event === 'SIGNED_IN' && session) {
+        // For sign in events, ensure state is fully updated
+        if (event === 'SIGNED_IN' && session && isMounted) {
+          // Give a bit more time for the session to be properly established
           setTimeout(async () => {
             if (isMounted) {
               try {
                 const { data: { session: currentSession } } = await supabase.auth.getSession()
-                setUser(currentSession?.user ?? null)
                 if (currentSession?.user) {
+                  setUser(currentSession.user)
                   await fetchUserProfile(currentSession.user.id)
                 }
               } catch (error) {
                 console.error('AuthContext: Double-check error:', error)
               }
             }
-          }, 100)
+          }, AUTH_STATE_DELAY)
         }
       }
     )
@@ -190,21 +180,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
+    // Try server-side signout first, but never abort the flow on failure
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('AuthContext: SignOut error:', error)
-        throw error
+      const res = await fetch('/api/auth/signout', { method: 'POST' })
+      if (!res.ok) {
+        const msg = await res
+          .json()
+          .then((j) => j?.error as string)
+          .catch(() => 'Signout API failed')
+        console.warn('AuthContext signOut: Server signout failed:', msg)
       }
-      setUserProfile(null)
-      setOrganization(null)
     } catch (error) {
-      console.error('AuthContext: SignOut failed:', error)
-      // エラーが発生してもUIの状態は更新する
-      setUserProfile(null)
-      setOrganization(null)
-      throw error
+      console.warn('AuthContext signOut: Server signout request error:', error)
     }
+
+    // Always attempt client-side signout to clear browser-held session
+    try {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) {
+        console.warn('AuthContext signOut: Supabase signOut failed:', signOutError)
+      }
+    } catch (error) {
+      console.warn('AuthContext signOut: Supabase signOut threw:', error)
+    }
+
+    // Best-effort cleanup of any residual client storage/cookies
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const keys = Object.keys(localStorage)
+        keys.forEach((key) => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            localStorage.removeItem(key)
+          }
+        })
+      }
+      if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+        const sessionKeys = Object.keys(sessionStorage)
+        sessionKeys.forEach((key) => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            sessionStorage.removeItem(key)
+          }
+        })
+      }
+      if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.cookie === 'string') {
+        document.cookie.split(';').forEach((cookie) => {
+          const eqPos = cookie.indexOf('=')
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
+          if (name.includes('supabase') || name.includes('sb-')) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+          }
+        })
+      }
+    } catch (storageError) {
+      console.warn('AuthContext signOut: Storage clear failed:', storageError)
+    }
+
+    // Clear local state no matter what
+    setUser(null)
+    setUserProfile(null)
+    setOrganization(null)
   }
 
   // Show loading state during SSR and initial mount to prevent hydration mismatch
