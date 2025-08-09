@@ -8,6 +8,27 @@ vi.mock('@/contexts/AuthContext', () => ({
 import AdminDashboard from '@/app/admin/page'
 import { useAuth } from '@/contexts/AuthContext'
 
+// 型定義
+type UserProfile = {
+  id: string
+  role: 'user' | 'admin' | null
+  created_at: string | null
+  email: string | null
+  updated_at: string | null
+  organization_id: number | null
+}
+
+type Organization = {
+  id: number
+  name: string
+  created_at: string | null
+  updated_at: string | null
+  max_checks: number | null
+  plan: 'trial' | 'basic' | null
+  trial_ends_at: string | null
+  used_checks: number | null
+}
+
 describe('AdminDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -31,7 +52,7 @@ describe('AdminDashboard', () => {
     const value: ReturnType<typeof useAuth> = {
       user: null,
       organization: null,
-      userProfile: { id: 'u', role: 'user', created_at: '', email: '', updated_at: null, organization_id: null } as any,
+      userProfile: { id: 'u', role: 'user', created_at: '', email: '', updated_at: null, organization_id: null } as UserProfile,
       loading: false,
       signOut: async () => {}
     }
@@ -44,8 +65,8 @@ describe('AdminDashboard', () => {
   it('管理者はダッシュボードと統計カードが表示される', () => {
     const value: ReturnType<typeof useAuth> = {
       user: null,
-      organization: { id: 'o1', name: 'Org', created_at: '', updated_at: null } as any,
-      userProfile: { id: 'u', role: 'admin', created_at: '', email: '', updated_at: null, organization_id: 'o1' } as any,
+      organization: { id: 1, name: 'Org', created_at: '', updated_at: null, max_checks: 100, plan: 'basic', trial_ends_at: null, used_checks: 10 } as Organization,
+      userProfile: { id: 'u', role: 'admin', created_at: '', email: '', updated_at: null, organization_id: 1 } as UserProfile,
       loading: false,
       signOut: async () => {}
     }

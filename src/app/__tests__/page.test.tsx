@@ -1,3 +1,4 @@
+import type { User } from '@supabase/supabase-js'
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -8,6 +9,16 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 import Home from '@/app/page'
 import { useAuth } from '@/contexts/AuthContext'
+
+// 型定義
+type UserProfile = {
+  role: 'user' | 'admin'
+}
+
+type Organization = {
+  id: string
+  name: string
+}
 
 describe('Home ページ', () => {
   beforeEach(() => {
@@ -29,8 +40,8 @@ describe('Home ページ', () => {
 
   it('認証済みユーザーにはようこそメッセージが表示され、管理者ボタンは表示されない', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'user@example.com' } as any,
-      userProfile: { role: 'user' } as any,
+      user: { id: 'u1', email: 'user@example.com' } as User,
+      userProfile: { role: 'user' } as UserProfile,
       organization: null,
       loading: false,
       signOut: vi.fn()
@@ -45,9 +56,9 @@ describe('Home ページ', () => {
 
   it('管理者には管理者用のボタンと説明が表示される', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'a1', email: 'admin@example.com' } as any,
-      userProfile: { role: 'admin' } as any,
-      organization: { id: 'o1', name: 'Org' } as any,
+      user: { id: 'a1', email: 'admin@example.com' } as User,
+      userProfile: { role: 'admin' } as UserProfile,
+      organization: { id: 'o1', name: 'Org' } as Organization,
       loading: false,
       signOut: vi.fn()
     })
