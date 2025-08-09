@@ -88,7 +88,7 @@ export async function GET(
           try {
             heartbeatCount++
             if (heartbeatCount > maxHeartbeats) {
-              console.log(`[SSE] Max heartbeats reached for check ${checkId}`)
+              // Max heartbeats reached - ending stream
               clearInterval(heartbeatInterval)
               return
             }
@@ -107,14 +107,14 @@ export async function GET(
       
       // 進捗タイムアウト: 一定時間進捗がない場合の処理
       progressTimeout = setTimeout(() => {
-        console.log(`[SSE] Progress timeout for check ${checkId} - checking status`)
+        // Progress timeout - reducing heartbeat interval
         // 進捗タイムアウト時はハートビート間隔を短くして接続維持
         startHeartbeat(10000) // 10秒間隔に変更
       }, maxProgressTime)
       
       // 最終接続タイムアウト
       const connectionTimeout = setTimeout((): void => {
-        console.log(`[SSE] Final connection timeout for check ${checkId}`)
+        // Final connection timeout - ending stream
         const timeoutData = JSON.stringify({
           id: checkId,
           status: 'failed',
@@ -147,7 +147,7 @@ export async function GET(
                 // 進捗更新時は進捗タイムアウトをリセット
                 clearTimeout(progressTimeout)
                 progressTimeout = setTimeout(() => {
-                  console.log(`[SSE] Progress timeout reset for check ${checkId}`)
+                  // Progress timeout reset - reducing heartbeat interval
                   startHeartbeat(10000)
                 }, maxProgressTime)
                 
@@ -171,13 +171,13 @@ export async function GET(
                 clearInterval(heartbeatInterval)
                 controller.close()
             } else if (status === 'SUBSCRIBED') {
-                console.log(`[SSE] Successfully subscribed to check ${checkId} updates`)
+                // Successfully subscribed to check updates
             }
         })
 
       // 最適化されたクリーンアップ処理
       const cleanup = () => {
-        console.log(`[SSE] Cleaning up resources for check ${checkId}`)
+        // Cleaning up SSE resources
         clearTimeout(connectionTimeout)
         clearTimeout(progressTimeout)
         clearInterval(heartbeatInterval)

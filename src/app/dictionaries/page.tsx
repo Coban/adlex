@@ -93,7 +93,6 @@ export default function DictionariesPage() {
               .order('created_at', { ascending: false })
 
             if (!error && data) {
-              console.log('Loaded dictionaries via fallback:', data.length, 'items')
               setDictionaries(data || [])
               setLoading(false)
               return
@@ -109,7 +108,6 @@ export default function DictionariesPage() {
     }
     
     try {
-      console.log('Loading dictionaries for organization:', organization.id)
       const { data, error } = await supabase
         .from('dictionaries')
         .select('*')
@@ -121,7 +119,6 @@ export default function DictionariesPage() {
         throw error
       }
       
-      console.log('Loaded dictionaries:', data?.length || 0, 'items')
       setDictionaries(data || [])
     } catch (error) {
       console.error('辞書の読み込みに失敗しました:', error)

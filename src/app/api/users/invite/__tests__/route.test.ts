@@ -338,11 +338,6 @@ describe('Users Invite API Route', () => {
 
       const response = await POST(request)
       
-      if (response.status !== 200) {
-        const errorBody = await response.json()
-        console.log('Error response:', { status: response.status, error: errorBody })
-      }
-      
       expect(response.status).toBe(200)
       const body = await response.json()
       expect(body.message).toBe('招待を送信しました')

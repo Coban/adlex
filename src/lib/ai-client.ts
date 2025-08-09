@@ -11,22 +11,7 @@ const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_K
 const USE_LM_STUDIO = !isProduction && !isTest && process.env.USE_LM_STUDIO === 'true'
 const USE_MOCK = isMockMode
 
-// AI Client Configuration logged only in development
-  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-    console.log('AI Client Configuration:', {
-      isProduction,
-      isTest,
-      hasValidOpenAIKey,
-      USE_LM_STUDIO,
-      USE_MOCK,
-      isMockMode,
-      environment: process.env.NODE_ENV,
-      openai_api_key: process.env.OPENAI_API_KEY?.substring(0, 10)?.concat('...'),
-      lm_studio_chat_model: process.env.LM_STUDIO_CHAT_MODEL,
-      lm_studio_embedding_model: process.env.LM_STUDIO_EMBEDDING_MODEL,
-      lm_studio_base_url: process.env.LM_STUDIO_BASE_URL
-    })
-  }
+// AI Client Configuration - initialized based on environment
 
 // OpenAI client (for production)
 const openaiClient = hasValidOpenAIKey ? new OpenAI({
@@ -195,7 +180,7 @@ export async function createChatCompletion(params: {
         // LM Studioはtools/tool_choiceをサポートしていない可能性があるため除外
       }
       
-      console.log('LM Studio chat completion request with model:', AI_MODELS.chat)
+      // Making LM Studio chat completion request
       
       // LM Studioリクエスト用のタイムアウト処理を追加
       const timeoutPromise = new Promise((_, reject) => {
@@ -206,10 +191,9 @@ export async function createChatCompletion(params: {
       
       try {
         const response = await Promise.race([chatPromise, timeoutPromise])
-        console.log('LM Studio chat completion successful')
         return response
       } catch (error) {
-        console.error('LM Studio specific error:', error)
+        // Handle LM Studio specific errors
         
         if (error instanceof Error) {
           // LM Studioの一般的なモデル関連エラーを処理
@@ -395,9 +379,8 @@ export function estimateOcrConfidence(text: string): number {
 export async function createEmbedding(input: string): Promise<number[]> {
   // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
-    console.log('辞書項目のembedding生成を開始:', input)
+    // Generate mock embedding for testing
     const mockEmbedding = new Array(384).fill(0).map(() => Math.random() - 0.5)
-    console.log('Embedding生成成功, 次元数:', mockEmbedding.length)
     return mockEmbedding
   }
 

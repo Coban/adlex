@@ -160,13 +160,13 @@ export async function GET(request: NextRequest) {
             console.error('[SSE] Subscription error:', err)
             cleanup()
           } else if (status === 'SUBSCRIBED') {
-            console.log('[SSE] Successfully subscribed to checks updates')
+            // Successfully subscribed to checks updates
           }
         })
 
       // クリーンアップ関数
       const cleanup = () => {
-        console.log('[SSE] Cleaning up resources')
+        // Cleaning up SSE resources
         clearInterval(heartbeatInterval)
         clearInterval(queueCheckInterval)
         channel.unsubscribe()

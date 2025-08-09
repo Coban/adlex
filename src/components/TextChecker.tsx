@@ -166,15 +166,7 @@ export default function TextChecker() {
           setOrganizationStatus(data.organization)
           setSystemStatus(data.system)
           
-          // デバッグ情報ログ
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[QUEUE-STATUS]', {
-              available: data.queue.availableSlots,
-              processing: data.queue.processingCount,
-              queue: data.queue.queueLength,
-              canStart: data.queue.canStartNewCheck
-            })
-          }
+          // Queue status updated
         }
         // 他のメッセージタイプ（check_progress等）は将来的に追加可能
       } catch (error) {
@@ -238,7 +230,7 @@ export default function TextChecker() {
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
       
-      console.log('PDF export successful')
+      // PDF exported successfully
     } catch (error) {
       setPdfError(error instanceof Error ? error.message : 'PDFの生成に失敗しました')
     }

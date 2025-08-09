@@ -137,15 +137,11 @@ describe('Users API Route', () => {
         }
       ]
 
-      let callCount = 0
       const mockFrom = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          callCount++
-          return Promise.resolve({ data: userData, error: null })
-        })
+        single: vi.fn().mockResolvedValue({ data: userData, error: null })
       }
 
       mockFrom.order.mockResolvedValue({ data: mockUsers, error: null })
@@ -172,15 +168,11 @@ describe('Users API Route', () => {
         role: 'admin'
       }
 
-      let callCount = 0
       const mockFrom = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          callCount++
-          return Promise.resolve({ data: userData, error: null })
-        })
+        single: vi.fn().mockResolvedValue({ data: userData, error: null })
       }
 
       mockFrom.order.mockResolvedValue({ data: null, error: new Error('Database error') })
@@ -205,15 +197,11 @@ describe('Users API Route', () => {
         role: 'admin'
       }
 
-      let callCount = 0
       const mockFrom = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          callCount++
-          return Promise.resolve({ data: userData, error: null })
-        })
+        single: vi.fn().mockResolvedValue({ data: userData, error: null })
       }
 
       mockFrom.order.mockResolvedValue({ data: null, error: null })
