@@ -2,10 +2,14 @@ import type { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 describe('Middleware', () => {
-  let mockSupabaseClient: any
-  let mockNextResponse: any
-  let mockCreateServerClient: any
-  let mockNextResponseNext: any
+  type CookieItem = { name: string; value: string; options?: Record<string, unknown> }
+  type CookieConfig = { cookies: { getAll: () => CookieItem[]; setAll: (cookies: CookieItem[]) => void } }
+  type MockSupabaseClient = { auth: { getUser: ReturnType<typeof vi.fn> } }
+
+  let mockSupabaseClient: MockSupabaseClient
+  let mockNextResponse: { cookies: { set: ReturnType<typeof vi.fn> }; headers: Headers }
+  let mockCreateServerClient: ReturnType<typeof vi.fn>
+  let mockNextResponseNext: ReturnType<typeof vi.fn>
   let mockRequest: NextRequest
 
   beforeEach(() => {
@@ -103,8 +107,8 @@ describe('Middleware', () => {
       const getAllSpy = vi.fn(() => mockCookies)
       mockRequest.cookies.getAll = getAllSpy
 
-      let cookieConfig: any
-      mockCreateServerClient.mockImplementation((url: string, key: string, config: any) => {
+      let cookieConfig: CookieConfig | undefined
+      mockCreateServerClient.mockImplementation((url: string, key: string, config: CookieConfig) => {
         cookieConfig = config
         return mockSupabaseClient
       })
@@ -113,7 +117,8 @@ describe('Middleware', () => {
       await middleware(mockRequest)
       
       // The cookies.getAll should be called through the Supabase client config
-      cookieConfig.cookies.getAll()
+      expect(cookieConfig).toBeDefined()
+      cookieConfig!.cookies.getAll()
       expect(getAllSpy).toHaveBeenCalled()
     })
 
@@ -156,8 +161,8 @@ describe('Middleware', () => {
 
   describe('cookie handling', () => {
     it('should handle cookie operations through Supabase client config', async () => {
-      let cookieConfig: any
-      mockCreateServerClient.mockImplementation((url: string, key: string, config: any) => {
+      let cookieConfig: CookieConfig | undefined
+      mockCreateServerClient.mockImplementation((url: string, key: string, config: CookieConfig) => {
         cookieConfig = config
         return mockSupabaseClient
       })
@@ -166,16 +171,17 @@ describe('Middleware', () => {
       await middleware(mockRequest)
 
       // Test getAll function
-      expect(cookieConfig.cookies.getAll).toBeInstanceOf(Function)
-      cookieConfig.cookies.getAll()
+      expect(cookieConfig).toBeDefined()
+      expect(cookieConfig!.cookies.getAll).toBeInstanceOf(Function)
+      cookieConfig!.cookies.getAll()
       expect(mockRequest.cookies.getAll).toHaveBeenCalled()
 
       // Test setAll function
-      expect(cookieConfig.cookies.setAll).toBeInstanceOf(Function)
+      expect(cookieConfig!.cookies.setAll).toBeInstanceOf(Function)
       const testCookies = [
         { name: 'test-cookie', value: 'test-value', options: { httpOnly: true } }
       ]
-      cookieConfig.cookies.setAll(testCookies)
+      cookieConfig!.cookies.setAll(testCookies)
 
       expect(mockRequest.cookies.set).toHaveBeenCalledWith('test-cookie', 'test-value')
       expect(mockNextResponse.cookies.set).toHaveBeenCalledWith('test-cookie', 'test-value', { httpOnly: true })

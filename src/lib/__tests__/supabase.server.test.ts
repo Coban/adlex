@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+type SSRCreateServerClientMock = ReturnType<typeof vi.fn> & { mock: { calls: unknown[][] } }
 
 // Mock next/headers cookies
 vi.mock('next/headers', () => {
@@ -47,7 +48,7 @@ describe('server supabase createClient', () => {
   it('cookies.getAll が cookieStore の getAll を呼ぶ', async () => {
     await createClient()
     const { __mocks__: ssrMocks } = await import('@supabase/ssr')
-    const optionsArg = (ssrMocks.createServerClient as any).mock.calls[0][2]
+    const optionsArg = (ssrMocks.createServerClient as SSRCreateServerClientMock).mock.calls[0][2]
     expect(optionsArg.cookies.getAll()).toEqual([{ name: 'a', value: '1' }])
     const { __mocks__: headersMocks } = await import('next/headers')
     expect(headersMocks.getAll).toHaveBeenCalled()
@@ -57,7 +58,7 @@ describe('server supabase createClient', () => {
     await createClient()
     const { __mocks__: ssrMocks } = await import('@supabase/ssr')
     const { __mocks__: headersMocks } = await import('next/headers')
-    const optionsArg = (ssrMocks.createServerClient as any).mock.calls[0][2]
+    const optionsArg = (ssrMocks.createServerClient as SSRCreateServerClientMock).mock.calls[0][2]
     const input = [
       { name: 'sb', value: 'x', options: { path: '/' } },
       { name: 'sb2', value: 'y', options: { path: '/app' } },
@@ -74,7 +75,7 @@ describe('server supabase createClient', () => {
     headersMocks.set.mockImplementationOnce(() => { throw new Error('server') })
     await createClient()
     const { __mocks__: ssrMocks } = await import('@supabase/ssr')
-    const optionsArg = (ssrMocks.createServerClient as any).mock.calls[0][2]
+    const optionsArg = (ssrMocks.createServerClient as SSRCreateServerClientMock).mock.calls[0][2]
     expect(() => optionsArg.cookies.setAll([{ name: 'a', value: '1', options: {} }])).not.toThrow()
   })
 })
