@@ -38,6 +38,10 @@
     "typescriptreact"
   ],
   "eslint.ignoreUntitled": true,
+  "eslint.run": "onType",
+  "eslint.codeAction.showDocumentation": {
+    "enable": true
+  },
   "problems.decorations.enabled": true,
   "problems.showCurrentInStatus": true,
   // Files to exclude from problems panel (optional)
@@ -58,9 +62,12 @@
   "typescript.preferences.includePackageJsonAutoImports": "auto",
   "typescript.suggest.autoImports": true,
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
   },
   "editor.formatOnSave": true,
+  "editor.formatOnPaste": false,
+  "editor.formatOnType": false,
   // File type specific settings
   "[typescript]": {
     "editor.defaultFormatter": "dbaeumer.vscode-eslint"
