@@ -20,7 +20,10 @@
       "Bash(psql:*)",
       "Bash(node:*)",
       "mcp__serena__*",
-      "mcp__ide__*"
+      "mcp__ide__*",
+      "Bash(npm run lint:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run check:*)"
     ],
     "deny": []
   }
