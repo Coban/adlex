@@ -6,7 +6,7 @@ const { supabaseMock } = vi.hoisted(() => ({
     auth: {
       exchangeCodeForSession: vi.fn(),
     },
-  } as any,
+  } as unknown as { auth: { exchangeCodeForSession: ReturnType<typeof vi.fn> } },
 }))
 
 vi.mock('@/lib/supabase/server', () => ({

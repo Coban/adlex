@@ -1,11 +1,11 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ComponentProps } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock next/link to a simple anchor for testing
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...props }: any) => (
-     
+  default: ({ href, children, ...props }: ComponentProps<'a'> & { href: string | object }) => (
     <a href={typeof href === 'string' ? href : '#'} {...props}>{children}</a>
   )
 }))
@@ -25,7 +25,7 @@ describe('CheckHistoryDetail', () => {
   })
 
   afterEach(() => {
-    global.fetch = originalFetch as any
+    global.fetch = originalFetch as typeof fetch
   })
 
   it.skip('正常系: チェック詳細を取得して表示する（違反のハイライト含む）', async () => {
@@ -45,7 +45,7 @@ describe('CheckHistoryDetail', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ check: mockCheck })
-    }) as any
+    }) as typeof fetch
 
     const { container } = render(<CheckHistoryDetail checkId={123} />)
 
@@ -68,7 +68,7 @@ describe('CheckHistoryDetail', () => {
   })
 
   it('エラー系: 404 をユーザー向けメッセージに変換して表示', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 }) as any
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 }) as typeof fetch
 
     render(<CheckHistoryDetail checkId={999} />)
 
@@ -90,7 +90,7 @@ describe('CheckHistoryDetail', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ check: mockCheck })
-    }) as any
+    }) as typeof fetch
 
     const spy = vi.spyOn(navigator.clipboard, 'writeText')
 

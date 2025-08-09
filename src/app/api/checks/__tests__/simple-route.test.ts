@@ -10,7 +10,13 @@ vi.mock('@/lib/queue-manager', () => ({
 }))
 
 // Supabase モック
-const mockSupabase: any = {
+ 
+type SupabaseClientMock = {
+  auth: { getUser: ReturnType<typeof vi.fn> }
+  from: ReturnType<typeof vi.fn>
+}
+
+const mockSupabase: SupabaseClientMock = {
   auth: { getUser: vi.fn() },
   from: vi.fn(),
 }

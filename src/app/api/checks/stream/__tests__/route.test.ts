@@ -5,7 +5,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from '../route'
 
 // Mocks
-const mockSupabase: any = {
+type SupabaseClientMock = {
+  auth: { getUser: ReturnType<typeof vi.fn> }
+  from: ReturnType<typeof vi.fn>
+  channel: ReturnType<typeof vi.fn>
+}
+
+const mockSupabase: SupabaseClientMock = {
   auth: { getUser: vi.fn() },
   from: vi.fn(),
   channel: vi.fn(),
@@ -41,7 +47,8 @@ function setupSupabaseStreams() {
 
   mockSupabase.channel.mockReturnValue({
     on: vi.fn().mockReturnThis(),
-    subscribe: vi.fn((cb: any) => { typeof cb === 'function' && cb('SUBSCRIBED'); return { unsubscribe: vi.fn() } }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    subscribe: vi.fn((cb: any) => { if (typeof cb === 'function') { cb('SUBSCRIBED') } return { unsubscribe: vi.fn() } }),
     unsubscribe: vi.fn()
   })
 }

@@ -1,7 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('next/link', () => ({ default: ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a> }))
+vi.mock('next/link', () => ({ 
+  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string; [key: string]: unknown }) => 
+    <a href={href} {...rest}>{children}</a> 
+}))
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
   useRouter: () => ({ replace: vi.fn() }),

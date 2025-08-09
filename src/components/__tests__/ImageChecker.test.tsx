@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('next/link', () => ({ default: ({ children }: any) => <a>{children}</a> }))
+vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u' } }),
@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/client', () => ({
 }))
 
 // Mock fetch for upload and checks (we won't reach network in simple tests)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const globalFetch = vi.spyOn(globalThis, 'fetch')
 
 import ImageChecker from '../ImageChecker'
@@ -32,6 +33,7 @@ describe('ImageChecker (smoke)', () => {
     const input = container.querySelector('#file-input') as HTMLInputElement
     const file = new File([new Uint8Array([1,2,3])], 'x.gif', { type: 'image/gif' })
     // jsdom では DataTransfer が未定義のため、直接 files 相当を渡す
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fireEvent.change(input, { target: { files: [file] } as any })
     expect(screen.getByText(/対応していないファイル形式/)).toBeInTheDocument()
   })

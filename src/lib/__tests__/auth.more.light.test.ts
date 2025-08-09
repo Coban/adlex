@@ -60,6 +60,7 @@ describe('lib/auth extra light tests', () => {
 
   it('updateUserProfile: userId 必須', async () => {
     // @ts-expect-error test invalid
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(updateUserProfile('', { role: 'user' } as any)).rejects.toThrow('User ID is required')
   })
 
@@ -70,11 +71,13 @@ describe('lib/auth extra light tests', () => {
 
   it('createOrganization: name 必須', async () => {
     // @ts-expect-error test invalid
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(createOrganization('', 'free' as any)).rejects.toThrow('Organization name is required')
   })
 
   it('changeUserRole: role バリデーション', async () => {
     // @ts-expect-error test invalid
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(changeUserRole('u', 'owner' as any)).rejects.toThrow('Invalid role')
   })
 })

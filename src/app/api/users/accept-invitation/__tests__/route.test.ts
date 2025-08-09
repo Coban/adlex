@@ -76,6 +76,7 @@ describe('Accept Invitation API Route', () => {
   it('既存ユーザーが存在すると400', async () => {
     // 1回目: 招待は有効
     // 2回目: 既存ユーザーが見つかる
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let call = 0
     mockSupabaseClient.from.mockImplementation((table: string) => {
       if (table === 'user_invitations') {

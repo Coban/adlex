@@ -1,7 +1,14 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const mockSupabase: any = {
+ 
+type SupabaseClientMock = {
+  auth: { getUser: ReturnType<typeof vi.fn> }
+  from: ReturnType<typeof vi.fn>
+  channel: ReturnType<typeof vi.fn>
+}
+
+const mockSupabase: SupabaseClientMock = {
   auth: { getUser: vi.fn() },
   from: vi.fn(),
   channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn(), unsubscribe: vi.fn() })),

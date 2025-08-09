@@ -1,7 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 
-vi.mock('next/link', () => ({ default: ({ children, href }: any) => <a href={href}>{children}</a> }))
+vi.mock('next/link', () => ({ 
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => 
+    <a href={href}>{children}</a> 
+}))
 
 // Mock fetch
 const originalFetch = global.fetch
@@ -16,7 +19,7 @@ describe('CheckHistoryList (smoke)', () => {
       checks: [],
       pagination: { page: 1, limit: 20, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
       userRole: 'user',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as any
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
   })
 
   it('空一覧のプレースホルダーを表示', async () => {
@@ -31,7 +34,7 @@ describe('CheckHistoryList (smoke)', () => {
   })
 
   it('APIエラー時はエラーメッセージを表示', async () => {
-    global.fetch = vi.fn(async () => new Response('oops', { status: 500 })) as any
+    global.fetch = vi.fn(async () => new Response('oops', { status: 500 })) as typeof fetch
     render(<CheckHistoryList />)
     expect(await screen.findByText('履歴の取得に失敗しました')).toBeInTheDocument()
   })

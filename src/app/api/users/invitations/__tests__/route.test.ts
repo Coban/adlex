@@ -64,6 +64,7 @@ describe('Invitations List API Route', () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     // 1回目: 現ユーザー情報
     // 2回目: 招待一覧の取得でエラー
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const call = 0
     mockSupabaseClient.from.mockImplementation((table: string) => {
       if (table === 'users') {
@@ -100,12 +101,12 @@ describe('Invitations List API Route', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { role: 'admin', organization_id: 'o1' }, error: null }),
-    } as any)
+    } as unknown as ReturnType<typeof vi.fn>)
     mockSupabaseClient.from.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: null, error: new Error('db') }),
-    } as any)
+    } as unknown as ReturnType<typeof vi.fn>)
 
     const res = await GET()
     expect(res.status).toBe(500)

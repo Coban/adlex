@@ -35,7 +35,7 @@ describe('Toast UI', () => {
         </Toast>
       </ToastProvider>
     )
-    const root = container.querySelector('[data-state]') || container.firstElementChild
+    const root = container.querySelector('[data-state]') ?? container.firstElementChild
     expect(root?.className).toContain('bg-destructive')
   })
 

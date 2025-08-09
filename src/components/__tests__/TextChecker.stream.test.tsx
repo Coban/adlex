@@ -14,7 +14,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 // Mock Supabase client
 const mockSupabase = {
   auth: {
-    getSession: vi.fn(async () => ({ data: { session: { access_token: 't' } }, error: null }))
+    getSession: vi.fn(async () => ({ data: { session: { access_token: 't' } as { access_token: string } }, error: null }))
   },
   from: vi.fn(),
 }
@@ -33,9 +33,11 @@ class MockEventSource {
 }
 
 // Attach static constants
-;(MockEventSource as any).CONNECTING = 0
-;(MockEventSource as any).OPEN = 1
-;(MockEventSource as any).CLOSED = 2
+Object.assign(MockEventSource, {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSED: 2
+})
 
 describe('TextChecker (stream + polling)', () => {
   const originalFetch = global.fetch
@@ -47,13 +49,13 @@ describe('TextChecker (stream + polling)', () => {
   })
 
   afterEach(() => {
-    global.fetch = originalFetch as any
-    global.EventSource = OriginalEventSource as any
+    global.fetch = originalFetch as typeof fetch
+    global.EventSource = OriginalEventSource as typeof EventSource
   })
 
   it('チェックを開始し、完了までの基本フローが動作する', async () => {
     // POST /api/checks → { id }
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 101 }) }) as any
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 101 }) }) as typeof fetch
 
     // Supabase polling: checks -> completed, then violations -> []
     const checksSingle = vi.fn()
@@ -83,12 +85,13 @@ describe('TextChecker (stream + polling)', () => {
 
     // 完了表示まで待つ
     await waitFor(() => {
-      expect(screen.getAllByTestId('status-message')[0].textContent || '').toContain('チェック完了')
+      expect(screen.getAllByTestId('status-message')[0].textContent ?? '').toContain('チェック完了')
     })
   })
 
   it('未認証時はエラーを表示する（セッションなし）', async () => {
-    mockSupabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockSupabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null } as any)
     render(<TextChecker />)
     const textarea = screen.getByTestId('text-input') as HTMLTextAreaElement
     await userEvent.type(textarea, 'テキスト')

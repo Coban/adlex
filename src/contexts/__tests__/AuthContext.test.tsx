@@ -127,7 +127,7 @@ describe.skip('AuthContext', () => {
     })
 
     // Mock profile and organization queries
-    mockSupabaseClient.from.mockImplementation((table) => {
+  mockSupabaseClient.from.mockImplementation((table: string) => {
       if (table === 'users') {
         return {
           select: vi.fn().mockReturnValue({
@@ -370,7 +370,7 @@ describe.skip('AuthContext', () => {
     })
 
     // Mock profile query success, organization query failure
-    mockSupabaseClient.from.mockImplementation((table) => {
+    mockSupabaseClient.from.mockImplementation((table: string) => {
       if (table === 'users') {
         return {
           select: vi.fn().mockReturnValue({

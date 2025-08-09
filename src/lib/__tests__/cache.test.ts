@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { cache, CacheUtils, cached, invalidatePattern } from '../cache'
+import { describe, it, expect } from 'vitest'
+import { cache, CacheUtils, invalidatePattern } from '../cache'
 
 describe('MemoryCache', () => {
   it('set/get/has/delete が動作する', () => {

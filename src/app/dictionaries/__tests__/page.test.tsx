@@ -3,14 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // hoisted shared mocks
 const { authState, mockSupabase } = vi.hoisted(() => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   authState: { organization: null as any, userProfile: null as any, loading: false },
   mockSupabase: {
     auth: { getUser: vi.fn() },
     from: vi.fn(),
-  } as any,
+  } as unknown as { auth: { getUser: ReturnType<typeof vi.fn> }, from: ReturnType<typeof vi.fn> },
 }))
 
-vi.mock('next/link', () => ({ default: ({ children }: any) => <a>{children}</a> }))
+vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => authState,

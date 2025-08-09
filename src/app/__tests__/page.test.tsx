@@ -2,23 +2,20 @@ import type { User } from '@supabase/supabase-js'
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+import Home from '@/app/page'
+import { useAuth } from '@/contexts/AuthContext'
+import { Database } from '@/types/database.types'
+
+type UserProfile = Database['public']['Tables']['users']['Row']
+type Organization = Database['public']['Tables']['organizations']['Row']
+
 // useAuth をモック
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn()
 }))
 
-import Home from '@/app/page'
-import { useAuth } from '@/contexts/AuthContext'
-
 // 型定義
-type UserProfile = {
-  role: 'user' | 'admin'
-}
-
-type Organization = {
-  id: string
-  name: string
-}
+// 型は厳密には不要なため、未使用警告を避ける
 
 describe('Home ページ', () => {
   beforeEach(() => {
@@ -41,7 +38,7 @@ describe('Home ページ', () => {
   it('認証済みユーザーにはようこそメッセージが表示され、管理者ボタンは表示されない', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'u1', email: 'user@example.com' } as User,
-      userProfile: { role: 'user' } as UserProfile,
+      userProfile: { role: 'user', id: 'u1', email: 'user@example.com', organization_id: 1, created_at: '2024-01-01', updated_at: '2024-01-01' } as UserProfile,
       organization: null,
       loading: false,
       signOut: vi.fn()
@@ -57,8 +54,8 @@ describe('Home ページ', () => {
   it('管理者には管理者用のボタンと説明が表示される', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'a1', email: 'admin@example.com' } as User,
-      userProfile: { role: 'admin' } as UserProfile,
-      organization: { id: 'o1', name: 'Org' } as Organization,
+      userProfile: { role: 'admin', id: 'a1', email: 'admin@example.com', organization_id: 1, created_at: '2024-01-01', updated_at: '2024-01-01' } as UserProfile,
+      organization: { id: 1, name: 'Org', created_at: '2024-01-01', updated_at: '2024-01-01', max_checks: 1000, used_checks: 50, plan: 'basic', trial_ends_at: null } as Organization,
       loading: false,
       signOut: vi.fn()
     })

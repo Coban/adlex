@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('next/link', () => ({ default: ({ children }: any) => <a>{children}</a> }))
+vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: null, loading: false }),

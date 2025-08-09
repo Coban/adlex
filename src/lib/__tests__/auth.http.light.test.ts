@@ -19,7 +19,7 @@ describe('lib/auth http/light validations', () => {
   })
 
   afterEach(() => {
-    global.fetch = originalFetch as any
+    global.fetch = originalFetch as unknown as typeof fetch
   })
 
   it('inviteUser: 空メールは即時エラー', async () => {
@@ -27,32 +27,32 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('inviteUser: API 失敗はエラーメッセージを投げる', async () => {
-    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as unknown as typeof fetch
     await expect(inviteUser({ email: 'a@b.com', role: 'admin' })).rejects.toThrow('bad')
   })
 
   it('inviteUser: 成功はJSONを返す', async () => {
-    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })) as unknown as typeof fetch
     await expect(inviteUser({ email: 'a@b.com', role: 'user' })).resolves.toEqual({ ok: true })
   })
 
   it('fetchOrganizationUsers: 失敗はエラー', async () => {
-    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'x' }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'x' }) })) as unknown as typeof fetch
     await expect(fetchOrganizationUsers()).rejects.toThrow('x')
   })
 
   it('fetchOrganizationUsers: 成功はJSON', async () => {
-    global.fetch = vi.fn(async () => ({ ok: true, json: async () => (['u1']) })) as any
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => (['u1']) })) as unknown as typeof fetch
     await expect(fetchOrganizationUsers()).resolves.toEqual(['u1'])
   })
 
   it('updateUserRole: 失敗はエラー', async () => {
-    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'ng' }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'ng' }) })) as unknown as typeof fetch
     await expect(updateUserRole('uid', 'admin')).rejects.toThrow('ng')
   })
 
   it('updateUserRole: 成功はJSON', async () => {
-    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ id: 'uid', role: 'user' }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ id: 'uid', role: 'user' }) })) as unknown as typeof fetch
     await expect(updateUserRole('uid', 'user')).resolves.toEqual({ id: 'uid', role: 'user' })
   })
 
@@ -65,12 +65,12 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('signUpWithInvitation: API 失敗はエラー', async () => {
-    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as unknown as typeof fetch
     await expect(signUpWithInvitation('token', '123456', '123456')).rejects.toThrow('bad')
   })
 
   it('signUpWithInvitation: 成功はJSON', async () => {
-    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })) as any
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })) as unknown as typeof fetch
     await expect(signUpWithInvitation('token', '123456', '123456')).resolves.toEqual({ ok: true })
   })
 
@@ -85,6 +85,7 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('inviteUserToOrganization: メール形式チェック', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(inviteUserToOrganization('bad', 1, 'user' as any)).rejects.toThrow('Invalid email format')
   })
 })

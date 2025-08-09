@@ -94,6 +94,7 @@ describe('processCheck', () => {
     cache.set(key, [
       { id: 10, phrase: '効果がある', category: 'NG', combined_score: 0.95 },
       { id: 11, phrase: '許容', category: 'ALLOW', combined_score: 0.1 },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ] as any, 5 * 60 * 1000)
 
     await processCheck(44, text, 123, 'text')
