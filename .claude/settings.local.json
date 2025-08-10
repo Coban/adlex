@@ -33,7 +33,8 @@
       "mcp__serena__find_symbol",
       "mcp__serena__find_file",
       "mcp__serena__think_about_collected_information",
-      "Bash(npm run supabase:start:*)"
+      "Bash(npm run supabase:start:*)",
+      "mcp__serena__replace_regex"
     ],
     "deny": []
   }
