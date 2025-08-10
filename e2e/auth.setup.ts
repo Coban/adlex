@@ -1,64 +1,64 @@
-import { test as setup, expect } from '@playwright/test';
+import { test as setup, expect, Page } from '@playwright/test';
 
 const authFile = 'playwright/.auth/user.json';
 
-async function checkAuthentication(page: any) {
-  // Try to find the sign out button in desktop view first
+async function checkAuthentication(page: Page) {
+  // まずデスクトップ表示でサインアウトボタンを探す
   try {
     await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 3000 });
     return true;
   } catch {
-    // If not found, check if we're on mobile and need to open the menu
+    // 見つからない場合はモバイル表示を想定してメニューを開く
     try {
       const menuButton = page.locator('.md\\:hidden button').first();
       const isMenuButtonVisible = await menuButton.isVisible();
       if (isMenuButtonVisible) {
         await menuButton.click();
-        await page.waitForTimeout(500); // Wait for menu to open
+        await page.waitForTimeout(500); // メニューが開くのを待機
         await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 3000 });
-        // Close the menu after checking
+        // 確認後にメニューを閉じる
         await menuButton.click();
         return true;
       }
     } catch {
-      // Still not found
+      // それでも見つからない場合
     }
     return false;
   }
 }
 
-setup('authenticate', async ({ page }) => {
-  // Navigate to the signin page
+setup('認証状態を保存', async ({ page }) => {
+  // トップページに遷移
   await page.goto('/');
   
-  // Check if we're already authenticated
+  // 既に認証済みか確認
   if (await checkAuthentication(page)) {
     console.log('Already authenticated, saving current state');
     await page.context().storageState({ path: authFile });
     return;
   }
   
-  // Click on signin link
+  // サインインリンクをクリック
   await page.getByRole('main').getByRole('link', { name: 'サインイン' }).click();
   
-  // Wait for sign in form to load
+  // サインインフォームの表示を待機
   await expect(page.getByRole('heading', { name: 'サインイン' })).toBeVisible();
   
-  // Fill in test credentials
+  // テスト用の認証情報を入力
   await page.fill('input[type="email"]', "admin@test.com");
   await page.fill('input[type="password"]', "password123");
   
-  // Submit form
+  // 送信
   await page.locator('form button[type="submit"]').click();
   
-  // Wait for successful authentication
+  // 認証成功を待機
   await expect(page).toHaveURL('/');
   
-  // Check authentication with mobile support
+  // モバイル対応を含めて認証状態を確認
   if (!(await checkAuthentication(page))) {
     throw new Error('Authentication failed - sign out button not found');
   }
   
-  // Save the authentication state
+  // 認証状態を保存
   await page.context().storageState({ path: authFile });
 });

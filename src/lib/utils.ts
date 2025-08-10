@@ -1,4 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
+import { format } from 'date-fns'
+import { ja } from 'date-fns/locale'
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
@@ -6,13 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string | Date) {
-  return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date))
+  return format(new Date(date), 'yyyy/MM/dd HH:mm', { locale: ja })
 }
 
 export function truncateText(text: string, maxLength: number) {

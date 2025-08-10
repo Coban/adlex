@@ -38,7 +38,7 @@ async function completeCheck(
   violations: ViolationData[],
   supabase: Awaited<ReturnType<typeof createClient>>
 ) {
-  console.log(`[CHECK] Completing check ${checkId} with ${violations.length} violations`)
+  // Completing check process
 
   // 違反データを挿入
   if (violations.length > 0) {
@@ -85,7 +85,7 @@ async function completeCheck(
     console.error(`[CHECK] Error incrementing usage for check ${checkId}:`, usageError)
   }
 
-  console.log(`[CHECK] Successfully completed check ${checkId}`)
+  // Check completed successfully
 }
 
 async function getCheckOrganizationId(
@@ -206,7 +206,7 @@ async function performActualCheck(
   inputType: 'text' | 'image' = 'text',
   imageUrl?: string
 ) {
-  console.log(`[CHECK] Starting check ${checkId} (${inputType})`)
+  // Starting check process
 
   // ステータスを処理中に更新
   await supabase
@@ -217,7 +217,7 @@ async function performActualCheck(
   // 画像の場合、最初にOCR処理を実行
   let processedText = text
   if (inputType === 'image' && imageUrl) {
-    console.log(`[CHECK] Processing image OCR for check ${checkId}`)
+    // Processing OCR for image input
     
     // OCRステータスを処理中に更新
     await supabase
@@ -270,7 +270,7 @@ async function performActualCheck(
   }
 
   // 処理済みテキストを使用して通常のテキスト処理を継続
-  console.log(`[CHECK] Processing text analysis for check ${checkId}`)
+  // Processing text analysis
 
   // 組織+テキストハッシュごとの類似フレーズキャッシュキー
   const textHash = CacheUtils.hashText(processedText)
@@ -329,16 +329,16 @@ async function performActualCheck(
     // 類似フレーズを5分キャッシュ（同一テキストの再チェック高速化）
     cache.set(similarKey, combinedPhrases, 5 * 60 * 1000)
   } else {
-    console.log(`[CHECK] Using cached similar phrases for check ${checkId} (key=${similarKey})`)
+    // Using cached similar phrases
   }
 
   if (!combinedPhrases || combinedPhrases.length === 0) {
-    console.log(`[CHECK] No similar phrases found for check ${checkId}`)
+    // No similar phrases found - completing with no violations
     await completeCheck(checkId, processedText, [], supabase)
     return
   }
 
-  console.log(`[CHECK] Found ${combinedPhrases.length} combined similar phrases for check ${checkId}`)
+  // Found similar phrases for analysis
 
   // NGエントリーをフィルターして内部形式に変換
   const relevantEntries = combinedPhrases
@@ -352,7 +352,7 @@ async function performActualCheck(
     .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
 
   if (relevantEntries.length === 0) {
-    console.log(`[CHECK] No relevant NG phrases found for check ${checkId}`)
+    // No relevant NG phrases found - completing with no violations
     await completeCheck(checkId, processedText, [], supabase)
     return
   }
@@ -361,7 +361,7 @@ async function performActualCheck(
   const MAX_AI_ENTRIES = 30
   const limitedEntries = relevantEntries.slice(0, MAX_AI_ENTRIES)
 
-  console.log(`[CHECK] Processing ${limitedEntries.length}/${relevantEntries.length} relevant NG phrases for check ${checkId}`)
+  // Processing relevant NG phrases with AI
 
   // AIを使用して分析し違反を生成
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')

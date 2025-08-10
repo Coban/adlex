@@ -209,6 +209,7 @@ export default function ImageChecker() {
             <div>
               <div className="text-sm text-gray-700 mb-2">プレビュー</div>
               {/* next/imageは外部S3等の最適化で制約もあるため、当面はimgを使用 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewUrl} alt="preview" className="w-full rounded border" />
             </div>
           )}

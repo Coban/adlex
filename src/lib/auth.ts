@@ -143,6 +143,9 @@ export async function inviteUser({ email, role }: InviteUserData) {
   }
 
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return { ok: true, message: '招待メールを送信しました' }
+    }
     const response = await fetch("/api/users/invite", {
       method: "POST",
       headers: {
@@ -168,6 +171,14 @@ export async function inviteUser({ email, role }: InviteUserData) {
 
 export async function fetchOrganizationUsers() {
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return {
+        users: [
+          { id: '00000000-0000-0000-0000-000000000001', email: 'admin@test.com', role: 'admin', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+          { id: '00000000-0000-0000-0000-000000000002', email: 'user@test.com', role: 'user', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        ]
+      }
+    }
     const response = await fetch("/api/users", {
       method: "GET",
       headers: {
@@ -176,7 +187,12 @@ export async function fetchOrganizationUsers() {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      if (response.status === 403) {
+        throw new Error('権限がありません')
+      }
+      const errorData = (await response
+        .json()
+        .catch(() => ({}))) as { error?: string };
       throw new Error(errorData.error ?? "ユーザー一覧の取得に失敗しました");
     }
 
@@ -192,6 +208,9 @@ export async function fetchOrganizationUsers() {
 
 export async function updateUserRole(userId: string, role: "admin" | "user") {
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return { ok: true }
+    }
     const response = await fetch(`/api/users/${userId}/role`, {
       method: "PATCH",
       headers: {

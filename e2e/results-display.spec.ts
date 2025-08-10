@@ -1,34 +1,34 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Results Display Modes', () => {
+test.describe('結果表示モード', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/checker')
     
-    // Submit a test text that will generate results
+    // 結果が出る想定のテキストを送信
     const testText = 'このサプリメントで驚異的な効果を実感できます。即効性があり、絶対に効きます。'
     await page.locator('[data-testid="text-input"]').fill(testText)
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for results to appear
+    // 結果が表示されるまで待機
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
   })
 
   test('should display side-by-side view correctly', async ({ page }) => {
-    // Click on side-by-side tab
+    // 並列表示タブをクリック
     await page.locator('[data-testid="side-by-side-tab"]').click()
     
-    // Verify side-by-side view is active
+    // 並列表示ビューがアクティブであること
     await expect(page.locator('[data-testid="side-by-side-view"]')).toBeVisible()
     
-    // Verify both original and modified text are displayed
+    // 原文と修正文の両方が表示される
     await expect(page.locator('[data-testid="original-text-panel"]')).toBeVisible()
     await expect(page.locator('[data-testid="modified-text-panel"]')).toBeVisible()
     
-    // Verify headers are correct
+    // 見出しが正しい
     await expect(page.locator('[data-testid="original-text-header"]')).toContainText('元のテキスト')
     await expect(page.locator('[data-testid="modified-text-header"]')).toContainText('修正されたテキスト')
     
-    // Verify text content is displayed
+    // テキスト内容が表示される
     await expect(page.locator('[data-testid="original-text-content"]')).toContainText('驚異的な効果')
     await expect(page.locator('[data-testid="modified-text-content"]')).toBeVisible()
   })
@@ -36,37 +36,37 @@ test.describe('Results Display Modes', () => {
   test('should highlight violations in original text', async ({ page }) => {
     await page.locator('[data-testid="side-by-side-tab"]').click()
     
-    // Check for violation highlights
+    // 違反箇所のハイライトを確認
     const highlightedText = page.locator('[data-testid="violation-highlight"]')
     await expect(highlightedText.first()).toBeVisible()
     
-    // Verify highlighted text has proper styling
+    // ハイライトのスタイルが適切である
     await expect(highlightedText.first()).toHaveClass(/bg-red-200/)
     
-    // Verify tooltip shows violation reason
+    // ツールチップに違反理由が表示される
     await highlightedText.first().hover()
     await expect(page.locator('[data-testid="violation-tooltip"]')).toBeVisible()
     await expect(page.locator('[data-testid="violation-tooltip"]')).toContainText('薬機法違反')
   })
 
   test('should display diff view correctly', async ({ page }) => {
-    // Click on diff tab
+    // 差分表示タブをクリック
     await page.locator('[data-testid="diff-tab"]').click()
     
-    // Verify diff view is active
+    // 差分ビューがアクティブ
     await expect(page.locator('[data-testid="diff-view"]')).toBeVisible()
     
-    // Verify diff lines are displayed
+    // 差分行が表示されている
     const diffLines = page.locator('[data-testid="diff-line"]')
     await expect(diffLines.first()).toBeVisible()
     
-    // Check for deleted lines (red background)
+    // 削除行（赤背景）を確認
     const deletedLines = page.locator('[data-testid="diff-line"].bg-red-50')
     if (await deletedLines.count() > 0) {
       await expect(deletedLines.first()).toBeVisible()
     }
     
-    // Check for added lines (green background)
+    // 追加行（緑背景）を確認
     const addedLines = page.locator('[data-testid="diff-line"].bg-green-50')
     if (await addedLines.count() > 0) {
       await expect(addedLines.first()).toBeVisible()
@@ -74,17 +74,17 @@ test.describe('Results Display Modes', () => {
   })
 
   test('should display violations view correctly', async ({ page }) => {
-    // Click on violations tab
+    // 違反詳細タブをクリック
     await page.locator('[data-testid="violations-tab"]').click()
     
-    // Verify violations view is active
+    // 違反詳細ビューがアクティブ
     await expect(page.locator('[data-testid="violations-view"]')).toBeVisible()
     
-    // Verify violation items are displayed
+    // 違反項目が表示される
     const violationItems = page.locator('[data-testid="violation-item"]')
     await expect(violationItems.first()).toBeVisible()
     
-    // Check violation details
+    // 違反詳細の内容を確認
     const firstViolation = violationItems.first()
     await expect(firstViolation.locator('[data-testid="violation-number"]')).toContainText('違反箇所 1')
     await expect(firstViolation.locator('[data-testid="violation-position"]')).toContainText('位置:')
@@ -93,39 +93,39 @@ test.describe('Results Display Modes', () => {
   })
 
   test('should switch between display modes smoothly', async ({ page }) => {
-    // Start with side-by-side
+    // まず並列表示
     await page.locator('[data-testid="side-by-side-tab"]').click()
     await expect(page.locator('[data-testid="side-by-side-view"]')).toBeVisible()
     
-    // Switch to diff view
+    // 差分表示に切り替え
     await page.locator('[data-testid="diff-tab"]').click()
     await expect(page.locator('[data-testid="diff-view"]')).toBeVisible()
     await expect(page.locator('[data-testid="side-by-side-view"]')).not.toBeVisible()
     
-    // Switch to violations view
+    // 違反詳細に切り替え
     await page.locator('[data-testid="violations-tab"]').click()
     await expect(page.locator('[data-testid="violations-view"]')).toBeVisible()
     await expect(page.locator('[data-testid="diff-view"]')).not.toBeVisible()
     
-    // Switch back to side-by-side
+    // 再び並列表示へ
     await page.locator('[data-testid="side-by-side-tab"]').click()
     await expect(page.locator('[data-testid="side-by-side-view"]')).toBeVisible()
     await expect(page.locator('[data-testid="violations-view"]')).not.toBeVisible()
   })
 
   test('should handle results with no violations', async ({ page }) => {
-    // Submit clean text with no violations
+    // 違反の無いクリーンなテキストを送信
     await page.locator('[data-testid="text-input"]').fill('これは安全なテキストです。')
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for results
+    // 結果を待機
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
     
-    // Check violations view shows no violations message
+    // 違反なしのメッセージが表示される
     await page.locator('[data-testid="violations-tab"]').click()
     await expect(page.locator('[data-testid="no-violations-message"]')).toContainText('違反は検出されませんでした')
     
-    // Side-by-side view should still work
+    // 並列表示でも表示できる
     await page.locator('[data-testid="side-by-side-tab"]').click()
     await expect(page.locator('[data-testid="original-text-content"]')).toContainText('安全なテキスト')
     await expect(page.locator('[data-testid="modified-text-content"]')).toContainText('安全なテキスト')
@@ -134,13 +134,13 @@ test.describe('Results Display Modes', () => {
   test('should display copy button and functionality', async ({ page }) => {
     await page.locator('[data-testid="side-by-side-tab"]').click()
     
-    // Verify copy button is visible
+    // コピーボタンが表示される
     await expect(page.locator('[data-testid="copy-button"]')).toBeVisible()
     
-    // Click copy button
+    // コピーボタンをクリック
     await page.locator('[data-testid="copy-button"]').click()
     
-    // Verify copy success feedback (toast or button state change)
+    // コピー成功のフィードバック（トーストやボタン状態の変化）を確認
     const copyFeedback = page.locator('[data-testid="copy-success"]')
     if (await copyFeedback.isVisible()) {
       await expect(copyFeedback).toContainText('コピーしました')
@@ -150,49 +150,49 @@ test.describe('Results Display Modes', () => {
   test('should display download button and functionality', async ({ page }) => {
     await page.locator('[data-testid="side-by-side-tab"]').click()
     
-    // Verify download button is visible
+    // ダウンロードボタンが表示される
     await expect(page.locator('[data-testid="download-button"]')).toBeVisible()
     
-    // Set up download promise
+    // ダウンロード待機を設定
     const downloadPromise = page.waitForEvent('download')
     
-    // Click download button
+    // ダウンロードボタンをクリック
     await page.locator('[data-testid="download-button"]').click()
     
-    // Wait for download to complete
+    // ダウンロード完了を待機
     const download = await downloadPromise
     expect(download.suggestedFilename()).toMatch(/.*\.pdf/)
   })
 
   test('should handle long text content properly', async ({ page }) => {
-    // Submit very long text
+    // 非常に長いテキストを送信
     const longText = 'この製品は素晴らしい効果があります。'.repeat(50)
     await page.locator('[data-testid="text-input"]').fill(longText)
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for results
+    // 結果を待機
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
     
-    // Check side-by-side view handles long text
+    // 並列表示で長文が適切に扱えるか確認
     await page.locator('[data-testid="side-by-side-tab"]').click()
     await expect(page.locator('[data-testid="original-text-content"]')).toBeVisible()
     await expect(page.locator('[data-testid="modified-text-content"]')).toBeVisible()
     
-    // Check scrolling works
+    // スクロールが機能する
     await page.locator('[data-testid="original-text-content"]').scrollIntoViewIfNeeded()
     await expect(page.locator('[data-testid="original-text-content"]')).toBeVisible()
   })
 
   test('should preserve line breaks in text display', async ({ page }) => {
-    // Submit text with line breaks
+    // 改行を含むテキストを送信
     const textWithBreaks = 'この製品は\n驚異的な効果があります。\n\n即効性があり、\n絶対に効きます。'
     await page.locator('[data-testid="text-input"]').fill(textWithBreaks)
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for results
+    // 結果を待機
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
     
-    // Check that line breaks are preserved
+    // 改行が保持されて表示されること
     await page.locator('[data-testid="side-by-side-tab"]').click()
     const originalContent = page.locator('[data-testid="original-text-content"]')
     await expect(originalContent).toContainText('この製品は')

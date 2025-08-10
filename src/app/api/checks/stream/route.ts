@@ -99,8 +99,16 @@ export async function GET(request: NextRequest) {
           
           // 前回のデータと同じ場合は送信をスキップ（帯域幅節約）
           if (queueDataStr !== lastQueueStatus) {
-            controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
-            lastQueueStatus = queueDataStr
+            try {
+              // desiredSize が null（クローズ）でない場合のみ送信
+              if (controller.desiredSize !== null) {
+                controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
+                lastQueueStatus = queueDataStr
+              }
+            } catch (controllerError) {
+              console.error('[SSE] Controller already closed:', controllerError)
+              return // Exit the callback
+            }
           }
         } catch (error) {
           console.error('[SSE] Error sending queue status:', error)
@@ -160,13 +168,13 @@ export async function GET(request: NextRequest) {
             console.error('[SSE] Subscription error:', err)
             cleanup()
           } else if (status === 'SUBSCRIBED') {
-            console.log('[SSE] Successfully subscribed to checks updates')
+            // Successfully subscribed to checks updates
           }
         })
 
       // クリーンアップ関数
       const cleanup = () => {
-        console.log('[SSE] Cleaning up resources')
+        // Cleaning up SSE resources
         clearInterval(heartbeatInterval)
         clearInterval(queueCheckInterval)
         channel.unsubscribe()

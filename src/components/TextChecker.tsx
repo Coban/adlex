@@ -166,15 +166,7 @@ export default function TextChecker() {
           setOrganizationStatus(data.organization)
           setSystemStatus(data.system)
           
-          // デバッグ情報ログ
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[QUEUE-STATUS]', {
-              available: data.queue.availableSlots,
-              processing: data.queue.processingCount,
-              queue: data.queue.queueLength,
-              canStart: data.queue.canStartNewCheck
-            })
-          }
+          // Queue status updated
         }
         // 他のメッセージタイプ（check_progress等）は将来的に追加可能
       } catch (error) {
@@ -238,7 +230,7 @@ export default function TextChecker() {
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
       
-      console.log('PDF export successful')
+      // PDF exported successfully
     } catch (error) {
       setPdfError(error instanceof Error ? error.message : 'PDFの生成に失敗しました')
     }
@@ -325,6 +317,43 @@ export default function TextChecker() {
     setText('')
     
     try {
+      // E2E: skip server and synthesize result locally when NEXT_PUBLIC_SKIP_AUTH or SKIP_AUTH
+      if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+        // mimic queued -> processing -> completed transitions quickly
+        setChecks(prev => prev.map(check => 
+          check.id === checkId 
+            ? { ...check, status: 'processing', statusMessage: 'AIによるテキスト解析を実行中...' }
+            : check
+        ))
+
+        // build a deterministic mock result similar to ai-client mocks
+        const mockViolations: Violation[] = text.length > 10 ? [{
+          id: 1,
+          startPos: 0,
+          endPos: Math.min(4, text.length),
+          reason: '医薬品的効能効果表現: テスト違反',
+          dictionary_id: 1
+        }] : []
+
+        const mockResult: CheckResult = {
+          id: Date.now(),
+          original_text: newCheckItem.originalText,
+          modified_text: newCheckItem.originalText.replace(/^(.{0,4})/, '安全な表現'),
+          status: 'completed',
+          violations: mockViolations
+        }
+
+        setTimeout(() => {
+          setChecks(prev => prev.map(check => 
+            check.id === checkId 
+              ? { ...check, result: mockResult, status: 'completed', statusMessage: 'チェック完了' }
+              : check
+          ))
+        }, 300)
+
+        return
+      }
+
       // Check if user is authenticated using AuthContext
       if (!user) {
         throw new Error('認証が必要です。サインインしてください。')

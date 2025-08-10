@@ -56,10 +56,7 @@ class CheckQueueManager {
       this.queue.push(queueItem)
     }
 
-    // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Queue] Added check ${checkId} (${inputType}) to queue. Queue length: ${this.queue.length}`)
-    }
+    // Item added to queue
 
     // Start processing if not already running
     if (!this.isProcessing) {
@@ -87,10 +84,7 @@ class CheckQueueManager {
         processingPromise.finally(() => {
           this.processing.delete(item.id)
           
-          // Debug logging
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[Queue] Finished processing check ${item.id}. Processing count: ${this.processing.size}`)
-          }
+          // Processing completed
         })
       }
 
@@ -120,9 +114,7 @@ class CheckQueueManager {
     const { processCheck } = await import('@/lib/check-processor')
     
     try {
-      console.log(`[QUEUE] Processing check ${item.id} (${item.inputType ?? 'text'})`)
       await processCheck(item.id, item.text, item.organizationId, item.inputType, item.imageUrl)
-      console.log(`[QUEUE] Successfully processed check ${item.id}`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
       console.error(`[QUEUE] Error processing check ${item.id}:`, {
@@ -138,7 +130,7 @@ class CheckQueueManager {
         item.retryCount++
         const retryDelay = Math.min(Math.pow(2, item.retryCount) * 1000, 30000) // Max 30s delay
         
-        console.log(`[QUEUE] Scheduling retry for check ${item.id} (attempt ${item.retryCount}/${item.maxRetries}) in ${retryDelay}ms`)
+        // Scheduling retry with exponential backoff
         
         setTimeout(() => {
           // Add back to queue with higher priority for retries
@@ -187,10 +179,7 @@ class CheckQueueManager {
       maxConcurrent: this.maxConcurrent
     }
     
-    // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Queue Status]', status)
-    }
+    // Return current queue status
     
     return status
   }

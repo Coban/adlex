@@ -1,6 +1,7 @@
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 import path from "path";
+
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
@@ -26,6 +27,14 @@ export default defineConfig({
         "*.config.*",
         "src/types/database.types.ts",
         "e2e/",
+        ".next/",
+        "**/*.hot-update.js",
+        "**/webpack/**",
+        "**/chunks/**",
+        "**/static/**",
+        "**/vendor-chunks/**",
+        "**/*-manifest.js",
+        "**/polyfills.js",
       ],
     },
     typecheck: {
