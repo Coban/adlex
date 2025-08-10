@@ -632,7 +632,8 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
     const response = await createChatCompletion({
       messages,
       temperature: 0.1,
-      max_tokens: 2000
+      max_tokens: 2000,
+      timeout: 40000 // 40秒タイムアウト設定
     })
 
     const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
@@ -704,7 +705,8 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
       tools,
       tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
       temperature: 0.1,
-      max_tokens: 2000
+      max_tokens: 2000,
+      timeout: 40000 // 40秒タイムアウト設定
     })
 
     return {

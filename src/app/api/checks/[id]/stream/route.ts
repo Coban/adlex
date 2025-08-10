@@ -139,15 +139,41 @@ export async function GET(
         startHeartbeat(10000) // 10秒間隔に変更
       }, maxProgressTime)
       
-      // 最終接続タイムアウト
-      const connectionTimeout = setTimeout((): void => {
-        // Final connection timeout - ending stream
+      // 最終接続タイムアウト（フォールバック付き）
+      const connectionTimeout = setTimeout(async (): Promise<void> => {
+        console.log(`[SSE] Connection timeout reached for check ${checkId}, checking final status`)
+        
+        // タイムアウト前に最終状態をチェック（フォールバック）
+        try {
+          const { data: finalCheck } = await supabase
+            .from('checks')
+            .select('status')
+            .eq('id', checkId)
+            .single()
+            
+          if (finalCheck?.status === 'completed' || finalCheck?.status === 'failed') {
+            console.log(`[SSE] Found completed check ${checkId} during timeout, sending final data`)
+            clearInterval(heartbeatInterval)
+            clearTimeout(progressTimeout)
+            await sendFinalData(controller, checkId, supabase)
+            controller.close()
+            channel.unsubscribe()
+            return
+          }
+        } catch (error) {
+          console.error(`[SSE] Error checking final status for check ${checkId}:`, error)
+        }
+        
+        // 本当にタイムアウトの場合
+        console.log(`[SSE] Actual timeout for check ${checkId}`)
         const timeoutData = JSON.stringify({
           id: checkId,
           status: 'failed',
           error: 'SSE接続がタイムアウトしました（処理時間制限）'
         })
-        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\n\n`))
+        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}
+
+`))
         controller.close()
         channel.unsubscribe()
         clearInterval(heartbeatInterval)
@@ -190,7 +216,7 @@ export async function GET(
                 controller.enqueue(new TextEncoder().encode(`data: ${progressData}\n\n`))
             }
         })
-        .subscribe((status, err) => {
+        .subscribe(async (status, err) => {
             if (err) {
                 console.error(`[SSE] Subscription error for check ${checkId}:`, err)
                 clearTimeout(connectionTimeout)
@@ -198,7 +224,28 @@ export async function GET(
                 clearInterval(heartbeatInterval)
                 controller.close()
             } else if (status === 'SUBSCRIBED') {
-                // Successfully subscribed to check updates
+                console.log(`[SSE] Successfully subscribed to check ${checkId} updates`)
+                
+                // 購読成功時に現在のステータスを確認（既に完了している場合への対応）
+                try {
+                  const { data: currentCheck } = await supabase
+                    .from('checks')
+                    .select('status')
+                    .eq('id', checkId)
+                    .single()
+                    
+                  if (currentCheck?.status === 'completed' || currentCheck?.status === 'failed') {
+                    console.log(`[SSE] Check ${checkId} already completed, sending final data immediately`)
+                    clearTimeout(connectionTimeout)
+                    clearTimeout(progressTimeout)
+                    clearInterval(heartbeatInterval)
+                    await sendFinalData(controller, checkId, supabase)
+                    controller.close()
+                    channel.unsubscribe()
+                  }
+                } catch (error) {
+                  console.error(`[SSE] Error checking initial status for check ${checkId}:`, error)
+                }
             }
         })
 

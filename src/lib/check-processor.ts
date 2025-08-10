@@ -105,10 +105,11 @@ export async function processCheck(
   inputType: 'text' | 'image' = 'text',
   imageUrl?: string
 ) {
+  console.log(`[CHECK] Starting processCheck for check ${checkId} (type: ${inputType}, textLength: ${text.length})`)
   const supabase = await createClient()
   
-  // タイムアウト保護設定（画像処理: 60秒、テキスト処理: 30秒）
-  const timeoutMs = inputType === 'image' ? 60000 : 30000
+  // タイムアウト保護設定（画像処理: 60秒、テキスト処理: 45秒）- AI API遅延に対応
+  const timeoutMs = inputType === 'image' ? 60000 : 45000
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
       reject(new Error(`処理がタイムアウトしました（${timeoutMs / 1000}秒）`))
@@ -179,6 +180,41 @@ export async function processCheck(
  * @param inputType 入力タイプ
  * @param imageUrl 画像URL（画像処理時）
  */
+/**
+ * AI処理のリトライ機能付きラッパー関数
+ * 複数チェック時のAI API遅延やエラーに対する耐性を向上
+ */
+async function retryAiRequest<T>(
+  operation: () => Promise<T>,
+  checkId: number,
+  maxRetries = 2,
+  baseDelayMs = 1000
+): Promise<T> {
+  let lastError: Error | undefined
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[CHECK] AI request attempt ${attempt + 1}/${maxRetries + 1} for check ${checkId}`)
+      return await operation()
+    } catch (error) {
+      lastError = error as Error
+      console.warn(`[CHECK] AI request attempt ${attempt + 1} failed for check ${checkId}:`, error)
+      
+      // 最後の試行の場合はリトライせずエラーを投げる
+      if (attempt === maxRetries) {
+        break
+      }
+      
+      // 指数バックオフで待機
+      const delay = baseDelayMs * Math.pow(2, attempt)
+      console.log(`[CHECK] Retrying AI request for check ${checkId} in ${delay}ms`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  
+  throw lastError ?? new Error('Unknown error')
+}
+
 async function performActualCheck(
   checkId: number,
   text: string,
@@ -187,7 +223,7 @@ async function performActualCheck(
   inputType: 'text' | 'image' = 'text',
   imageUrl?: string
 ) {
-  // Starting check process
+  console.log(`[CHECK] Starting actual check processing for check ${checkId}`)
 
   // ステータスを処理中に更新
   await supabase
@@ -251,7 +287,7 @@ async function performActualCheck(
   }
 
   // 処理済みテキストを使用して通常のテキスト処理を継続
-  // Processing text analysis
+  console.log(`[CHECK] Starting text analysis for check ${checkId} with text: "${processedText.substring(0, 50)}..."`)
 
   // 組織+テキストハッシュごとの類似フレーズキャッシュキー
   const textHash = CacheUtils.hashText(processedText)
@@ -261,22 +297,44 @@ async function performActualCheck(
   let combinedPhrases = cache.get<CombinedPhrase[]>(similarKey)
 
   if (!combinedPhrases) {
-    // 意味的類似性チェック用の埋め込みを作成（テキストハッシュでキャッシュしてAPI呼び出し削減）
+    // 長い文章の埋め込み生成最適化
     const embeddingKey = `emb:${textHash}`
     let embedding = cache.get<number[]>(embeddingKey)
 
     if (!embedding) {
       const { createEmbedding } = await import('@/lib/ai-client')
       try {
-        embedding = await createEmbedding(processedText)
-        cache.set(embeddingKey, embedding, 10 * 60 * 1000) // 10分TTL
+        console.log(`[CHECK] Creating embedding for check ${checkId} (text length: ${processedText.length})`)
+        
+        // 長い文章は先頭部分のみで埋め込み生成（パフォーマンス最適化）
+        const embeddingText = processedText.length > 1000 
+          ? processedText.substring(0, 1000) + '...'
+          : processedText
+        
+        const startTime = Date.now()
+        embedding = await createEmbedding(embeddingText)
+        const embeddingTime = Date.now() - startTime
+        console.log(`[CHECK] Embedding created for check ${checkId} in ${embeddingTime}ms`)
+        
+        cache.set(embeddingKey, embedding, 15 * 60 * 1000) // 15分TTL（長い文章用に延長）
       } catch (embeddingError) {
         console.error(`[CHECK] Failed to create embedding for check ${checkId}:`, embeddingError)
         throw new Error(`Failed to create embedding: ${embeddingError}`)
       }
+    } else {
+      console.log(`[CHECK] Using cached embedding for check ${checkId}`)
     }
 
-    // 最適化された統合類似フレーズ関数を使用（パフォーマンス最適化）
+    // 長い文章用の最適化された類似フレーズ検索
+    console.log(`[CHECK] Starting similarity search for check ${checkId} (text length: ${processedText.length})`)
+    const searchStartTime = Date.now()
+    
+    // 長い文章の場合は検索パラメータを調整してパフォーマンス向上
+    const isLongText = processedText.length > 500
+    const searchText = isLongText ? processedText.substring(0, 500) + '...' : processedText
+    const maxResults = isLongText ? 30 : 50 // 長い文章は結果数を制限
+    const vectorThreshold = isLongText ? 0.7 : 0.75 // 長い文章は閾値を下げて高速化
+    
     const { data, error: combinedError } = await (supabase as unknown as {
       rpc: (
         fn: 'get_combined_similar_phrases',
@@ -292,14 +350,17 @@ async function performActualCheck(
     }).rpc(
       'get_combined_similar_phrases',
       { 
-        input_text: processedText,
+        input_text: searchText,
         org_id: organizationId,
         trgm_threshold: 0.3,
-        vector_threshold: 0.75,
+        vector_threshold: vectorThreshold,
         query_embedding: JSON.stringify(embedding),
-        max_results: 50
+        max_results: maxResults
       }
     )
+    
+    const searchTime = Date.now() - searchStartTime
+    console.log(`[CHECK] Similarity search completed for check ${checkId} in ${searchTime}ms`)
 
     if (combinedError) {
       console.error(`[CHECK] Error getting combined similar phrases for check ${checkId}:`, combinedError)
@@ -342,13 +403,20 @@ async function performActualCheck(
   const MAX_AI_ENTRIES = 30
   const limitedEntries = relevantEntries.slice(0, MAX_AI_ENTRIES)
 
-  // Processing relevant NG phrases with AI
+  console.log(`[CHECK] Starting AI analysis for check ${checkId} with ${limitedEntries.length} entries`)
 
   // AIを使用して分析し違反を生成
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
-      const result = await createChatCompletionForCheck(processedText, limitedEntries)
+      console.log(`[CHECK] Calling createChatCompletionForCheck for check ${checkId}`)
+      const result = await retryAiRequest(
+        () => createChatCompletionForCheck(processedText, limitedEntries),
+        checkId,
+        2, // 最大2回リトライ
+        1500 // 1.5秒から開始
+      )
+      console.log(`[CHECK] AI analysis completed for check ${checkId}`)
       
     let violations: ViolationData[]
     let modifiedText: string
