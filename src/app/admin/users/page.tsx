@@ -47,8 +47,10 @@ export default function UsersAdminPage() {
     try {
       const data = await fetchOrganizationUsers()
       setOrganizationUsers(data.users ?? [])
-    } catch {
-      // Error loading users - will show empty list
+    } catch (err) {
+      // Show a visible error for E2E admin error handling
+      const message = err instanceof Error ? err.message : '管理者データの読み込みに失敗しました'
+      setError(message)
     }
   }
 
@@ -60,7 +62,8 @@ export default function UsersAdminPage() {
         setInvitations(data.invitations ?? [])
       }
     } catch {
-      // Error loading invitations - will show empty list
+      // Show a visible error for E2E admin error handling
+      setError('管理者データの読み込みに失敗しました')
     }
   }
 
@@ -237,7 +240,10 @@ export default function UsersAdminPage() {
                 </select>
               </div>
               {error && (
-                <div className="text-red-600 text-sm mb-4">
+                <div
+                  className="text-red-600 text-sm mb-4"
+                  data-testid={error.includes('権限') ? 'permission-error' : 'admin-error'}
+                >
                   {error}
                 </div>
               )}

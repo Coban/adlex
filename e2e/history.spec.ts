@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Check History', () => {
+test.describe('チェック履歴', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to history page
+    // 履歴ページへ遷移
     await page.goto('/history')
   })
 
@@ -13,29 +13,29 @@ test.describe('Check History', () => {
   })
 
   test('should display paginated history items', async ({ page }) => {
-    // Wait for history items to load
+    // 履歴項目の読み込みを待機
     await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
     
-    // Check that history items are displayed
+    // 履歴項目が表示されていること
     const historyItems = page.locator('[data-testid="history-item"]')
     await expect(historyItems).toHaveCount(20) // Default page size
     
-    // Check pagination controls
+    // ページネーションのコントロールが表示されていること
     await expect(page.locator('[data-testid="pagination"]')).toBeVisible()
   })
 
   test('should filter history by search term', async ({ page }) => {
-    // Wait for initial items to load
+    // 初期項目の読み込みを待機
     await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
     
-    // Search for specific text
+    // 特定のテキストで検索
     await page.locator('[data-testid="history-search"]').fill('テスト')
     await page.locator('[data-testid="search-button"]').click()
     
-    // Wait for filtered results
+    // フィルタリング結果を待機
     await page.waitForTimeout(1000)
     
-    // Verify search results contain the search term
+    // 結果に検索語が含まれることを確認
     const searchResults = page.locator('[data-testid="history-item"]')
     const count = await searchResults.count()
     
@@ -48,20 +48,20 @@ test.describe('Check History', () => {
   })
 
   test('should filter history by status', async ({ page }) => {
-    // Wait for initial items to load
+    // 初期項目の読み込みを待機
     await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
     
-    // Select completed status filter (shadcn/ui Select component)
+    // 完了ステータスで絞り込み（shadcn/ui Selectコンポーネント）
     try {
       await page.locator('[data-testid="status-filter"]').click()
       
-      // Wait for dropdown with multiple selectors
+      // 複数のセレクタでドロップダウン出現を待機
       const listboxVisible = await page.waitForSelector('[role="listbox"], [role="menu"], .select-content, [data-state="open"]', { timeout: 3000 }).catch(() => null)
       
       if (listboxVisible) {
         await page.locator('[role="option"], [role="menuitem"], text="完了"').first().click()
       } else {
-        // Keyboard navigation fallback
+        // キーボード操作のフォールバック
         await page.locator('[data-testid="status-filter"]').press('ArrowDown')
         await page.waitForTimeout(500)
         await page.locator('[data-testid="status-filter"]').press('Enter')
@@ -71,10 +71,10 @@ test.describe('Check History', () => {
       return
     }
     
-    // Wait for filtered results
+    // フィルタリング結果を待機
     await page.waitForTimeout(1000)
     
-    // Verify all items have completed status
+    // すべての項目が完了ステータスであることを確認
     const statusBadges = page.locator('[data-testid="status-badge"]')
     const count = await statusBadges.count()
     
@@ -87,31 +87,31 @@ test.describe('Check History', () => {
   })
 
   test('should navigate to check detail page', async ({ page }) => {
-    // Wait for history items to load
+    // 履歴項目の読み込みを待機
     await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
     
-    // Click on first history item
+    // 先頭の履歴をクリック
     await page.locator('[data-testid="history-item"]').first().click()
     
-    // Verify navigation to detail page
+    // 詳細ページへ遷移したことを確認
     await expect(page).toHaveURL(/\/history\/\d+/)
     await expect(page.locator('h1')).toContainText('チェック詳細')
   })
 
   test('should export history to CSV', async ({ page }) => {
-    // Wait for history items to load
+    // 履歴項目の読み込みを待機
     await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
     
-    // Set up download promise
+    // ダウンロード待機を設定
     const downloadPromise = page.waitForEvent('download')
     
-    // Click CSV export button
+    // CSV出力ボタンをクリック
     await page.locator('[data-testid="csv-export"]').click()
     
-    // Wait for download to complete
+    // ダウンロード完了を待機
     const download = await downloadPromise
     
-    // Verify download filename (updated pattern to match actual format)
+    // ダウンロードファイル名を検証（実際の形式に合わせたパターン）
     expect(download.suggestedFilename()).toMatch(/check_history_\d{8}\.csv/)
   })
 

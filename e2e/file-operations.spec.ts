@@ -1,9 +1,13 @@
-import { test, expect } from '@playwright/test'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 
-test.describe('File Operations', () => {
-  test.describe('PDF Export', () => {
-    // Helper function to check if AI service is available and results are present
-    async function hasResults(page: any): Promise<boolean> {
+import { test, expect, type Page } from '@playwright/test'
+
+test.describe('ファイル操作', () => {
+test.describe('PDF出力', () => {
+    // AIサービスの可用性と結果表示の有無を確認するヘルパー
+    async function hasResults(page: Page): Promise<boolean> {
       try {
         await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 5000 })
         return true
@@ -15,57 +19,57 @@ test.describe('File Operations', () => {
     test.beforeEach(async ({ page }) => {
       await page.goto('/checker')
       
-      // Wait for page to load
+      // ページの読み込みを待機
       await page.waitForTimeout(2000)
       
-      // Submit test text to get results
+      // 結果取得のためテストテキストを送信
       await page.locator('[data-testid="text-input"]').fill('PDFエクスポートテスト用のテキストです。この製品は驚異的な効果があります。')
       await page.locator('[data-testid="check-button"]').click()
       
-      // Wait for either results or error status
+      // 結果またはエラーステータスを待機
       await page.waitForTimeout(5000)
     })
 
     test('should download PDF report successfully', async ({ page }) => {
-      // Check if AI service produced results
+      // AIサービスで結果が生成されたか確認
       if (!(await hasResults(page))) {
         console.log('AI service not available or processing error, skipping test')
         return
       }
       
-      // Check if download button exists
+      // ダウンロードボタンが存在するか
       const downloadButton = page.locator('[data-testid="download-button"]')
       if (!(await downloadButton.count() > 0)) {
         console.log('Download button not found, skipping test')
         return
       }
       
-      // Set up download promise
+      // ダウンロード待機を設定
       const downloadPromise = page.waitForEvent('download')
       
-      // Click PDF download button
+      // PDFダウンロードボタンをクリック
       await downloadButton.click()
       
-      // Wait for download to complete
+      // ダウンロード完了を待機
       const download = await downloadPromise
       
-      // Verify download properties
+      // ダウンロードのプロパティを確認
       expect(download.suggestedFilename()).toMatch(/check-report-[\d\-TZ:]+\.pdf/)
       expect(await download.failure()).toBeNull()
       
-      // Verify file size is reasonable (not empty)
-      const path = await download.path()
-      expect(path).toBeTruthy()
+      // ファイルサイズが妥当（空でない）ことを確認
+      const filePath = await download.path()
+      expect(filePath).toBeTruthy()
     })
 
     test('should generate PDF with correct content', async ({ page }) => {
-      // Check if AI service produced results
+      // AIサービスで結果が生成されたか確認
       if (!(await hasResults(page))) {
         console.log('AI service not available or processing error, skipping test')
         return
       }
       
-      // Check if download button exists
+      // ダウンロードボタンの有無を確認
       const downloadButton = page.locator('[data-testid="download-button"]')
       if (!(await downloadButton.count() > 0)) {
         console.log('Download button not found, skipping test')
@@ -77,31 +81,30 @@ test.describe('File Operations', () => {
       await downloadButton.click()
       
       const download = await downloadPromise
-      const path = await download.path()
+      const filePath = await download.path()
       
-      // Verify file exists and has content
-      const fs = require('fs')
-      const stats = fs.statSync(path)
+      // ファイルの存在と十分なサイズを確認
+      const stats = fs.statSync(filePath)
       expect(stats.size).toBeGreaterThan(500) // PDF should be at least 500 bytes
     })
 
     test('should handle PDF download errors', async ({ page }) => {
-      // Check if results section is available
+      // 結果セクションが利用可能か確認
       const resultsSection = page.locator('[data-testid="results-section"]')
       if (!(await resultsSection.isVisible())) {
         console.log('Results section not available, skipping PDF error test')
         return
       }
       
-      // Mock PDF generation failure
+      // PDF生成の失敗をモック
       await page.route('**/api/pdf/**', route => route.abort('failed'))
       
-      // Try to download PDF
+      // PDFダウンロードを試行
       const downloadButton = page.locator('[data-testid="download-button"]')
       if (await downloadButton.isVisible()) {
         await downloadButton.click()
         
-        // Should show error message or at least not crash
+        // エラーメッセージ表示、またはクラッシュしないこと
         const errorElement = page.locator('[data-testid="pdf-error"]')
         if (await errorElement.isVisible({ timeout: 5000 })) {
           await expect(errorElement).toContainText('PDFの生成に失敗しました')
@@ -114,44 +117,44 @@ test.describe('File Operations', () => {
     })
 
     test('should handle multiple PDF downloads', async ({ page }) => {
-      // Check if results section is available
+      // 結果セクションが利用可能か確認
       const resultsSection = page.locator('[data-testid="results-section"]')
       if (!(await resultsSection.isVisible())) {
         console.log('Results section not available, skipping PDF multiple download test')
         return
       }
       
-      // Check if download button is available
+      // ダウンロードボタンが利用可能か確認
       const downloadButton = page.locator('[data-testid="download-button"]')
       if (!(await downloadButton.isVisible())) {
         console.log('Download button not found, skipping test')
         return
       }
       
-      // First download
+      // 1回目のダウンロード
       const downloadPromise1 = page.waitForEvent('download')
       await downloadButton.click()
       const download1 = await downloadPromise1
       
-      // Second download
+      // 2回目のダウンロード
       const downloadPromise2 = page.waitForEvent('download')
       await downloadButton.click()
       const download2 = await downloadPromise2
       
-      // Both should succeed
+      // どちらも成功すること
       expect(await download1.failure()).toBeNull()
       expect(await download2.failure()).toBeNull()
     })
 
     test('should download PDF from history detail page', async ({ page }) => {
-      // Navigate to history page
+      // 履歴ページへ遷移
       await page.goto('/history')
       
-      // Wait for history items and click on first one
+      // 履歴項目の表示を待機し、先頭をクリック
       await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
       await page.locator('[data-testid="history-item"]').first().click()
       
-      // Download PDF from detail page
+      // 詳細ページからPDFをダウンロード
       const downloadPromise = page.waitForEvent('download')
       await page.locator('[data-testid="pdf-download"]').click()
       
@@ -160,15 +163,15 @@ test.describe('File Operations', () => {
     })
 
     test('should handle PDF download with large content', async ({ page }) => {
-      // Submit large text
+      // 大きなテキストを送信
       const largeText = 'この製品は素晴らしい効果があります。'.repeat(100)
       await page.locator('[data-testid="text-input"]').fill(largeText)
       await page.locator('[data-testid="check-button"]').click()
       
-      // Wait for results or handle AI service unavailable
+      // 結果を待機（AIサービス未接続時はスキップ）
       try {
         await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
-      } catch (error) {
+      } catch {
         // Check if there's an error message indicating AI service is not available
         const errorText = await page.textContent('body')
         if (errorText && (errorText.includes('AI service') || errorText.includes('処理中') || errorText.includes('エラー'))) {
@@ -179,22 +182,21 @@ test.describe('File Operations', () => {
         return
       }
       
-      // Download PDF
+      // PDFをダウンロード
       const downloadPromise = page.waitForEvent('download')
       await page.locator('[data-testid="download-button"]').click()
       
       const download = await downloadPromise
       expect(await download.failure()).toBeNull()
       
-      // Large content should produce larger PDF
-      const path = await download.path()
-      const fs = require('fs')
-      const stats = fs.statSync(path)
+      // 大きな内容のためPDFサイズも大きくなるはず
+      const filePath = await download.path()
+      const stats = fs.statSync(filePath)
       expect(stats.size).toBeGreaterThan(1000) // Should be larger than normal PDF
     })
   })
 
-  test.describe('CSV Export', () => {
+  test.describe('CSV出力', () => {
     test.beforeEach(async ({ page }) => {
       await page.goto('/history')
       
@@ -241,11 +243,10 @@ test.describe('File Operations', () => {
       await csvExportButton.click()
       
       const download = await downloadPromise
-      const path = await download.path()
+      const filePath = await download.path()
       
       // Read CSV content
-      const fs = require('fs')
-      const content = fs.readFileSync(path, 'utf-8')
+      const content = fs.readFileSync(filePath, 'utf-8')
       
       // Verify CSV headers (check for key components since order might vary)
       expect(content).toContain('ID')
@@ -310,11 +311,10 @@ test.describe('File Operations', () => {
       await page.locator('[data-testid="csv-export"]').click()
       
       const download = await downloadPromise
-      const path = await download.path()
+      const filePath = await download.path()
       
       // Should still generate CSV with headers
-      const fs = require('fs')
-      const content = fs.readFileSync(path, 'utf-8')
+      const content = fs.readFileSync(filePath, 'utf-8')
       expect(content).toContain('ID')
       expect(content).toContain('作成日時')
       expect(content).toContain('ステータス')
@@ -335,7 +335,7 @@ test.describe('File Operations', () => {
       // Wait for results or handle AI service unavailable
       try {
         await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
-      } catch (error) {
+      } catch {
         console.log('Results section not found, AI service may be unavailable')
       }
     })
@@ -464,9 +464,7 @@ test.describe('File Operations', () => {
 
     test('should handle text file upload', async ({ page }) => {
       // Create temporary text file
-      const fs = require('fs')
-      const path = require('path')
-      const tmpDir = require('os').tmpdir()
+      const tmpDir = os.tmpdir()
       const testFile = path.join(tmpDir, 'test-upload.txt')
       fs.writeFileSync(testFile, 'アップロードテスト用のテキストです。')
       
@@ -485,9 +483,7 @@ test.describe('File Operations', () => {
 
     test('should handle file upload errors', async ({ page }) => {
       // Create invalid file
-      const fs = require('fs')
-      const path = require('path')
-      const tmpDir = require('os').tmpdir()
+      const tmpDir = os.tmpdir()
       const testFile = path.join(tmpDir, 'test-upload.pdf')
       fs.writeFileSync(testFile, 'invalid content')
       
@@ -505,9 +501,7 @@ test.describe('File Operations', () => {
 
     test('should handle large file upload', async ({ page }) => {
       // Create large text file
-      const fs = require('fs')
-      const path = require('path')
-      const tmpDir = require('os').tmpdir()
+      const tmpDir = os.tmpdir()
       const testFile = path.join(tmpDir, 'large-upload.txt')
       fs.writeFileSync(testFile, 'a'.repeat(50000)) // 50KB file
       

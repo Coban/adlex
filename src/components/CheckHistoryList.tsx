@@ -64,7 +64,7 @@ export default function CheckHistoryList() {
   const fetchHistory = useCallback(async (page = 1) => {
     try {
       setLoading(true)
-      if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+      if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
         // Provide mock history in E2E to make UI functional
         const now = new Date()
         const mock: CheckHistory[] = Array.from({ length: 2 }).map((_, i) => ({

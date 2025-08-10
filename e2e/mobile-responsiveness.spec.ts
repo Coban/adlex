@@ -1,21 +1,21 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Mobile Responsiveness', () => {
-  test.describe('Mobile Layout - Phone', () => {
+test.describe('モバイル対応', () => {
+  test.describe('モバイルレイアウト（Phone）', () => {
     test.beforeEach(async ({ page }) => {
-      // Set mobile viewport (iPhone 12)
+      // モバイルのビューポート（iPhone 12 相当）を設定
       await page.setViewportSize({ width: 390, height: 844 })
       await page.goto('/')
     })
 
     test('should display mobile navigation correctly', async ({ page }) => {
-      // Mobile menu toggle should be visible
+      // モバイルメニューのトグルが表示されている
       await expect(page.locator('[data-testid="mobile-menu-toggle"]')).toBeVisible()
       
-      // Desktop navigation should be hidden
+      // デスクトップナビゲーションは非表示
       await expect(page.locator('[data-testid="desktop-nav"]')).not.toBeVisible()
       
-      // Menu items should be hidden initially
+      // 初期状態ではメニュー項目が非表示
       await expect(page.locator('[data-testid="nav-checker"]')).not.toBeVisible()
     })
 
@@ -23,15 +23,15 @@ test.describe('Mobile Responsiveness', () => {
       const menuToggle = page.locator('[data-testid="mobile-menu-toggle"]')
       const mobileMenu = page.locator('[data-testid="mobile-menu"]')
       
-      // Open menu
+      // メニューを開く
       await menuToggle.click()
       await expect(mobileMenu).toBeVisible()
       
-      // Menu items should be visible (check in mobile menu specifically)
+      // モバイルメニュー内で項目が表示される
       await expect(page.locator('[data-testid="mobile-menu"] [data-testid="nav-checker"]')).toBeVisible()
       await expect(page.locator('[data-testid="mobile-menu"] [data-testid="nav-history"]')).toBeVisible()
       
-      // Close menu by clicking toggle again
+      // トグルを再度クリックしてメニューを閉じる
       await menuToggle.click()
       await expect(mobileMenu).not.toBeVisible()
     })
@@ -40,49 +40,49 @@ test.describe('Mobile Responsiveness', () => {
       const menuToggle = page.locator('[data-testid="mobile-menu-toggle"]')
       const mobileMenu = page.locator('[data-testid="mobile-menu"]')
       
-      // Open menu
+      // メニューを開く
       await menuToggle.click()
       await expect(mobileMenu).toBeVisible()
       
-      // Click outside menu
+      // メニューの外をクリック
       await page.click('body', { position: { x: 50, y: 50 } })
       
-      // Menu should close
+      // メニューが閉じる
       await expect(mobileMenu).not.toBeVisible()
     })
 
     test('should display text checker in mobile layout', async ({ page }) => {
       await page.goto('/checker')
       
-      // Wait for page to load and check if authenticated
+      // ページ読み込み後、認証が必要か確認
       await page.waitForTimeout(2000)
       
-      // Check if we need to authenticate first
+      // 認証が必要な場合はスキップ
       const hasLoginPrompt = await page.locator('text=ログインが必要です').count() > 0
       if (hasLoginPrompt) {
         console.log('Not authenticated, skipping text checker layout test')
         return
       }
       
-      // Text input should be full width on mobile
+      // テキスト入力はモバイルで全幅表示
       const textInput = page.locator('[data-testid="text-input"]')
       await expect(textInput).toBeVisible()
       
-      // Check button should be properly sized
+      // チェックボタンが適切なサイズで表示
       await expect(page.locator('[data-testid="check-button"]')).toBeVisible()
       
-      // Test mobile layout by filling text and clicking button
+      // テキストを入力してボタンを押し、モバイルレイアウトの基本動作を確認
       await textInput.fill('モバイルテスト')
       await page.locator('[data-testid="check-button"]').click()
       
-      // Wait for processing to start (status message should appear)
+      // 処理開始を待機（ステータスメッセージが表示される）
       await expect(page.locator('[data-testid="status-message"]')).toBeVisible({ timeout: 10000 })
       
-      // Verify the UI is responsive - test passes if basic interaction works
+      // UIの基本操作が機能すれば合格
       const statusText = await page.locator('[data-testid="status-message"]').textContent()
       console.log(`Mobile layout test - Status: ${statusText}`)
       
-      // Test passes if the interface is functional (can submit and get status feedback)
+      // 送信でき、ステータスのフィードバックが得られればOK
       expect(statusText).toBeTruthy()
     })
 
@@ -91,17 +91,17 @@ test.describe('Mobile Responsiveness', () => {
       
       const textInput = page.locator('[data-testid="text-input"]')
       
-      // Test touch interactions
+      // タッチ操作の挙動
       await textInput.tap()
       await expect(textInput).toBeFocused()
       
-      // Test typing with mobile viewport
+      // モバイルビューポートでの入力
       await textInput.fill('これはモバイルでのテキスト入力テストです。')
       
-      // Character count should be visible
+      // 文字数カウントが表示される
       await expect(page.locator('[data-testid="character-count"]')).toBeVisible()
       
-      // Scroll should work with content
+      // スクロールが機能する
       await textInput.fill('a'.repeat(1000))
       await textInput.scrollIntoViewIfNeeded()
     })
@@ -112,17 +112,17 @@ test.describe('Mobile Responsiveness', () => {
       await page.locator('[data-testid="text-input"]').fill('モバイル結果表示テスト')
       await page.locator('[data-testid="check-button"]').click()
       
-      // Wait for results
+      // 結果を待機
       await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
       
-      // Tabs should be mobile-friendly
+      // タブはモバイルに最適化されている
       await expect(page.locator('[data-testid="mobile-tabs"]')).toBeVisible()
       
-      // Tab content should be properly sized
+      // タブの内容が適切なサイズで表示
       await page.locator('[data-testid="side-by-side-tab"]').tap()
       await expect(page.locator('[data-testid="mobile-side-by-side"]')).toBeVisible()
       
-      // Text should be readable on mobile
+      // テキストがモバイルでも読みやすい
       const originalText = page.locator('[data-testid="original-text-content"]')
       await expect(originalText).toBeVisible()
     })
@@ -130,21 +130,21 @@ test.describe('Mobile Responsiveness', () => {
     test('should handle mobile scrolling in results', async ({ page }) => {
       await page.goto('/checker')
       
-      // Submit long text
+      // 長文を送信
       const longText = 'これは長いテキストのテストです。'.repeat(50)
       await page.locator('[data-testid="text-input"]').fill(longText)
       await page.locator('[data-testid="check-button"]').click()
       
-      // Wait for results
+      // 結果を待機
       await expect(page.locator('[data-testid="results-section"]')).toBeVisible({ timeout: 30000 })
       
-      // Test scrolling in results
+      // 結果エリアでのスクロールを確認
       await page.locator('[data-testid="side-by-side-tab"]').tap()
       
       const originalTextArea = page.locator('[data-testid="original-text-content"]')
       await originalTextArea.scrollIntoViewIfNeeded()
       
-      // Should be able to scroll within text area
+      // テキストエリア内でスクロールできる
       await originalTextArea.hover()
       await page.mouse.wheel(0, 100)
     })
@@ -152,7 +152,7 @@ test.describe('Mobile Responsiveness', () => {
     test('should display mobile-optimized history', async ({ page }) => {
       await page.goto('/history')
       
-      // History items should be mobile-friendly
+      // 履歴項目がモバイルでも見やすく表示
       await page.waitForSelector('[data-testid="history-item"]', { timeout: 10000 })
       
       const historyItems = page.locator('[data-testid="history-item"]')
@@ -231,7 +231,7 @@ test.describe('Mobile Responsiveness', () => {
       expect(statusText).toBeTruthy()
     })
 
-    test('should handle tablet touch interactions', async ({ page, browserName }) => {
+    test('should handle tablet touch interactions', async ({ page }) => {
       await page.goto('/checker')
       
       // Wait for page to load and check if authenticated
@@ -250,7 +250,7 @@ test.describe('Mobile Responsiveness', () => {
       // Try touch interactions if supported (mobile devices)
       try {
         await page.touchscreen.tap(200, 300)
-      } catch (error) {
+      } catch {
         // If touch is not supported, use mouse click instead
         console.log('Touch not supported, using mouse click')
         await page.click('[data-testid="text-input"]')
@@ -259,7 +259,7 @@ test.describe('Mobile Responsiveness', () => {
       // Mouse wheel should work on all platforms except mobile Safari
       try {
         await page.mouse.wheel(0, 500)
-      } catch (error) {
+      } catch {
         console.log('Mouse wheel not supported on this platform (mobile Safari)')
       }
       

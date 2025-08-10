@@ -1,48 +1,48 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function waitForAuthentication(page: any) {
-  // Try to find the sign out button in desktop view first
+async function waitForAuthentication(page: Page) {
+  // まずデスクトップ表示でサインアウトボタンを探す
   try {
     await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
     return;
   } catch {
-    // If not found, check if we're on mobile and need to open the menu
-    // Look for the mobile menu button more broadly
+    // 見つからない場合はモバイル表示を想定してメニューを開く
+    // モバイルメニューボタンを広めに探索
     const menuButton = page.locator('.md\\:hidden button').first();
     const isMenuButtonVisible = await menuButton.isVisible();
     if (isMenuButtonVisible) {
       await menuButton.click();
-      await page.waitForTimeout(500); // Wait for menu to open
+      await page.waitForTimeout(500); // メニューが開くのを待機
       await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
-      // Close the menu after checking
+      // 確認後にメニューを閉じる
       await menuButton.click();
     } else {
-      // If still not found, just wait a bit and try again
+      // それでも見つからない場合は少し待って再試行
       await page.waitForTimeout(2000);
       await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
     }
   }
 }
 
-test.describe("Text Checker", () => {
+test.describe('テキストチェッカー', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to home page first (should be authenticated via setup)
+    // まずホームへ（セットアップで認証済みの想定）
     await page.goto("/");
     
-    // Verify we're authenticated
+    // 認証済みであることを確認
     await waitForAuthentication(page);
 
-    // Navigate to checker page
+    // チェッカーページへ遷移
     await page.goto("/checker");
     
-    // Wait for page to fully load - try multiple possible headings
+    // ページの完全読み込みを待機（見出しの候補を複数試す）
     try {
       await expect(page.getByRole('heading', { name: '薬機法チェッカー' })).toBeVisible({ timeout: 5000 });
     } catch {
       try {
         await expect(page.getByRole('heading', { name: '薬機法チェック & リライト' })).toBeVisible({ timeout: 5000 });
       } catch {
-        // If we can't find the heading, just wait for the main content area
+        // 見出しが見つからない場合はメインのテキストエリアを待機
         await expect(page.locator("textarea")).toBeVisible({ timeout: 10000 });
       }
     }
@@ -179,7 +179,7 @@ test.describe("Text Checker", () => {
     // Switch to violations tab only if results were found
     try {
       await page.getByRole('tab', { name: '違反詳細' }).click();
-    } catch (error) {
+    } catch {
       console.log('Could not click violations tab, test continuing');
       return;
     }

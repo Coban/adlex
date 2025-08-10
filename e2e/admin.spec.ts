@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Admin Functionality', () => {
-  test.describe('Admin User Management', () => {
+test.describe('管理機能', () => {
+  test.describe('管理者ユーザー管理', () => {
     test.beforeEach(async ({ page }) => {
-      // This test suite should run with admin authentication
-      // We'll need to set up admin auth in the setup file
+      // このスイートは管理者認証状態で実行する
+      // セットアップファイルで管理者認証を保存している
       await page.goto('/admin/users')
     })
 
@@ -15,13 +15,13 @@ test.describe('Admin Functionality', () => {
     })
 
     test('should display user list with correct information', async ({ page }) => {
-      // Wait for users to load
+      // ユーザー一覧の読み込みを待機
       await page.waitForSelector('[data-testid="user-item"]', { timeout: 10000 })
       
       const userItems = page.locator('[data-testid="user-item"]')
       await expect(userItems.first()).toBeVisible()
       
-      // Check first user item has required fields
+      // 先頭ユーザー項目に必要な情報があることを確認
       const firstUser = userItems.first()
       await expect(firstUser.locator('[data-testid="user-email"]')).toBeVisible()
       await expect(firstUser.locator('[data-testid="user-role"]')).toBeVisible()
@@ -32,7 +32,7 @@ test.describe('Admin Functionality', () => {
     test('should open invite user modal', async ({ page }) => {
       await page.locator('[data-testid="invite-user-button"]').click()
       
-      // Check modal is opened
+      // モーダルが開いたことを確認
       await expect(page.locator('[data-testid="invite-modal"]')).toBeVisible()
       await expect(page.locator('[data-testid="invite-email-input"]')).toBeVisible()
       await expect(page.locator('[data-testid="invite-role-select"]')).toBeVisible()
@@ -42,39 +42,39 @@ test.describe('Admin Functionality', () => {
     test('should send user invitation', async ({ page }) => {
       await page.locator('[data-testid="invite-user-button"]').click()
       
-      // Generate unique email to avoid conflicts
+      // 重複を避けるためユニークなメールを生成
       const uniqueEmail = `newuser-${Date.now()}@example.com`
       
-      // Fill invitation form
+      // 招待フォームを入力
       await page.locator('[data-testid="invite-email-input"]').fill(uniqueEmail)
       try {
         await page.locator('[data-testid="invite-role-select"]').click()
-        // Try different selectors for shadcn/ui Select
+        // shadcn/ui Select 向けに複数のセレクタを試す
         await page.locator('[role="option"], [data-value="user"], text="ユーザー"').first().click({ timeout: 3000 })
       } catch {
-        console.log('Select option not found, trying alternative approach')
-        // Skip this test if select doesn't work
+        console.log('選択肢が見つからないため代替手段を試します')
+        // Select が操作できない場合はこのテストをスキップ
         test.skip(true, 'Select component interaction not working')
       }
       
-      // Send invitation
+      // 招待を送信
       await page.locator('[data-testid="send-invite-button"]').click()
       
-      // Check for success message
+      // 成功メッセージを確認
       await expect(page.locator('[data-testid="success-message"]')).toContainText('招待メールを送信しました')
       
-      // Modal should close
+      // モーダルが閉じること
       await expect(page.locator('[data-testid="invite-modal"]')).not.toBeVisible()
     })
 
     test('should handle invitation form validation', async ({ page }) => {
       await page.locator('[data-testid="invite-user-button"]').click()
       
-      // Try to send without email
+      // メール未入力で送信を試す
       await page.locator('[data-testid="send-invite-button"]').click()
       await expect(page.locator('[data-testid="email-error"]')).toContainText('メールアドレスが必要です')
       
-      // Enter invalid email
+      // 不正なメールアドレスを入力
       await page.locator('[data-testid="invite-email-input"]').fill('invalid-email')
       await page.locator('[data-testid="send-invite-button"]').click()
       await expect(page.locator('[data-testid="email-error"]')).toContainText('有効なメールアドレスを入力してください')
@@ -83,34 +83,34 @@ test.describe('Admin Functionality', () => {
     test('should change user role', async ({ page }) => {
       await page.waitForSelector('[data-testid="user-item"]', { timeout: 10000 })
       
-      // Target the second user (not the current admin user)
+      // 2人目のユーザー（現在の管理者以外）を対象
       const userItems = page.locator('[data-testid="user-item"]')
       const userItem = userItems.nth(1)
       const roleSelect = userItem.locator('[data-testid="role-select"]')
       
-      // Get current role
+      // 現在の権限を取得
       let currentRole: string
       let newRole: string
       try {
         currentRole = await roleSelect.inputValue()
         newRole = currentRole === 'admin' ? 'user' : 'admin'
       } catch {
-        // If inputValue fails, skip this test
+        // 値が取得できなければスキップ
         test.skip(true, 'Role select input value not accessible')
         return
       }
       
-      // Change role - try multiple approaches for shadcn/ui Select
+      // 権限変更（shadcn/ui Select で複数の方法を試行）
       try {
         await roleSelect.click()
-        // Try different selectors for the dropdown
+        // ドロップダウンのセレクタを複数試す
         const listboxVisible = await page.waitForSelector('[role="listbox"], [role="menu"], .select-content, [data-state="open"]', { timeout: 3000 }).catch(() => null)
         
         if (listboxVisible) {
           const optionText = newRole === 'admin' ? '管理者' : 'ユーザー'
           await page.locator('[role="option"], [role="menuitem"], [data-value="' + newRole + '"], text="' + optionText + '"').first().click()
         } else {
-          // Try keyboard navigation as fallback
+          // フォールバックとしてキーボード操作
           await roleSelect.press('ArrowDown')
           await page.waitForTimeout(500)
           await roleSelect.press('Enter')
@@ -120,71 +120,71 @@ test.describe('Admin Functionality', () => {
         return
       }
       
-      // Check for confirmation dialog if present
+      // 確認ダイアログがあれば処理
       const confirmDialog = page.locator('[data-testid="confirm-role-change"]')
       if (await confirmDialog.count() > 0) {
         await expect(confirmDialog).toBeVisible()
         await page.locator('[data-testid="confirm-button"]').click()
       }
       
-      // Check for success message with extended timeout
+      // 成功メッセージをやや長めのタイムアウトで確認
       try {
         await expect(page.locator('[data-testid="success-message"]')).toContainText('ユーザーの役割を変更しました', { timeout: 10000 })
       } catch {
-        // If success message is not found, check if the role actually changed
+        // メッセージが出ない場合、実際に変更されたかを確認
         await page.waitForTimeout(2000)
         
         try {
           const updatedRole = await roleSelect.inputValue()
           if (updatedRole === newRole) {
-            console.log('Role change succeeded but success message not displayed')
+            console.log('権限変更は成功したが成功メッセージが表示されなかった')
             return
           }
         } catch (roleCheckError) {
-          console.log('Could not verify role change:', (roleCheckError as Error).message)
+          console.log('権限変更の検証に失敗:', (roleCheckError as Error).message)
         }
         
-        // Check for error messages
+        // エラーメッセージの表示を確認
         const errorMessages = await page.locator('text=エラー').count()
         if (errorMessages > 0) {
-          console.log('Role change failed with error message')
+          console.log('権限変更はエラーメッセージとともに失敗')
           return
         }
         
-        // Check if the confirmation dialog is still visible (indicates failure)
+        // 確認ダイアログが残っていれば失敗とみなす
         const confirmDialogVisible = await page.locator('[data-testid="confirm-role-change"]').isVisible()
         if (!confirmDialogVisible) {
-          console.log('Role change dialog closed, assuming success despite missing message')
+          console.log('ダイアログは閉じているため、メッセージが無くても成功とみなす')
           return
         }
         
-        throw new Error('Role change did not reflect and no messages shown')
+        throw new Error('権限変更が反映されず、メッセージも表示されませんでした')
       }
     })
 
     test('should deactivate user', async ({ page }) => {
       await page.waitForSelector('[data-testid="user-item"]', { timeout: 10000 })
       
-      // Target the second user (not the current admin user)
+      // 2人目のユーザー（現在の管理者以外）を対象
       const userItems = page.locator('[data-testid="user-item"]')
       const userItem = userItems.nth(1)
       await userItem.locator('[data-testid="deactivate-button"]').click()
       
-      // Check for confirmation dialog
+      // 確認ダイアログの表示を確認
       await expect(page.locator('[data-testid="confirm-deactivate"]')).toBeVisible()
       await page.locator('[data-testid="confirm-button"]').click()
       
-      // Check for success message
+      // 成功メッセージを確認
       await expect(page.locator('[data-testid="success-message"]')).toContainText('ユーザーを無効化しました')
       
-      // User should show as inactive
+      // ユーザーが無効表示になること
       await expect(userItem.locator('[data-testid="user-status"]')).toContainText('無効')
     })
 
     test('should filter users by role', async ({ page }) => {
       await page.waitForSelector('[data-testid="user-item"]', { timeout: 10000 })
       
-      // Filter by admin role - support native and custom select
+      // 管理者でフィルタ（ネイティブ/カスタム両対応）
       try {
         const roleFilter = page.locator('[data-testid="role-filter"]')
         const isNativeSelect = await roleFilter.evaluate((el) => el.tagName.toLowerCase() === 'select').catch(() => false)
@@ -192,9 +192,7 @@ test.describe('Admin Functionality', () => {
           await roleFilter.selectOption('admin')
         } else {
           await roleFilter.click()
-          const listboxVisible = await page
-            .waitForSelector('[role="listbox"], [role="menu"], .select-content, [data-state="open"]', { timeout: 3000 })
-            .catch(() => null)
+          const listboxVisible = await page.waitForSelector('[role="listbox"], [role="menu"], .select-content, [data-state="open"]', { timeout: 3000 }).catch(() => null)
           if (listboxVisible) {
             await page.locator('[role="option"], [role="menuitem"], text="管理者"').first().click()
           } else {

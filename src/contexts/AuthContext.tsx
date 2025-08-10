@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!mounted) return
     
     // In E2E (NEXT_PUBLIC_SKIP_AUTH), provide a mock authenticated session
-    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
       const mockUser = {
         id: '00000000-0000-0000-0000-000000000001',
         email: 'admin@test.com'
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
-    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
       setUser(null)
       setUserProfile(null)
       setOrganization(null)

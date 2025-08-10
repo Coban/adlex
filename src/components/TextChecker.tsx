@@ -317,8 +317,8 @@ export default function TextChecker() {
     setText('')
     
     try {
-      // E2E: skip server and synthesize result locally when NEXT_PUBLIC_SKIP_AUTH
-      if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+      // E2E: skip server and synthesize result locally when NEXT_PUBLIC_SKIP_AUTH or SKIP_AUTH
+      if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
         // mimic queued -> processing -> completed transitions quickly
         setChecks(prev => prev.map(check => 
           check.id === checkId 
