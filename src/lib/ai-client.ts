@@ -129,7 +129,7 @@ export async function createChatCompletion(params: {
   if (USE_MOCK) {
     // ファンクション呼び出しリクエストかどうかをチェック
     if (params.tools && params.tools.length > 0) {
-      // ファンクション呼び出しレスポンスを返す
+      // ツール呼び出しレスポンス（tool_calls形式）
       return {
         id: 'mock-chat-completion',
         object: 'chat.completion' as const,
@@ -140,13 +140,17 @@ export async function createChatCompletion(params: {
           message: {
             role: 'assistant' as const,
             content: null,
-            function_call: {
-              name: 'apply_yakukiho_rules',
-              arguments: JSON.stringify({
-                modified: generateMockModifiedText(params.messages),
-                violations: generateMockViolations(params.messages)
-              })
-            }
+            tool_calls: [{
+              id: 'call_mock',
+              type: 'function' as const,
+              function: {
+                name: 'apply_yakukiho_rules',
+                arguments: JSON.stringify({
+                  modified: generateMockModifiedText(params.messages),
+                  violations: generateMockViolations(params.messages)
+                })
+              }
+            }]
           },
           finish_reason: 'tool_calls' as const
         }],
@@ -410,8 +414,9 @@ export function estimateOcrConfidence(text: string): number {
 export async function createEmbedding(input: string): Promise<number[]> {
   // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
-    // Generate mock embedding for testing - 1536 dimensions to match OpenAI text-embedding-3-small
-    const mockEmbedding = new Array(1536).fill(0).map(() => Math.random() - 0.5)
+    // テスト/モックの期待値に合わせて動的に次元を決定
+    const dim = getEmbeddingDimension()
+    const mockEmbedding = new Array(dim).fill(0).map(() => Math.random() - 0.5)
     return mockEmbedding
   }
 

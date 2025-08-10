@@ -100,7 +100,8 @@ export async function GET(request: NextRequest) {
           // 前回のデータと同じ場合は送信をスキップ（帯域幅節約）
           if (queueDataStr !== lastQueueStatus) {
             try {
-              if (!controller.desiredSize === null) {
+              // desiredSize が null（クローズ）でない場合のみ送信
+              if (controller.desiredSize !== null) {
                 controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
                 lastQueueStatus = queueDataStr
               }
