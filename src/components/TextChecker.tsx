@@ -9,75 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/lib/supabase/client'
-
-interface CheckItem {
-  id: string
-  originalText: string
-  result: CheckResult | null
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
-  statusMessage: string
-  timestamp: number
-  queuePosition?: number
-}
-
-interface QueueStatus {
-  queueLength: number
-  processingCount: number
-  maxConcurrent: number
-  databaseProcessingCount: number
-  availableSlots: number
-  processingStats: {
-    text: number
-    image: number
-  }
-  canStartNewCheck: boolean
-}
-
-interface OrganizationStatus {
-  monthlyLimit: number
-  currentMonthChecks: number
-  remainingChecks: number
-  canPerformCheck: boolean
-}
-
-interface SystemStatus {
-  timestamp: string
-  serverLoad: {
-    queue: 'idle' | 'busy'
-    processing: 'available' | 'full'
-  }
-}
-
-interface Violation {
-  id: number
-  startPos: number
-  endPos: number
-  reason: string
-  dictionary_id?: number
-}
-
-interface CheckStreamData {
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
-  error?: string
-  id?: number
-  original_text?: string
-  modified_text?: string
-  violations?: Array<{
-    id: number
-    start_pos: number
-    end_pos: number
-    reason: string
-    dictionary_id: number | null
-  }>
-}
-
-interface CheckResult {
-  id: number
-  original_text: string
-  modified_text: string
-  status: string
-  violations: Violation[]
-}
+import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
 
 /**
  * 薬機法チェッカーのメインコンポーネント
@@ -148,42 +80,57 @@ export default function TextChecker() {
     }
 
     // 統合SSEエンドポイントに接続
-    const eventSource = new EventSource('/api/checks/stream')
-    globalStreamRef.current = eventSource
-
-    eventSource.onmessage = (event) => {
+    // EventSource は Authorization ヘッダを付けられないため、
+    // セッショントークンが取得できた場合はクエリに付与してサーバ側で検証する
+    const connectGlobalSSE = async () => {
       try {
-        // ハートビートメッセージをスキップ
-        if (event.data.startsWith(': heartbeat')) {
-          return
-        }
-
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'queue_status') {
-          // キュー状況の更新
-          setQueueStatus(data.queue)
-          setOrganizationStatus(data.organization)
-          setSystemStatus(data.system)
-          
-          // Queue status updated
-        }
-        // 他のメッセージタイプ（check_progress等）は将来的に追加可能
-      } catch (error) {
-        console.error('Failed to parse global SSE data:', error)
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 500))
+        ])
+        const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
+        const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
+        return new EventSource(url)
+      } catch {
+        return new EventSource('/api/checks/stream')
       }
     }
+    connectGlobalSSE().then((eventSource) => {
+      globalStreamRef.current = eventSource
+      
+      eventSource.onmessage = (event) => {
+        try {
+          // ハートビートメッセージをスキップ
+          if (event.data.startsWith(': heartbeat')) {
+            return
+          }
 
-    eventSource.onerror = (error) => {
-      console.error('Global SSE connection error:', error)
-      globalStreamRef.current = null
-    }
+          const data = JSON.parse(event.data)
+
+          if (data.type === 'queue_status') {
+            // キュー状況の更新
+            setQueueStatus(data.queue)
+            setOrganizationStatus(data.organization)
+            setSystemStatus(data.system)
+          }
+        } catch (error) {
+          console.error('Failed to parse global SSE data:', error)
+        }
+      }
+
+      eventSource.onerror = (error) => {
+        console.error('Global SSE connection error:', error)
+        globalStreamRef.current = null
+      }
+    })
 
     return () => {
-      safeCloseEventSource(eventSource)
+      if (globalStreamRef.current) {
+        safeCloseEventSource(globalStreamRef.current)
+      }
       globalStreamRef.current = null
     }
-  }, [])
+  }, [supabase])
 
   const handlePdfExport = async () => {
     setPdfError(null)
@@ -280,7 +227,7 @@ export default function TextChecker() {
     // キューの可用性チェック（警告のみ）
     if (!queueStatus.canStartNewCheck) {
       toast({
-        title: 'キューが満月です',
+        title: 'キューがいっぱいです',
         description: `現在 ${queueStatus.processingCount}/${queueStatus.maxConcurrent} のチェックが処理中です。キューに追加されますが、待機時間が発生する可能性があります。`,
         variant: 'default'
       })
@@ -359,12 +306,14 @@ export default function TextChecker() {
         throw new Error('認証が必要です。サインインしてください。')
       }
 
-      // Get auth token from Supabase
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        throw new Error('認証セッションが見つかりません。再度サインインしてください。')
-      }
+      // Get auth token from Supabase (タイムアウト付きで非ブロッキング化)
+      const sessionResult = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 500)
+        ),
+      ])
+      const session = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session
 
       // ステータス更新
       setChecks(prev => prev.map(check => 
@@ -379,9 +328,7 @@ export default function TextChecker() {
         'Content-Type': 'application/json',
       }
       
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
 
       const response = await fetch('/api/checks', {
         method: 'POST',
@@ -413,8 +360,19 @@ export default function TextChecker() {
           : check
       ))
       
-      // SSEで結果を待機
-      const eventSource = new EventSource(`/api/checks/${checkData.id}/stream`)
+      // SSEで結果を待機（ヘッダ不可のため、トークンはクエリで渡す）
+      // 個別SSEはできるだけ確実にトークンを付与したいので、タイムアウトを長めにする
+      const sseSessionResult = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 3000)
+        ),
+      ])
+      const sseToken = (sseSessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
+      const streamUrl = sseToken
+        ? `/api/checks/${checkData.id}/stream?token=${encodeURIComponent(sseToken)}`
+        : `/api/checks/${checkData.id}/stream`
+      const eventSource = new EventSource(streamUrl)
       
       // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0

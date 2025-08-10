@@ -3,26 +3,7 @@
 
 import { cache, CacheUtils } from '@/lib/cache'
 import { createClient } from '@/lib/supabase/server'
-import { Database } from '@/types/database.types'
-
-// Type definitions for the API
-type DictionaryCategory = Database['public']['Enums']['dictionary_category']
-
-interface CombinedPhrase {
-  id: number
-  phrase: string
-  category: DictionaryCategory
-  trgm_similarity?: number
-  vector_similarity?: number
-  combined_score?: number
-}
-
-interface ViolationData {
-  start_pos: number
-  end_pos: number
-  reason: string
-  dictionary_id?: number
-}
+import { DictionaryCategory, LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**
  * チェック処理を完了し結果をデータベースに保存する

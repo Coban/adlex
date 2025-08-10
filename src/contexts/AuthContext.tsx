@@ -4,12 +4,7 @@ import { User } from '@supabase/supabase-js'
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 import { createClient } from '@/lib/supabase/client'
-import { Database } from '@/types/database.types'
-
-type UserProfile = Database['public']['Tables']['users']['Row']
-type Organization = Database['public']['Tables']['organizations']['Row']
-
-const AUTH_STATE_DELAY = 200
+import { UserProfile, Organization } from '@/types'
 
 interface AuthContextType {
   user: User | null
@@ -18,6 +13,8 @@ interface AuthContextType {
   loading: boolean
   signOut: () => Promise<void>
 }
+
+const AUTH_STATE_DELAY = 200
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 

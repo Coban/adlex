@@ -161,7 +161,7 @@ export default function GlobalNavigation() {
             {mounted && !loading && user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                  <div className="text-sm font-medium text-gray-900">{user?.email || ''}</div>
                   {organization && userProfile && (
                     <span className="text-sm text-gray-600">
                       {userProfile.role === 'admin' ? '管理者' : 'ユーザー'} | {organization.name}
@@ -263,7 +263,7 @@ export default function GlobalNavigation() {
               {!loading && user && (
                 <div className="space-y-3">
                   <div className="px-3">
-                    <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                    <div className="text-sm font-medium text-gray-900">{user?.email || ''}</div>
                     {organization && userProfile && (
                       <div className="text-sm text-gray-600">
                         {userProfile.role === 'admin' ? '管理者' : 'ユーザー'} | {organization.name}

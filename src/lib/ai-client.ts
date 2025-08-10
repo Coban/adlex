@@ -3,13 +3,13 @@ import OpenAI from 'openai'
 // Environment detection
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
-const isMockMode = process.env.OPENAI_API_KEY === 'mock' || isTest
-const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' && !isMockMode
+// モックはテスト時のみ有効
+const hasValidOpenAIKey = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here')
 
 // AI client configuration
-// Use LM Studio for local development, OpenAI for production, Mock for testing
-const USE_LM_STUDIO = !isProduction && !isTest && process.env.USE_LM_STUDIO === 'true'
-const USE_MOCK = isMockMode
+// Local development → LM Studio, Production → OpenAI, Test → Mock
+const USE_LM_STUDIO = !isProduction && !isTest
+const USE_MOCK = isTest
 
 // AI Client Configuration - initialized based on environment
 
@@ -415,7 +415,7 @@ export async function createEmbedding(input: string): Promise<number[]> {
   // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
     // テスト/モックの期待値に合わせて動的に次元を決定
-    const dim = getEmbeddingDimension()
+    const dim = 384
     const mockEmbedding = new Array(dim).fill(0).map(() => Math.random() - 0.5)
     return mockEmbedding
   }
@@ -453,7 +453,14 @@ export async function createEmbedding(input: string): Promise<number[]> {
         const data = await response.json()
         
         if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
-          return data.data[0].embedding
+          // LM Studio の次元が 768 の場合でも、DBは1536に統一しているため拡張
+          const targetDim = getEmbeddingDimension()
+          const emb: number[] = data.data[0].embedding
+          if (emb.length === targetDim) return emb
+          if (emb.length < targetDim) {
+            return [...emb, ...new Array(targetDim - emb.length).fill(0)]
+          }
+          return emb.slice(0, targetDim)
         }
         
         throw new Error('LM Studio embedding response is missing data')
@@ -563,33 +570,31 @@ export function isUsingMock(): boolean {
 export function getEmbeddingDimension(): number {
   if (USE_MOCK) {
     return 384 // Mock embedding dimension
-  } else if (USE_LM_STUDIO) {
-    // text-embedding-nomic-embed-text-v1.5 は768次元を使用
-    return 768
-  } else {
-    return 1536 // OpenAI text-embedding-3-small
   }
+  // DBは1536次元に統一（migrations参照）
+  return 1536
 }
 
-// Legacy createChatCompletion for check-processor compatibility  
-type DictionaryEntry = {
+// Legacy createChatCompletion for check-processor compatibility
+
+type LegacyDictionaryEntry = {
   id: number
   phrase: string
   category: string
   similarity?: number
 }
 
-type ViolationData = {
+type LegacyViolationData = {
   start_pos: number
   end_pos: number
   reason: string
   dictionary_id?: number
 }
 
-export async function createChatCompletionForCheck(text: string, relevantEntries: DictionaryEntry[]): Promise<{
+export async function createChatCompletionForCheck(text: string, relevantEntries: LegacyDictionaryEntry[]): Promise<{
   type: 'openai' | 'lmstudio'
   response?: OpenAI.Chat.Completions.ChatCompletion
-  violations: ViolationData[]
+  violations: LegacyViolationData[]
   modified: string
 }> {
 

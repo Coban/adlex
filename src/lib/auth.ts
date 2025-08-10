@@ -1,10 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
-import { Database } from '@/types/database.types'
-
-type UserProfileInsert = Database['public']['Tables']['users']['Insert']
-type UserProfileUpdate = Database['public']['Tables']['users']['Update']
-type OrganizationPlan = Database['public']['Enums']['organization_plan']
-type UserRole = Database['public']['Enums']['user_role']
+import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
 
 export interface AuthError {
   message: string;

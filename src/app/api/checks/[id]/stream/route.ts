@@ -22,11 +22,30 @@ export async function GET(
 
   // ユーザーがこのチェックにアクセス権があるかを検証
   const authResult = await supabase.auth.getUser()
-  const user = authResult.data.user
+  let user = authResult.data.user
   const authError = authResult.error
   
   if (authError || !user) {
-    return new Response('Unauthorized', { status: 401 })
+    // EventSource はヘッダが使えないため、トークンをクエリから検証
+    const token = request.nextUrl.searchParams.get('token')
+    if (token) {
+      try {
+        const { createClient: createServiceClient } = await import('@supabase/supabase-js')
+        const supabaseService = createServiceClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+        const { data: { user: tokenUser } } = await supabaseService.auth.getUser(token)
+        if (tokenUser) {
+          user = tokenUser
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!user) {
+      return new Response('Unauthorized', { status: 401 })
+    }
   }
 
   const { data: checkRecord, error: checkError } = await supabase
@@ -94,8 +113,8 @@ export async function GET(
             }
             // Check if controller is still open before enqueueing
             try {
-              if (!controller.desiredSize === null) {
-                controller.enqueue(new TextEncoder().encode(`: heartbeat-${heartbeatCount}\\n\\n`))
+              if (controller.desiredSize !== null) {
+                controller.enqueue(new TextEncoder().encode(`: heartbeat-${heartbeatCount}\n\n`))
               }
             } catch (controllerError) {
               console.error(`[SSE] Controller already closed for heartbeat ${heartbeatCount}:`, controllerError)

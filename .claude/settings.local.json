@@ -26,7 +26,9 @@
       "Bash(npm run check:*)",
       "Bash(npm run test:e2e:*)",
       "Bash(npm run supabase:reset:*)",
-      "Bash(npm run seed:*)"
+      "Bash(npm run seed:*)",
+      "mcp__serena__list_dir",
+      "mcp__serena__search_for_pattern"
     ],
     "deny": []
   }
