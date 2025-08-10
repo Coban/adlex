@@ -147,7 +147,7 @@ export async function GET(
           status: 'failed',
           error: 'SSE接続がタイムアウトしました（処理時間制限）'
         })
-        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\\n\\n`))
+        controller.enqueue(new TextEncoder().encode(`data: ${timeoutData}\n\n`))
         controller.close()
         channel.unsubscribe()
         clearInterval(heartbeatInterval)
@@ -265,7 +265,7 @@ async function sendFinalData(
         status: 'failed',
         error: 'データの取得に失敗しました'
       })
-      controller.enqueue(new TextEncoder().encode(`data: ${errorData}\\n\\n`))
+      controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
       return
     }
 
@@ -287,7 +287,7 @@ async function sendFinalData(
 
     // 最終データをSSEストリームに送信
     const finalData = JSON.stringify(responseData)
-    controller.enqueue(new TextEncoder().encode(`data: ${finalData}\\n\\n`))
+    controller.enqueue(new TextEncoder().encode(`data: ${finalData}\n\n`))
   } catch (error) {
     console.error(`[SSE] Unexpected error in sendFinalData for check ${checkId}:`, error)
     const errorData = JSON.stringify({
@@ -295,6 +295,6 @@ async function sendFinalData(
       status: 'failed',
       error: '予期しないエラーが発生しました'
     })
-    controller.enqueue(new TextEncoder().encode(`data: ${errorData}\\n\\n`))
+    controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`))
   }
 }

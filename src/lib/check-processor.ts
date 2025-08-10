@@ -3,7 +3,7 @@
 
 import { cache, CacheUtils } from '@/lib/cache'
 import { createClient } from '@/lib/supabase/server'
-import { DictionaryCategory, LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
+import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**
  * チェック処理を完了し結果をデータベースに保存する
@@ -23,7 +23,7 @@ async function completeCheck(
 
   // 違反データを挿入
   if (violations.length > 0) {
-    const violationRows = violations.map(violation => ({
+      const violationRows = violations.map(violation => ({
       check_id: checkId,
       start_pos: violation.start_pos,
       end_pos: violation.end_pos,
@@ -348,8 +348,8 @@ async function performActualCheck(
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
-    const result = await createChatCompletionForCheck(processedText, limitedEntries)
-    
+      const result = await createChatCompletionForCheck(processedText, limitedEntries)
+      
     let violations: ViolationData[]
     let modifiedText: string
 
@@ -377,8 +377,8 @@ async function performActualCheck(
       modifiedText = result.modified
     }
 
-    await completeCheck(checkId, modifiedText, violations, supabase)
-    
+      await completeCheck(checkId, modifiedText, violations, supabase)
+      
   } catch (aiError) {
     console.error(`[CHECK] AI processing failed for check ${checkId}:`, aiError)
     throw new Error(`Failed to create chat completion: ${aiError}`)

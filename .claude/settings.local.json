@@ -34,7 +34,11 @@
       "mcp__serena__find_file",
       "mcp__serena__think_about_collected_information",
       "Bash(npm run supabase:start:*)",
-      "mcp__serena__replace_regex"
+      "mcp__serena__replace_regex",
+      "Bash(git checkout:*)",
+      "Bash(npm run test:*)",
+      "Bash(echo:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": []
   }
