@@ -99,8 +99,15 @@ export async function GET(request: NextRequest) {
           
           // 前回のデータと同じ場合は送信をスキップ（帯域幅節約）
           if (queueDataStr !== lastQueueStatus) {
-            controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
-            lastQueueStatus = queueDataStr
+            try {
+              if (!controller.desiredSize === null) {
+                controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
+                lastQueueStatus = queueDataStr
+              }
+            } catch (controllerError) {
+              console.error('[SSE] Controller already closed:', controllerError)
+              return // Exit the callback
+            }
           }
         } catch (error) {
           console.error('[SSE] Error sending queue status:', error)

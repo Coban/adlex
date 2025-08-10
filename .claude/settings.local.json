@@ -23,7 +23,10 @@
       "mcp__ide__*",
       "Bash(npm run lint:*)",
       "Bash(npm run type-check:*)",
-      "Bash(npm run check:*)"
+      "Bash(npm run check:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run supabase:reset:*)",
+      "Bash(npm run seed:*)"
     ],
     "deny": []
   }

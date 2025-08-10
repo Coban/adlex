@@ -27,9 +27,9 @@ test.describe('Mobile Responsiveness', () => {
       await menuToggle.click()
       await expect(mobileMenu).toBeVisible()
       
-      // Menu items should be visible
-      await expect(page.locator('[data-testid="nav-checker"]')).toBeVisible()
-      await expect(page.locator('[data-testid="nav-history"]')).toBeVisible()
+      // Menu items should be visible (check in mobile menu specifically)
+      await expect(page.locator('[data-testid="mobile-menu"] [data-testid="nav-checker"]')).toBeVisible()
+      await expect(page.locator('[data-testid="mobile-menu"] [data-testid="nav-history"]')).toBeVisible()
       
       // Close menu by clicking toggle again
       await menuToggle.click()

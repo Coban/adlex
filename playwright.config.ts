@@ -86,6 +86,7 @@ export default defineConfig({
       use: { 
         ...devices["Pixel 5"],
         storageState: 'playwright/.auth/user.json',
+        hasTouch: true,
       },
       dependencies: ['setup'],
     },
@@ -94,6 +95,7 @@ export default defineConfig({
       use: { 
         ...devices["iPhone 12"],
         storageState: 'playwright/.auth/user.json',
+        hasTouch: true,
       },
       dependencies: ['setup'],
     },
@@ -112,14 +114,15 @@ export default defineConfig({
   webServer: {
     command: "npm run dev",
     url: "http://localhost:3001",
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 120 * 1000,
     // E2EテストではMSWを無効化し、実際のSupabaseローカル環境を使用
     env: {
       NODE_ENV: 'test',
       OPENAI_API_KEY: 'mock',
       USE_LM_STUDIO: 'false',
-      SKIP_AUTH: 'true',
+      // SKIP_AUTH: 'true',           // 実際の認証フローをテストするため削除
+      // NEXT_PUBLIC_SKIP_AUTH: 'true', // 実際の認証フローをテストするため削除
     },
   },
 });

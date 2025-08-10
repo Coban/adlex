@@ -1,8 +1,8 @@
-import { test as setup, expect } from '@playwright/test';
+import { test as setup, expect, Page } from '@playwright/test';
 
 const authFile = 'playwright/.auth/user.json';
 
-async function checkAuthentication(page: any) {
+async function checkAuthentication(page: Page) {
   // Try to find the sign out button in desktop view first
   try {
     await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 3000 });

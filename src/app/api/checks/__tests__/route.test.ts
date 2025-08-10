@@ -25,7 +25,7 @@ vi.mock('@/lib/ai-client', () => ({
   isUsingLMStudio: vi.fn(() => false)
 }))
 
-import { createChatCompletion, createEmbedding } from '@/lib/ai-client'
+import { createChatCompletion, createEmbedding } from '../../../../lib/ai-client'
 
 // Set up AI client mocks with proper return values
 vi.mocked(createChatCompletion).mockResolvedValue({

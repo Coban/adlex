@@ -92,7 +92,15 @@ export async function GET(
               clearInterval(heartbeatInterval)
               return
             }
-            controller.enqueue(new TextEncoder().encode(`: heartbeat-${heartbeatCount}\\n\\n`))
+            // Check if controller is still open before enqueueing
+            try {
+              if (!controller.desiredSize === null) {
+                controller.enqueue(new TextEncoder().encode(`: heartbeat-${heartbeatCount}\\n\\n`))
+              }
+            } catch (controllerError) {
+              console.error(`[SSE] Controller already closed for heartbeat ${heartbeatCount}:`, controllerError)
+              clearInterval(heartbeatInterval)
+            }
           } catch (error) {
             console.error(`[SSE] Heartbeat error for check ${checkId}:`, error)
             clearInterval(heartbeatInterval)

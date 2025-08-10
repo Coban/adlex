@@ -92,6 +92,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return
     
+    // In E2E (NEXT_PUBLIC_SKIP_AUTH), provide a mock authenticated session
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+      const mockUser = {
+        id: '00000000-0000-0000-0000-000000000001',
+        email: 'admin@test.com'
+      } as unknown as User
+      const mockProfile = {
+        id: mockUser.id,
+        email: mockUser.email,
+        role: 'admin',
+        organization_id: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as unknown as UserProfile
+      const mockOrg = {
+        id: 1,
+        name: 'Test Org',
+        plan: 'free',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        max_checks: 1000,
+        used_checks: 0,
+      } as unknown as Organization
+
+      setUser(mockUser)
+      setUserProfile(mockProfile)
+      setOrganization(mockOrg)
+      setLoading(false)
+      return () => {}
+    }
+
     let isMounted = true
     
     // Get initial session
@@ -180,6 +211,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, fetchUserProfile, mounted])
 
   const signOut = async () => {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true') {
+      setUser(null)
+      setUserProfile(null)
+      setOrganization(null)
+      return
+    }
     // Try server-side signout first, but never abort the flow on failure
     try {
       const res = await fetch('/api/auth/signout', { method: 'POST' })

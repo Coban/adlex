@@ -63,6 +63,54 @@ function sanitizePlainText(text: string | null | undefined): string {
   return trimmed
 }
 
+/**
+ * モック用のテキスト修正を生成
+ */
+function generateMockModifiedText(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]): string {
+  const userMessage = messages.find(m => m.role === 'user')
+  const content = typeof userMessage?.content === 'string' ? userMessage.content : ''
+  
+  // 薬機法違反の可能性がある語句を安全な表現に置換
+  return content
+    .replace(/がん.*?(治る|治療|効く|効果)/g, '健康維持をサポート')
+    .replace(/血圧.*?(下がる|降下|下げる)/g, '血圧の健康維持をサポート')
+    .replace(/糖尿病.*?(治る|治療|改善)/g, '健康的な生活をサポート')
+    .replace(/ダイエット.*?(痩せる|減量|効果)/g, '健康的な体型維持をサポート')
+    || '健康維持にお役立ていただけます。'
+}
+
+/**
+ * モック用の違反情報を生成
+ */
+function generateMockViolations(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]): Array<{ start: number; end: number; reason: string; dictionaryId?: number }> {
+  const userMessage = messages.find(m => m.role === 'user')
+  const content = typeof userMessage?.content === 'string' ? userMessage.content : ''
+  
+  const violations: Array<{ start: number; end: number; reason: string; dictionaryId?: number }> = []
+  
+  // 薬機法違反パターンをチェック
+  const patterns = [
+    { regex: /がん.*?(治る|治療|効く|効果)/g, reason: '医薬品的効能効果表現: がん治療効果の標榜は薬機法違反です', dictionaryId: 1 },
+    { regex: /血圧.*?(下がる|降下|下げる)/g, reason: '医薬品的効能効果表現: 血圧降下効果は医薬品的効果に該当します', dictionaryId: 3 },
+    { regex: /糖尿病.*?(治る|治療|改善)/g, reason: '医薬品的効能効果表現: 糖尿病治療効果は医薬品的効果です', dictionaryId: 2 },
+    { regex: /必ず.*?(痩せる|効く|治る)/g, reason: '断定的表現: 「必ず」などの断定的表現は薬機法で禁止されています', dictionaryId: 4 }
+  ]
+  
+  patterns.forEach(pattern => {
+    let match
+    while ((match = pattern.regex.exec(content)) !== null) {
+      violations.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        reason: pattern.reason,
+        dictionaryId: pattern.dictionaryId
+      })
+    }
+  })
+  
+  return violations
+}
+
 // Utility function to create chat completion
 /**
  * AIクライアントを使用してチャット完了を作成する
@@ -92,30 +140,13 @@ export async function createChatCompletion(params: {
           message: {
             role: 'assistant' as const,
             content: null,
-            tool_calls: [{
-              id: 'call_mock',
-              type: 'function' as const,
-              function: {
-                name: 'apply_yakukiho_rules',
-                arguments: JSON.stringify({
-                  modified: "このサプリメントは健康維持にお役立ていただけます。血圧の健康維持をサポートします。",
-                  violations: [
-                    {
-                      start: 0,
-                      end: 4,
-                      reason: "医薬品的効能効果表現: がん治療効果の標榜は薬機法違反です",
-                      dictionaryId: 1
-                    },
-                    {
-                      start: 28,
-                      end: 35,
-                      reason: "医薬品的効能効果表現: 血圧降下効果は医薬品的効果に該当します",
-                      dictionaryId: 3
-                    }
-                  ]
-                })
-              }
-            }]
+            function_call: {
+              name: 'apply_yakukiho_rules',
+              arguments: JSON.stringify({
+                modified: generateMockModifiedText(params.messages),
+                violations: generateMockViolations(params.messages)
+              })
+            }
           },
           finish_reason: 'tool_calls' as const
         }],
@@ -379,8 +410,8 @@ export function estimateOcrConfidence(text: string): number {
 export async function createEmbedding(input: string): Promise<number[]> {
   // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
-    // Generate mock embedding for testing
-    const mockEmbedding = new Array(384).fill(0).map(() => Math.random() - 0.5)
+    // Generate mock embedding for testing - 1536 dimensions to match OpenAI text-embedding-3-small
+    const mockEmbedding = new Array(1536).fill(0).map(() => Math.random() - 0.5)
     return mockEmbedding
   }
 
