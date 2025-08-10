@@ -136,8 +136,14 @@ AI_API_KEY=your-api-key              # API key for the selected provider
 AI_CHAT_MODEL=gpt-4o                 # Chat model name
 AI_EMBEDDING_MODEL=text-embedding-3-small  # Embedding model name
 
-# LM Studio specific settings (when AI_PROVIDER=lmstudio)
+# Embedding provider selection (when AI_PROVIDER=openrouter)
+AI_EMBEDDING_PROVIDER=openai  # openai | lmstudio | auto
+
+# LM Studio specific settings (when AI_PROVIDER=lmstudio or AI_EMBEDDING_PROVIDER=lmstudio)
 LM_STUDIO_BASE_URL=http://localhost:1234/v1
+
+# Provider-specific API keys (when needed for embeddings)
+# OPENAI_API_KEY=your-openai-key  # Required when AI_EMBEDDING_PROVIDER=openai
 
 # Legacy environment variables (backward compatibility - deprecated)
 # OPENAI_API_KEY=your-openai-key       # Use AI_API_KEY with AI_PROVIDER=openai instead
@@ -159,6 +165,35 @@ Provider selection logic in `src/lib/ai-client.ts`:
 - Uses `AI_PROVIDER` environment variable
 - Falls back to provider-specific legacy environment variables
 - Defaults to `openai` in production, `lmstudio` in development
+
+### Embedding Provider Selection (OpenRouter)
+Since OpenRouter does not support embeddings API, when using `AI_PROVIDER=openrouter`, you can choose the embedding provider:
+
+- **`AI_EMBEDDING_PROVIDER=openai`**: Use OpenAI embeddings ($0.02/1M tokens)
+- **`AI_EMBEDDING_PROVIDER=lmstudio`**: Use local LM Studio embeddings (free, offline)
+- **`AI_EMBEDDING_PROVIDER=auto`**: Try OpenAI first, fallback to LM Studio if failed
+
+**Configuration Examples:**
+```bash
+# Cost-effective: OpenRouter chat + OpenAI embeddings
+AI_PROVIDER=openrouter
+AI_EMBEDDING_PROVIDER=openai
+AI_API_KEY=sk-or-v1-xxxxx
+OPENAI_API_KEY=sk-xxxxx
+
+# Fully offline: OpenRouter chat + LM Studio embeddings
+AI_PROVIDER=openrouter
+AI_EMBEDDING_PROVIDER=lmstudio
+AI_API_KEY=sk-or-v1-xxxxx
+LM_STUDIO_BASE_URL=http://localhost:1234/v1
+
+# Reliable: Auto-fallback from OpenAI to LM Studio
+AI_PROVIDER=openrouter
+AI_EMBEDDING_PROVIDER=auto
+AI_API_KEY=sk-or-v1-xxxxx
+OPENAI_API_KEY=sk-xxxxx
+LM_STUDIO_BASE_URL=http://localhost:1234/v1
+```
 
 
 
