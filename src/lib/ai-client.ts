@@ -598,27 +598,25 @@ export async function createChatCompletionForCheck(text: string, relevantEntries
   modified: string
 }> {
 
+  // 辞書情報の表示方法を簡潔化
+  const dictionaryReference = relevantEntries.length > 0
+    ? `参考: ${relevantEntries.slice(0, 3).map(e => e.phrase).join(', ')}`
+    : ''
+
+  // 長い文章用の軽量プロンプト
   const messages = [
     {
       role: 'system' as const,
-      content: `あなたは薬機法コンプライアンスの専門家です。与えられた広告テキストを分析し、薬機法違反の可能性がある表現を特定して修正してください。
+      content: `薬機法専門家として違反表現を検出・修正してください。
 
-以下の辞書項目を参考に、テキスト内の違反箇所を特定し、適切な表現に修正してください：
+${dictionaryReference}
 
-辞書項目:
-${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similarity ?? 0).toFixed(2)})`).join('\n')}
+違反パターン: 効能効果標榜、医療効果、身体機能言及、疾病治療予防、医師推奨装い
 
-分析結果は以下のJSON形式で返してください：
+JSON形式:
 {
-  "modified": "修正されたテキスト",
-  "violations": [
-    {
-      "start_pos": 開始位置,
-      "end_pos": 終了位置,
-      "reason": "違反理由",
-      "dictionary_id": 辞書項目ID（該当する場合）
-    }
-  ]
+  "modified": "修正テキスト",
+  "violations": [{"start_pos": 0, "end_pos": 3, "reason": "理由", "dictionary_id": null}]
 }`
     },
     {
@@ -632,8 +630,7 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
     const response = await createChatCompletion({
       messages,
       temperature: 0.1,
-      max_tokens: 2000,
-      timeout: 40000 // 40秒タイムアウト設定
+      max_tokens: 2000 // 長い文章に対応
     })
 
     const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
@@ -641,14 +638,39 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
       throw new Error('LM Studio did not return content')
     }
 
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
+    // Extract JSON from response with improved parsing
+    console.log('LM Studio raw response:', content.substring(0, 500) + '...')
+    
+    // Try multiple JSON extraction patterns
+    let jsonStr = null
+    
+    // Pattern 1: JSON within markdown code blocks
+    let jsonMatch = content.match(/```json([^`]+)```/)
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim()
+    } else {
+      // Pattern 2: Look for complete JSON object at end
+      jsonMatch = content.match(/\{[^}]*\}$/m)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+      } else {
+        // Pattern 3: Look for any JSON-like structure
+        jsonMatch = content.match(/\{[^}]*\}/m)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+        }
+      }
+    }
+    
+    if (!jsonStr) {
+      console.error('No JSON pattern found in LM Studio response:', content)
       throw new Error('No JSON found in LM Studio response')
     }
+    
+    console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...')
 
     try {
-      const parsed = JSON.parse(jsonMatch[0])
+      const parsed = JSON.parse(jsonStr)
       
       if (!parsed.modified || typeof parsed.modified !== 'string') {
         throw new Error('Invalid modified field in response')
@@ -664,6 +686,8 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
         modified: parsed.modified
       }
     } catch (error) {
+      console.error('JSON parsing failed:', error)
+      console.error('Original JSON string:', jsonStr)
       throw new Error(`Failed to parse LM Studio JSON response: ${error}`)
     }
   } else {
@@ -705,8 +729,7 @@ ${relevantEntries.map(entry => `- "${entry.phrase}" (類似度: ${(entry.similar
       tools,
       tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
       temperature: 0.1,
-      max_tokens: 2000,
-      timeout: 40000 // 40秒タイムアウト設定
+      max_tokens: 2000 // 長い文章に対応
     })
 
     return {

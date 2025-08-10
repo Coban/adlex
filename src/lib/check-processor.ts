@@ -108,8 +108,8 @@ export async function processCheck(
   console.log(`[CHECK] Starting processCheck for check ${checkId} (type: ${inputType}, textLength: ${text.length})`)
   const supabase = await createClient()
   
-  // タイムアウト保護設定（画像処理: 60秒、テキスト処理: 45秒）- AI API遅延に対応
-  const timeoutMs = inputType === 'image' ? 60000 : 45000
+  // タイムアウト保護設定（画像処理: 120秒、テキスト処理: 120秒）- AI API遅延に対応
+  const timeoutMs = inputType === 'image' ? 120000 : 120000
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
       reject(new Error(`処理がタイムアウトしました（${timeoutMs / 1000}秒）`))
@@ -289,6 +289,9 @@ async function performActualCheck(
   // 処理済みテキストを使用して通常のテキスト処理を継続
   console.log(`[CHECK] Starting text analysis for check ${checkId} with text: "${processedText.substring(0, 50)}..."`)
 
+  // 辞書から参考情報を取得（必須ではない）
+  let referenceEntries: Array<{ id: number; phrase: string; category: string; similarity?: number }> = []
+  
   // 組織+テキストハッシュごとの類似フレーズキャッシュキー
   const textHash = CacheUtils.hashText(processedText)
   const similarKey = CacheUtils.similarPhrasesKey(organizationId, textHash)
@@ -319,104 +322,98 @@ async function performActualCheck(
         cache.set(embeddingKey, embedding, 15 * 60 * 1000) // 15分TTL（長い文章用に延長）
       } catch (embeddingError) {
         console.error(`[CHECK] Failed to create embedding for check ${checkId}:`, embeddingError)
-        throw new Error(`Failed to create embedding: ${embeddingError}`)
+        // 埋め込み生成に失敗しても処理は継続（辞書なしでLLM分析）
+        console.log(`[CHECK] Continuing without dictionary reference for check ${checkId}`)
       }
     } else {
       console.log(`[CHECK] Using cached embedding for check ${checkId}`)
     }
 
-    // 長い文章用の最適化された類似フレーズ検索
-    console.log(`[CHECK] Starting similarity search for check ${checkId} (text length: ${processedText.length})`)
-    const searchStartTime = Date.now()
-    
-    // 長い文章の場合は検索パラメータを調整してパフォーマンス向上
-    const isLongText = processedText.length > 500
-    const searchText = isLongText ? processedText.substring(0, 500) + '...' : processedText
-    const maxResults = isLongText ? 30 : 50 // 長い文章は結果数を制限
-    const vectorThreshold = isLongText ? 0.7 : 0.75 // 長い文章は閾値を下げて高速化
-    
-    const { data, error: combinedError } = await (supabase as unknown as {
-      rpc: (
-        fn: 'get_combined_similar_phrases',
-        args: {
-          input_text: string
-          org_id: number
-          trgm_threshold: number
-          vector_threshold: number
-          query_embedding: string
-          max_results: number
+    // 埋め込みが利用可能な場合のみ辞書検索を実行
+    if (embedding) {
+      // 長い文章用の最適化された類似フレーズ検索
+      console.log(`[CHECK] Starting similarity search for check ${checkId} (text length: ${processedText.length})`)
+      const searchStartTime = Date.now()
+      
+      // 長い文章の場合は検索パラメータを調整してパフォーマンス向上
+      const isLongText = processedText.length > 500
+      const searchText = isLongText ? processedText.substring(0, 500) + '...' : processedText
+      const maxResults = isLongText ? 30 : 50 // 長い文章は結果数を制限
+      const vectorThreshold = isLongText ? 0.7 : 0.75 // 長い文章は閾値を下げて高速化
+      
+      const { data, error: combinedError } = await (supabase as unknown as {
+        rpc: (
+          fn: 'get_combined_similar_phrases',
+          args: {
+            input_text: string
+            org_id: number
+            trgm_threshold: number
+            vector_threshold: number
+            query_embedding: string
+            max_results: number
+          }
+        ) => Promise<{ data: CombinedPhrase[]; error: { message: string } | null }>
+      }).rpc(
+        'get_combined_similar_phrases',
+        { 
+          input_text: searchText,
+          org_id: organizationId,
+          trgm_threshold: 0.3,
+          vector_threshold: vectorThreshold,
+          query_embedding: JSON.stringify(embedding),
+          max_results: maxResults
         }
-      ) => Promise<{ data: CombinedPhrase[]; error: { message: string } | null }>
-    }).rpc(
-      'get_combined_similar_phrases',
-      { 
-        input_text: searchText,
-        org_id: organizationId,
-        trgm_threshold: 0.3,
-        vector_threshold: vectorThreshold,
-        query_embedding: JSON.stringify(embedding),
-        max_results: maxResults
+      )
+      
+      const searchTime = Date.now() - searchStartTime
+      console.log(`[CHECK] Similarity search completed for check ${checkId} in ${searchTime}ms`)
+
+      if (combinedError) {
+        console.error(`[CHECK] Error getting combined similar phrases for check ${checkId}:`, combinedError)
+        console.log(`[CHECK] Continuing without dictionary reference for check ${checkId}`)
+      } else {
+        combinedPhrases = Array.isArray(data) ? data : []
+        // 類似フレーズを5分キャッシュ（同一テキストの再チェック高速化）
+        cache.set(similarKey, combinedPhrases, 5 * 60 * 1000)
       }
-    )
-    
-    const searchTime = Date.now() - searchStartTime
-    console.log(`[CHECK] Similarity search completed for check ${checkId} in ${searchTime}ms`)
-
-    if (combinedError) {
-      console.error(`[CHECK] Error getting combined similar phrases for check ${checkId}:`, combinedError)
-      throw new Error(`Failed to get combined similar phrases: ${combinedError.message}`)
     }
+  }
 
-    combinedPhrases = Array.isArray(data) ? data : []
-    // 類似フレーズを5分キャッシュ（同一テキストの再チェック高速化）
-    cache.set(similarKey, combinedPhrases, 5 * 60 * 1000)
+  // 辞書から参考情報を抽出（NGエントリーのみ）
+  if (combinedPhrases && combinedPhrases.length > 0) {
+    referenceEntries = combinedPhrases
+      .filter(entry => entry.category === 'NG')
+      .map(entry => ({
+        id: entry.id,
+        phrase: entry.phrase,
+        category: entry.category,
+        similarity: entry.combined_score // 関連性には統合スコアを使用
+      }))
+      .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+
+    // AIに渡すエントリー数を制限してトークン使用量と応答時間を削減
+    const MAX_REFERENCE_ENTRIES = 20
+    referenceEntries = referenceEntries.slice(0, MAX_REFERENCE_ENTRIES)
+    
+    console.log(`[CHECK] Found ${referenceEntries.length} reference dictionary entries for check ${checkId}`)
   } else {
-    // Using cached similar phrases
+    console.log(`[CHECK] No dictionary reference found for check ${checkId}, proceeding with LLM-only analysis`)
   }
 
-  if (!combinedPhrases || combinedPhrases.length === 0) {
-    // No similar phrases found - completing with no violations
-    await completeCheck(checkId, processedText, [], supabase)
-    return
-  }
+  console.log(`[CHECK] Starting AI analysis for check ${checkId} with ${referenceEntries.length} reference entries`)
 
-  // Found similar phrases for analysis
-
-  // NGエントリーをフィルターして内部形式に変換
-  const relevantEntries = combinedPhrases
-    .filter(entry => entry.category === 'NG')
-    .map(entry => ({
-      id: entry.id,
-      phrase: entry.phrase,
-      category: entry.category,
-      similarity: entry.combined_score // 関連性には統合スコアを使用
-    }))
-    .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
-
-  if (relevantEntries.length === 0) {
-    // No relevant NG phrases found - completing with no violations
-    await completeCheck(checkId, processedText, [], supabase)
-    return
-  }
-
-  // AIに渡すエントリー数を制限してトークン使用量と応答時間を削減
-  const MAX_AI_ENTRIES = 30
-  const limitedEntries = relevantEntries.slice(0, MAX_AI_ENTRIES)
-
-  console.log(`[CHECK] Starting AI analysis for check ${checkId} with ${limitedEntries.length} entries`)
-
-  // AIを使用して分析し違反を生成
+  // LLMを使用して薬機法違反を分析（辞書は参考情報として使用）
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
-      console.log(`[CHECK] Calling createChatCompletionForCheck for check ${checkId}`)
-      const result = await retryAiRequest(
-        () => createChatCompletionForCheck(processedText, limitedEntries),
-        checkId,
-        2, // 最大2回リトライ
-        1500 // 1.5秒から開始
-      )
-      console.log(`[CHECK] AI analysis completed for check ${checkId}`)
+    console.log(`[CHECK] Calling createChatCompletionForCheck for check ${checkId}`)
+    const result = await retryAiRequest(
+      () => createChatCompletionForCheck(processedText, referenceEntries),
+      checkId,
+      2, // 最大2回リトライ
+      1500 // 1.5秒から開始
+    )
+    console.log(`[CHECK] AI analysis completed for check ${checkId}`)
       
     let violations: ViolationData[]
     let modifiedText: string
@@ -445,7 +442,7 @@ async function performActualCheck(
       modifiedText = result.modified
     }
 
-      await completeCheck(checkId, modifiedText, violations, supabase)
+    await completeCheck(checkId, modifiedText, violations, supabase)
       
   } catch (aiError) {
     console.error(`[CHECK] AI processing failed for check ${checkId}:`, aiError)
