@@ -16,7 +16,7 @@ export default function Home() {
           </div>
         ) : user ? (
           <div className="text-center py-8">
-            <h1 className="text-2xl font-bold mb-4">ようこそ、{user?.email || 'ユーザー'}さん</h1>
+            <h1 className="text-2xl font-bold mb-4">ようこそ、{user?.email ?? 'ユーザー'}さん</h1>
             <p className="text-gray-600 mb-6">
               薬機法チェック & リライト機能をご利用いただけます。
             </p>
