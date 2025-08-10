@@ -11,7 +11,7 @@ AdLex is a SaaS application for pharmaceutical law (薬機法) compliance checki
 - **Backend**: Next.js API Routes, Server-Sent Events (SSE)
 - **Database**: Supabase PostgreSQL with pgvector extension
 - **Authentication**: Supabase Auth
-- **AI**: OpenAI GPT-4o (production), LM Studio (local development)
+- **AI**: Multi-provider support (OpenAI, OpenRouter, LM Studio) with unified configuration
 - **OCR**: Tesseract.js (MVP), Google Vision API (production)
 - **Testing**: Vitest (unit), Playwright (E2E), MSW (mocking)
 
@@ -89,6 +89,14 @@ npm run test:all
 
 ## Architecture
 
+### Background Processing System
+AdLex uses a sophisticated background processing system for handling AI analysis:
+
+- **Queue Management**: `CheckQueueManager` in `src/lib/queue-manager.ts` handles concurrent processing
+- **Check Processing**: `src/lib/check-processor.ts` orchestrates the full AI analysis pipeline
+- **Real-time Updates**: Server-Sent Events provide live progress updates to the UI
+- **Embedding Pipeline**: `src/lib/embedding-queue.ts` manages vector embedding generation for dictionary entries
+
 ### Core Processing Flow
 
 #### Text Check Processing
@@ -101,65 +109,58 @@ npm run test:all
 4. **Real-time Updates**: `/api/checks/[id]/stream` provides SSE updates
 5. **Results Display**: Violations highlighted with modification suggestions
 
-#### Image Check Processing
-1. **Image Upload**: User uploads image through `ImageChecker` component
-2. **OCR Processing**: `/api/ocr` processes image and extracts text using Tesseract.js or Vision API
-3. **Text Extraction**: Extracted text displayed in editable format
-4. **Text Check**: Extracted text processed through normal text checking flow
-5. **Results Display**: Same violation highlighting with image context
+
 
 ### Key Components
 - `src/components/TextChecker.tsx`: Main UI for text input/analysis
-- `src/components/ImageChecker.tsx`: Main UI for image upload/OCR processing (planned)
-- `src/lib/ai-client.ts`: AI service abstraction (OpenAI/LM Studio)
-- `src/lib/ocr-client.ts`: OCR service abstraction (Tesseract.js/Vision API) (planned)
+- `src/lib/ai-client.ts`: Multi-provider AI service abstraction
+- `src/lib/check-processor.ts`: Core AI analysis pipeline orchestration
+- `src/lib/queue-manager.ts`: Background processing queue management
 - `src/app/api/checks/route.ts`: Main check processing API
-- `src/app/api/ocr/route.ts`: Image upload and OCR processing API (planned)
 - `src/app/api/checks/[id]/stream/route.ts`: SSE streaming endpoint
 
 ### Database Schema
 - `organizations`: Company/group data with usage limits
 - `users`: User accounts with role-based access
 - `dictionaries`: NG/ALLOW phrase dictionary with vector embeddings
-- `checks`: Text/image analysis records with OCR support
-  - `input_type`: 'text' or 'image'
-  - `extracted_text`: OCR extracted text (for images)
-  - `image_url`: Uploaded image URL
-  - `ocr_status`: OCR processing status
-  - `ocr_metadata`: OCR processing details
-- `violations`: Specific violation details
+- `checks`: Text analysis records and processing status
+- `violations`: Specific violation details with position and reasoning
 
 ## AI Configuration
 
 ### Environment Variables
 ```bash
-# OpenAI (production)
-OPENAI_API_KEY=your-key-here
+# AI Configuration (Unified)
+AI_PROVIDER=openai                    # openai | openrouter | lmstudio
+AI_API_KEY=your-api-key              # API key for the selected provider
+AI_CHAT_MODEL=gpt-4o                 # Chat model name
+AI_EMBEDDING_MODEL=text-embedding-3-small  # Embedding model name
 
-# LM Studio (local development)
-USE_LM_STUDIO=true
+# LM Studio specific settings (when AI_PROVIDER=lmstudio)
 LM_STUDIO_BASE_URL=http://localhost:1234/v1
-LM_STUDIO_API_KEY=lm-studio
-LM_STUDIO_CHAT_MODEL=openai/gpt-oss-20b
-LM_STUDIO_EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
 
-# OCR Configuration
-USE_TESSERACT=true                    # Use Tesseract.js for OCR (MVP)
-GOOGLE_VISION_API_KEY=your-key-here  # Google Vision API (production)
-GOOGLE_VISION_PROJECT_ID=your-project-id
+# Legacy environment variables (backward compatibility - deprecated)
+# OPENAI_API_KEY=your-openai-key       # Use AI_API_KEY with AI_PROVIDER=openai instead
+# OPENROUTER_API_KEY=your-openrouter-key # Use AI_API_KEY with AI_PROVIDER=openrouter instead
+# LM_STUDIO_CHAT_MODEL=model-name      # Use AI_CHAT_MODEL instead  
+# LM_STUDIO_EMBEDDING_MODEL=model-name # Use AI_EMBEDDING_MODEL instead
+
+
 ```
 
 ### AI Client Usage
-The system automatically selects the appropriate AI client:
-- Production: OpenAI with function calling
-- Local development: LM Studio with JSON parsing
-- Testing: Mock responses
+The system automatically selects the appropriate AI client based on `AI_PROVIDER`:
+- **OpenAI**: Function calling with GPT models (production default)
+- **OpenRouter**: Access to various models through unified API
+- **LM Studio**: Local development with JSON parsing fallback
+- **Mock**: Automated testing with predictable responses
 
-### OCR Client Usage
-The system automatically selects the appropriate OCR client:
-- MVP: Tesseract.js (client-side processing)
-- Production: Google Vision API (server-side processing)
-- Testing: Mock OCR responses
+Provider selection logic in `src/lib/ai-client.ts`:
+- Uses `AI_PROVIDER` environment variable
+- Falls back to provider-specific legacy environment variables
+- Defaults to `openai` in production, `lmstudio` in development
+
+
 
 ## Testing Setup
 
@@ -196,15 +197,12 @@ Use `npm run seed` to create test accounts:
 
 ### AI Integration
 - Use `createChatCompletion()` and `createEmbedding()` from `@/lib/ai-client`
-- Handle both OpenAI and LM Studio responses
-- Implement proper error handling for AI failures
+- Support for multiple AI providers through unified interface
+- Provider-specific error handling with clear error messages
+- Function calling for OpenAI/OpenRouter, JSON parsing fallback for LM Studio
+- Automatic model validation and configuration suggestions
 
-### OCR Integration
-- Use `extractText()` from `@/lib/ocr-client` for text extraction
-- Handle both Tesseract.js and Google Vision API responses
-- Implement proper error handling for OCR failures
-- Support image preprocessing (resize, rotate, enhance)
-- Handle multiple image formats (JPEG, PNG, WebP, PDF)
+
 
 ### Real-time Updates
 - Use Server-Sent Events for progress updates
@@ -216,10 +214,10 @@ Use `npm run seed` to create test accounts:
 - Always run `npm run check` before committing
 - Use `npm run seed` to reset test data
 - E2E tests require local Supabase instance
-- LM Studio requires manual model loading
-- Vector embeddings are automatically generated for dictionary entries
+- LM Studio requires manual model loading for local development
+- Vector embeddings are automatically generated for dictionary entries using pgvector
 - Database schema is managed through Supabase migrations
-- Image files are temporarily stored in Supabase Storage (auto-deleted after 1 hour)
-- OCR processing may take 5-30 seconds depending on image complexity
-- Supported image formats: JPEG, PNG, WebP, PDF (max 10MB)
-- For image checks, the same usage limits apply as text checks
+
+- AI provider can be switched without code changes using environment variables
+- Background processing uses queue system to handle concurrent checks efficiently
+- Real-time progress updates are delivered via Server-Sent Events

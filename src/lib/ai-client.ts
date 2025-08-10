@@ -4,48 +4,112 @@ import OpenAI from 'openai'
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
 // モックはテスト時のみ有効
-const hasValidOpenAIKey = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here')
+const aiProvider = process.env.AI_PROVIDER ?? (isProduction ? 'openai' : 'lmstudio')
+const hasValidApiKey = Boolean(process.env.AI_API_KEY && process.env.AI_API_KEY !== 'your-api-key')
+
+// Backward compatibility with old environment variables
+const legacyOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here'
+const legacyOpenRouterKey = process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your-openrouter-api-key'
 
 // AI client configuration
-// Local development → LM Studio, Production → OpenAI, Test → Mock
-const USE_LM_STUDIO = !isProduction && !isTest
 const USE_MOCK = isTest
+const USE_LM_STUDIO = !USE_MOCK && aiProvider === 'lmstudio'
+const USE_OPENROUTER = !USE_MOCK && aiProvider === 'openrouter'
+const USE_OPENAI = !USE_MOCK && aiProvider === 'openai'
 
-// AI Client Configuration - initialized based on environment
+// Get API key based on provider (with backward compatibility)
+function getApiKey(): string | null {
+  if (process.env.AI_API_KEY && process.env.AI_API_KEY !== 'your-api-key') {
+    return process.env.AI_API_KEY
+  }
+  // Backward compatibility
+  if (aiProvider === 'openai' && legacyOpenAIKey) {
+    return process.env.OPENAI_API_KEY!
+  }
+  if (aiProvider === 'openrouter' && legacyOpenRouterKey) {
+    return process.env.OPENROUTER_API_KEY!
+  }
+  if (aiProvider === 'lmstudio') {
+    return process.env.LM_STUDIO_API_KEY ?? 'lm-studio'
+  }
+  return null
+}
 
-// OpenAI client (for production)
-const openaiClient = hasValidOpenAIKey ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+// AI Client Configuration - initialized based on provider
+const apiKey = getApiKey()
+
+// OpenAI client
+const openaiClient = (USE_OPENAI && apiKey) ? new OpenAI({
+  apiKey: apiKey,
 }) : null
 
-// LM Studio client (for local development)
-const lmStudioClient = new OpenAI({
+// OpenRouter client
+const openRouterClient = (USE_OPENROUTER && apiKey) ? new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: apiKey,
+  defaultHeaders: {
+    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+    'X-Title': 'AdLex - 薬機法チェックツール',
+  },
+}) : null
+
+// LM Studio client
+const lmStudioClient = USE_LM_STUDIO ? new OpenAI({
   baseURL: process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234/v1',
-  apiKey: process.env.LM_STUDIO_API_KEY ?? 'lm-studio',
-})
+  apiKey: apiKey ?? 'lm-studio',
+}) : null
 
 // Select the appropriate client
-export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
+export const aiClient = USE_LM_STUDIO ? lmStudioClient : USE_OPENROUTER ? openRouterClient : openaiClient
 
 // Model configurations with validation
 const getChatModel = () => {
-  if (!USE_LM_STUDIO) return 'gpt-4o'
-  
-  const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? 'openai/gpt-oss-20b'
-  
-  // Prevent using embedding models for chat
-  if (chatModel.includes('embedding') || chatModel.includes('embed')) {
-    console.warn(`Warning: Chat model "${chatModel}" appears to be an embedding model. Using default chat model.`)
-    return 'openai/gpt-oss-20b'
+  // Use unified AI_CHAT_MODEL with fallback to provider-specific defaults
+  if (process.env.AI_CHAT_MODEL && process.env.AI_CHAT_MODEL !== 'gpt-4o') {
+    return process.env.AI_CHAT_MODEL
   }
   
-  return chatModel
+  // Backward compatibility
+  if (USE_OPENROUTER && process.env.OPENROUTER_CHAT_MODEL) {
+    return process.env.OPENROUTER_CHAT_MODEL
+  }
+  if (USE_LM_STUDIO && process.env.LM_STUDIO_CHAT_MODEL) {
+    return process.env.LM_STUDIO_CHAT_MODEL
+  }
+  
+  // Provider-specific defaults
+  if (USE_OPENROUTER) return 'openai/gpt-4o'
+  if (USE_LM_STUDIO) {
+    const defaultModel = 'openai/gpt-oss-20b'
+    // Prevent using embedding models for chat
+    const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? defaultModel
+    if (chatModel.includes('embedding') || chatModel.includes('embed')) {
+      console.warn(`Warning: Chat model "${chatModel}" appears to be an embedding model. Using default chat model.`)
+      return defaultModel
+    }
+    return chatModel
+  }
+  return 'gpt-4o' // OpenAI default
 }
 
 const getEmbeddingModel = () => {
-  if (!USE_LM_STUDIO) return 'text-embedding-3-small'
+  // Use unified AI_EMBEDDING_MODEL with fallback to provider-specific defaults
+  if (process.env.AI_EMBEDDING_MODEL && process.env.AI_EMBEDDING_MODEL !== 'text-embedding-3-small') {
+    return process.env.AI_EMBEDDING_MODEL
+  }
   
-  return process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5'
+  // Backward compatibility
+  if (USE_OPENROUTER && process.env.OPENROUTER_EMBEDDING_MODEL) {
+    return process.env.OPENROUTER_EMBEDDING_MODEL
+  }
+  if (USE_LM_STUDIO && process.env.LM_STUDIO_EMBEDDING_MODEL) {
+    return process.env.LM_STUDIO_EMBEDDING_MODEL
+  }
+  
+  // Provider-specific defaults
+  if (USE_OPENROUTER) return 'text-embedding-3-small'
+  if (USE_LM_STUDIO) return 'text-embedding-nomic-embed-text-v1.5'
+  return 'text-embedding-3-small' // OpenAI default
 }
 
 export const AI_MODELS = {
@@ -205,6 +269,36 @@ export async function createChatCompletion(params: {
   }
 
   try {
+    // OpenRouter用のパラメータ（OpenAIと同様の機能をサポート）
+    if (USE_OPENROUTER) {
+      const openRouterParams = {
+        model: AI_MODELS.chat,
+        messages: params.messages,
+        tools: params.tools,
+        tool_choice: params.tool_choice,
+        temperature: params.temperature ?? 0.7,
+        max_tokens: params.max_tokens,
+      }
+      
+      try {
+        const response = await aiClient!.chat.completions.create(openRouterParams)
+        return response
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message.includes('insufficient_quota') || error.message.includes('quota')) {
+            throw new Error('OpenRouter quota exceeded. Please check your OpenRouter account balance.')
+          }
+          if (error.message.includes('invalid_api_key') || error.message.includes('unauthorized')) {
+            throw new Error('OpenRouter API key is invalid. Please check your OPENROUTER_API_KEY environment variable.')
+          }
+          if (error.message.includes('model_not_found') || error.message.includes('not found')) {
+            throw new Error(`OpenRouter model "${AI_MODELS.chat}" not found. Please check your OPENROUTER_CHAT_MODEL setting.`)
+          }
+        }
+        throw new Error(`OpenRouter chat completion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
     // LM Studio用のパラメータ簡略化（サポートされていない機能を回避）
     if (USE_LM_STUDIO) {
       const lmParams = {
@@ -270,7 +364,7 @@ export async function createChatCompletion(params: {
         name: error.name,
         currentModel: AI_MODELS.chat,
         usingLMStudio: USE_LM_STUDIO,
-        hasValidOpenAIKey,
+        hasValidApiKey,
         aiClientAvailable: !!aiClient
       })
     }
@@ -303,6 +397,41 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     { type: 'text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
     { type: 'image_url', image_url: { url: imageUrl } }
   ]
+
+  // OpenRouterを使用する場合
+  if (USE_OPENROUTER) {
+    try {
+      const response: unknown = await createChatCompletion({
+        messages: [
+          { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
+          { role: 'user', content: userContent }
+        ],
+        temperature: 0,
+        max_tokens: 4000
+      })
+
+      const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
+      if (!content || typeof content !== 'string') {
+        throw new Error('OpenRouter did not return textual content for vision request')
+      }
+      return {
+        text: sanitizePlainText(content),
+        provider: 'openrouter' as 'openai',
+        model: AI_MODELS.chat
+      }
+    } catch (error) {
+      // OpenRouterでVision機能をサポートしていない場合の分かりやすいエラーメッセージ
+      if (error instanceof Error && (
+        error.message.includes('image') ||
+        error.message.toLowerCase().includes('vision') ||
+        error.message.includes('not supported') ||
+        error.message.includes('unsupported')
+      )) {
+        throw new Error('OpenRouterの現在のモデルは画像入力（Vision）をサポートしていません。Vision対応のモデル（gpt-4-vision-preview等）を選択してください。')
+      }
+      throw error
+    }
+  }
 
   // 開発環境でLM Studioが設定されている場合は最初に試行
   if (isUsingLMStudio()) {
@@ -425,6 +554,39 @@ export async function createEmbedding(input: string): Promise<number[]> {
   }
 
   try {
+    // OpenRouter用：OpenAI SDKを使用
+    if (USE_OPENROUTER) {
+      try {
+        const response = await aiClient!.embeddings.create({
+          model: AI_MODELS.embedding,
+          input,
+        })
+
+        if (!response.data || response.data.length === 0) {
+          throw new Error('No embedding data returned from OpenRouter API')
+        }
+        
+        if (!response.data[0]?.embedding) {
+          throw new Error('Embedding data is missing from OpenRouter response')
+        }
+        
+        return response.data[0].embedding
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message.includes('insufficient_quota') || error.message.includes('quota')) {
+            throw new Error('OpenRouter quota exceeded. Please check your OpenRouter account balance.')
+          }
+          if (error.message.includes('invalid_api_key') || error.message.includes('unauthorized')) {
+            throw new Error('OpenRouter API key is invalid. Please check your OPENROUTER_API_KEY environment variable.')
+          }
+          if (error.message.includes('model_not_found') || error.message.includes('not found')) {
+            throw new Error(`OpenRouter embedding model "${AI_MODELS.embedding}" not found. Please check your OPENROUTER_EMBEDDING_MODEL setting.`)
+          }
+        }
+        throw new Error(`OpenRouter embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
     // LM Studio用：OpenAI SDKのパース問題を回避するため直接fetchを使用
     if (USE_LM_STUDIO) {
       const controller = new AbortController()
@@ -511,6 +673,11 @@ export function isUsingLMStudio(): boolean {
   return USE_LM_STUDIO
 }
 
+// Utility function to check if we're using OpenRouter
+export function isUsingOpenRouter(): boolean {
+  return USE_OPENROUTER
+}
+
 // Additional utility functions for debugging and monitoring
 export function getCurrentAIModel(): string {
   return AI_MODELS.chat
@@ -518,15 +685,23 @@ export function getCurrentAIModel(): string {
 
 export function getAIClientInfo() {
   return {
+    aiProvider: aiProvider,
     isUsingLMStudio: USE_LM_STUDIO,
+    isUsingOpenRouter: USE_OPENROUTER,
+    isUsingOpenAI: USE_OPENAI,
     currentChatModel: AI_MODELS.chat,
     currentEmbeddingModel: AI_MODELS.embedding,
-    hasValidOpenAIKey,
+    hasValidApiKey: hasValidApiKey,
     clientAvailable: !!aiClient,
     environment: process.env.NODE_ENV,
     isMockMode: USE_MOCK,
-    lmStudioChatModelEnv: process.env.LM_STUDIO_CHAT_MODEL,
-    lmStudioEmbeddingModelEnv: process.env.LM_STUDIO_EMBEDDING_MODEL,
+    // New unified config
+    aiApiKey: process.env.AI_API_KEY ? '***' : undefined,
+    aiChatModel: process.env.AI_CHAT_MODEL,
+    aiEmbeddingModel: process.env.AI_EMBEDDING_MODEL,
+    // Backward compatibility info
+    legacyOpenAIKey: legacyOpenAIKey ? '***' : undefined,
+    legacyOpenRouterKey: legacyOpenRouterKey ? '***' : undefined,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL
   }
 }
@@ -625,7 +800,55 @@ JSON形式:
     }
   ]
 
-  if (USE_LM_STUDIO) {
+  if (USE_OPENROUTER) {
+    // OpenRouter mode - use function calling (same as OpenAI)
+    const tools = [{
+      type: 'function' as const,
+      function: {
+        name: 'apply_yakukiho_rules',
+        description: '薬機法ルールを適用してテキストを分析・修正する',
+        parameters: {
+          type: 'object',
+          properties: {
+            modified: {
+              type: 'string',
+              description: '薬機法に準拠するよう修正されたテキスト'
+            },
+            violations: {
+              type: 'array',
+              description: '検出された違反項目のリスト',
+              items: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number', description: '違反箇所の開始位置' },
+                  end: { type: 'number', description: '違反箇所の終了位置' },
+                  reason: { type: 'string', description: '違反理由' },
+                  dictionaryId: { type: 'number', description: '対応する辞書項目ID' }
+                },
+                required: ['start', 'end', 'reason']
+              }
+            }
+          },
+          required: ['modified', 'violations']
+        }
+      }
+    }]
+
+    const response = await createChatCompletion({
+      messages,
+      tools,
+      tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
+      temperature: 0.1,
+      max_tokens: 2000
+    })
+
+    return {
+      type: 'openrouter' as 'openai',
+      response: response as OpenAI.Chat.Completions.ChatCompletion,
+      violations: [], // Will be extracted by caller
+      modified: '' // Will be extracted by caller
+    }
+  } else if (USE_LM_STUDIO) {
     // LM Studio mode - parse JSON from content
     const response = await createChatCompletion({
       messages,
