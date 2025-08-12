@@ -1,13 +1,18 @@
-
-
-
 import { cache, CacheUtils } from '@/lib/cache'
 import { createClient } from '@/lib/supabase/server'
 import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**
- * チェック処理を完了し結果をデータベースに保存する
- * 違反データの挿入、チェックステータスの更新、組織使用量の増加を行う
+ * チェック処理を完了し結果をデータベースへ反映する。
+ *
+ * 処理内容:
+ * - `violations` があれば `violations` テーブルへ一括挿入
+ * - `checks` レコードを `completed` に更新し、`modified_text` と `completed_at` を記録
+ * - チェックに紐づく組織の使用量を `increment_organization_usage` で加算
+ *
+ * 失敗時の挙動:
+ * - 挿入/更新いずれかでエラーがあれば `Error` を投げ呼び出し側へ委譲
+ *
  * @param checkId チェックID
  * @param modifiedText 修正されたテキスト
  * @param violations 検出された違反データ
@@ -19,8 +24,6 @@ async function completeCheck(
   violations: ViolationData[],
   supabase: Awaited<ReturnType<typeof createClient>>
 ) {
-  // Completing check process
-
   // 違反データを挿入
   if (violations.length > 0) {
       const violationRows = violations.map(violation => ({
@@ -37,7 +40,7 @@ async function completeCheck(
 
     if (violationError) {
       console.error(`[CHECK] Error inserting violations for check ${checkId}:`, violationError)
-      throw new Error(`Failed to insert violations: ${violationError.message}`)
+      throw new Error(`違反データの挿入に失敗しました: ${violationError.message}`)
     }
   }
 
@@ -52,8 +55,8 @@ async function completeCheck(
     .eq('id', checkId)
 
   if (updateError) {
-    console.error(`[CHECK] Error updating check ${checkId} status:`, updateError)
-    throw new Error(`Failed to update check status: ${updateError.message}`)
+    console.error(`[CHECK] チェック ${checkId} のステータス更新でエラーが発生しました:`, updateError)
+    throw new Error(`チェックのステータス更新に失敗しました: ${updateError.message}`)
   }
 
   // 組織の使用量を増加
@@ -63,12 +66,21 @@ async function completeCheck(
   })
 
   if (usageError) {
-    console.error(`[CHECK] Error incrementing usage for check ${checkId}:`, usageError)
+    console.error(`[CHECK] チェック ${checkId} の使用量加算でエラーが発生しました:`, usageError)
   }
-
-  // Check completed successfully
 }
 
+/**
+ * 指定されたチェックに紐づく `organization_id` を取得する。
+ *
+ * 処理内容:
+ * - `checks` テーブルから単一行取得（`id`=checkId）
+ * - 取得できない場合は `Error` を投げる
+ *
+ * @param checkId チェックID
+ * @param supabase Supabaseクライアント
+ * @returns 取得した `organization_id`
+ */
 async function getCheckOrganizationId(
   checkId: number,
   supabase: Awaited<ReturnType<typeof createClient>>
@@ -80,7 +92,7 @@ async function getCheckOrganizationId(
     .single()
 
   if (error || !data) {
-    throw new Error(`Failed to get organization_id for check ${checkId}`)
+    throw new Error(`チェック${checkId}のorganization_id取得に失敗しました`)
   }
 
   return data.organization_id
@@ -90,13 +102,19 @@ async function getCheckOrganizationId(
 
 
 /**
- * チェック処理のメイン関数
- * タイムアウト保護を含む包括的なエラーハンドリングを提供
+ * チェック処理のエントリーポイント。
+ *
+ * 処理内容:
+ * - Supabaseクライアントを生成
+ * - 全体処理にタイムアウト保護を付与（画像/テキストとも既定: 120秒）
+ * - 実際の処理（OCR→類似検索→AI解析→保存）を `performActualCheck` に委譲
+ * - 例外発生時はユーザー向けエラー文言を決定し、`checks.status='failed'` と `error_message` を更新
+ *
  * @param checkId チェックID
  * @param text 処理対象のテキスト
  * @param organizationId 組織ID
  * @param inputType 入力タイプ（'text' | 'image'）
- * @param imageUrl 画像URLオプション（画像処理時）
+ * @param imageUrl 画像URL（画像処理時）
  */
 export async function processCheck(
   checkId: number, 
@@ -105,7 +123,6 @@ export async function processCheck(
   inputType: 'text' | 'image' = 'text',
   imageUrl?: string
 ) {
-  console.log(`[CHECK] Starting processCheck for check ${checkId} (type: ${inputType}, textLength: ${text.length})`)
   const supabase = await createClient()
   
   // タイムアウト保護設定（画像処理: 120秒、テキスト処理: 120秒）- AI API遅延に対応
@@ -117,13 +134,12 @@ export async function processCheck(
   })
 
   try {
-    // 全処理をタイムアウトでラップ
     await Promise.race([
       performActualCheck(checkId, text, organizationId, supabase, inputType, imageUrl),
       timeoutPromise
     ])
   } catch (error) {
-    console.error(`[CHECK] Error processing check ${checkId}:`, error)
+    console.error(`[CHECK] チェック ${checkId} の処理中にエラーが発生しました:`, error)
 
     // より具体的なエラーメッセージを生成
     let errorMessage = 'チェック処理中にエラーが発生しました'
@@ -163,7 +179,7 @@ export async function processCheck(
       .eq('id', checkId)
     
     if (updateError) {
-      console.error(`[CHECK] Failed to update check ${checkId} status:`, updateError)
+      console.error(`[CHECK] チェック ${checkId} の失敗ステータス更新に失敗しました:`, updateError)
     }
     
     throw error // 呼び出し元でのハンドリングのため再スロー
@@ -181,8 +197,17 @@ export async function processCheck(
  * @param imageUrl 画像URL（画像処理時）
  */
 /**
- * AI処理のリトライ機能付きラッパー関数
- * 複数チェック時のAI API遅延やエラーに対する耐性を向上
+ * AI処理用のリトライラッパー。
+ *
+ * 処理内容:
+ * - 最大 `maxRetries+1` 回 `operation` を実行
+ * - 失敗時は指数バックオフで待機後に再試行
+ * - 最終試行まで失敗した場合は最後のエラー、または不明エラーを投げる
+ *
+ * @param operation 実行する非同期処理
+ * @param checkId ログ/文脈用のチェックID
+ * @param maxRetries 最大リトライ回数（デフォルト: 2）
+ * @param baseDelayMs バックオフ基準ミリ秒（デフォルト: 1000）
  */
 async function retryAiRequest<T>(
   operation: () => Promise<T>,
@@ -194,7 +219,6 @@ async function retryAiRequest<T>(
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[CHECK] AI request attempt ${attempt + 1}/${maxRetries + 1} for check ${checkId}`)
       return await operation()
     } catch (error) {
       lastError = error as Error
@@ -207,14 +231,31 @@ async function retryAiRequest<T>(
       
       // 指数バックオフで待機
       const delay = baseDelayMs * Math.pow(2, attempt)
-      console.log(`[CHECK] Retrying AI request for check ${checkId} in ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
   
-  throw lastError ?? new Error('Unknown error')
+  throw lastError ?? new Error('不明なエラーが発生しました')
 }
 
+/**
+ * 実際のチェック処理を行う。
+ *
+ * 処理内容:
+ * - `checks.status` を `processing` に更新
+ * - 入力が画像の場合: OCR 実行→抽出テキスト/メタデータを保存（失敗時は `ocr_status='failed'`）
+ * - テキストに対して、埋め込み生成→類似フレーズ検索（キャッシュ利用・条件付き実行）
+ * - NGカテゴリの参考辞書エントリーを抽出・上位にソート・件数制限
+ * - LLMで薬機法違反を分析（OpenAI/LM Studio 形式を吸収）
+ * - `completeCheck` にて違反・修正文の保存と完了処理
+ *
+ * @param checkId チェックID
+ * @param text 入力テキスト
+ * @param organizationId 組織ID
+ * @param supabase Supabaseクライアント
+ * @param inputType 入力タイプ
+ * @param imageUrl 画像URL
+ */
 async function performActualCheck(
   checkId: number,
   text: string,
@@ -223,9 +264,6 @@ async function performActualCheck(
   inputType: 'text' | 'image' = 'text',
   imageUrl?: string
 ) {
-  console.log(`[CHECK] Starting actual check processing for check ${checkId}`)
-
-  // ステータスを処理中に更新
   await supabase
     .from('checks')
     .update({ status: 'processing' })
@@ -234,7 +272,6 @@ async function performActualCheck(
   // 画像の場合、最初にOCR処理を実行
   let processedText = text
   if (inputType === 'image' && imageUrl) {
-    // Processing OCR for image input
     
     // OCRステータスを処理中に更新
     await supabase
@@ -243,13 +280,12 @@ async function performActualCheck(
       .eq('id', checkId)
 
     try {
-      // LLMによるOCR実行
       const { extractTextFromImageWithLLM, estimateOcrConfidence } = await import('@/lib/ai-client')
       const start = Date.now()
       const ocr = await extractTextFromImageWithLLM(imageUrl)
       processedText = (ocr.text ?? '').trim()
       if (!processedText) {
-        throw new Error('Empty OCR result')
+        throw new Error('OCR結果が空です')
       }
       const confidence = estimateOcrConfidence(processedText)
 
@@ -270,7 +306,7 @@ async function performActualCheck(
         .eq('id', checkId)
 
     } catch (ocrError) {
-      console.error(`[CHECK] OCR processing failed for check ${checkId}:`, ocrError)
+      console.error(`[CHECK] チェック ${checkId} のOCR処理に失敗しました:`, ocrError)
       
       await supabase
         .from('checks')
@@ -282,14 +318,11 @@ async function performActualCheck(
         })
         .eq('id', checkId)
         
-      throw new Error('OCR processing failed')
+      throw new Error('OCR処理に失敗しました')
     }
   }
 
   // 処理済みテキストを使用して通常のテキスト処理を継続
-  console.log(`[CHECK] Starting text analysis for check ${checkId} with text: "${processedText.substring(0, 50)}..."`)
-
-  // 辞書から参考情報を取得（必須ではない）
   let referenceEntries: Array<{ id: number; phrase: string; category: string; similarity?: number }> = []
   
   // 組織+テキストハッシュごとの類似フレーズキャッシュキー
@@ -307,33 +340,22 @@ async function performActualCheck(
     if (!embedding) {
       const { createEmbedding } = await import('@/lib/ai-client')
       try {
-        console.log(`[CHECK] Creating embedding for check ${checkId} (text length: ${processedText.length})`)
         
         // 長い文章は先頭部分のみで埋め込み生成（パフォーマンス最適化）
         const embeddingText = processedText.length > 1000 
           ? processedText.substring(0, 1000) + '...'
           : processedText
-        
-        const startTime = Date.now()
         embedding = await createEmbedding(embeddingText)
-        const embeddingTime = Date.now() - startTime
-        console.log(`[CHECK] Embedding created for check ${checkId} in ${embeddingTime}ms`)
-        
         cache.set(embeddingKey, embedding, 15 * 60 * 1000) // 15分TTL（長い文章用に延長）
       } catch (embeddingError) {
-        console.error(`[CHECK] Failed to create embedding for check ${checkId}:`, embeddingError)
+        console.error(`[CHECK] チェック ${checkId} の埋め込み生成に失敗しました:`, embeddingError)
         // 埋め込み生成に失敗しても処理は継続（辞書なしでLLM分析）
-        console.log(`[CHECK] Continuing without dictionary reference for check ${checkId}`)
       }
     } else {
-      console.log(`[CHECK] Using cached embedding for check ${checkId}`)
     }
 
     // 埋め込みが利用可能な場合のみ辞書検索を実行
     if (embedding) {
-      // 長い文章用の最適化された類似フレーズ検索
-      console.log(`[CHECK] Starting similarity search for check ${checkId} (text length: ${processedText.length})`)
-      const searchStartTime = Date.now()
       
       // 長い文章の場合は検索パラメータを調整してパフォーマンス向上
       const isLongText = processedText.length > 500
@@ -364,13 +386,9 @@ async function performActualCheck(
           max_results: maxResults
         }
       )
-      
-      const searchTime = Date.now() - searchStartTime
-      console.log(`[CHECK] Similarity search completed for check ${checkId} in ${searchTime}ms`)
 
       if (combinedError) {
-        console.error(`[CHECK] Error getting combined similar phrases for check ${checkId}:`, combinedError)
-        console.log(`[CHECK] Continuing without dictionary reference for check ${checkId}`)
+        console.error(`[CHECK] チェック ${checkId} の類似フレーズ取得でエラーが発生しました:`, combinedError)
       } else {
         combinedPhrases = Array.isArray(data) ? data : []
         // 類似フレーズを5分キャッシュ（同一テキストの再チェック高速化）
@@ -394,26 +412,19 @@ async function performActualCheck(
     // AIに渡すエントリー数を制限してトークン使用量と応答時間を削減
     const MAX_REFERENCE_ENTRIES = 20
     referenceEntries = referenceEntries.slice(0, MAX_REFERENCE_ENTRIES)
-    
-    console.log(`[CHECK] Found ${referenceEntries.length} reference dictionary entries for check ${checkId}`)
   } else {
-    console.log(`[CHECK] No dictionary reference found for check ${checkId}, proceeding with LLM-only analysis`)
   }
-
-  console.log(`[CHECK] Starting AI analysis for check ${checkId} with ${referenceEntries.length} reference entries`)
 
   // LLMを使用して薬機法違反を分析（辞書は参考情報として使用）
   const { createChatCompletionForCheck } = await import('@/lib/ai-client')
 
   try {
-    console.log(`[CHECK] Calling createChatCompletionForCheck for check ${checkId}`)
     const result = await retryAiRequest(
       () => createChatCompletionForCheck(processedText, referenceEntries),
       checkId,
       2, // 最大2回リトライ
       1500 // 1.5秒から開始
     )
-    console.log(`[CHECK] AI analysis completed for check ${checkId}`)
       
     let violations: ViolationData[]
     let modifiedText: string
@@ -422,7 +433,7 @@ async function performActualCheck(
       const responseAny = result.response as unknown as { choices?: Array<{ message?: { function_call?: { arguments?: string } } }> }
       const functionCall = responseAny?.choices?.[0]?.message?.function_call
       if (!functionCall) {
-        throw new Error('OpenAI did not return expected function call')
+        throw new Error('OpenAIの応答に期待したfunction_callが含まれていません')
       }
       
       const analysisResult = JSON.parse(functionCall.arguments ?? '{}') as {
@@ -445,7 +456,7 @@ async function performActualCheck(
     await completeCheck(checkId, modifiedText, violations, supabase)
       
   } catch (aiError) {
-    console.error(`[CHECK] AI processing failed for check ${checkId}:`, aiError)
-    throw new Error(`Failed to create chat completion: ${aiError}`)
+    console.error(`[CHECK] チェック ${checkId} のAI処理に失敗しました:`, aiError)
+    throw new Error(`チャット補完の作成に失敗しました: ${aiError}`)
   }
 }

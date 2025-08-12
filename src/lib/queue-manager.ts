@@ -3,6 +3,12 @@
  * Handles concurrent check processing with proper queue management
  */
 
+/**
+ * キューに格納される処理対象の情報。
+ *
+ * - `priority` により追加時の挿入位置を制御
+ * - `retryCount`/`maxRetries` により再試行ロジックを制御
+ */
 interface QueueItem {
   id: number
   text: string
@@ -15,6 +21,14 @@ interface QueueItem {
   imageUrl?: string
 }
 
+/**
+ * チェック処理のための簡易キューマネージャ。
+ *
+ * 機能:
+ * - 優先度付きキューへの追加
+ * - 上限同時実行数の管理とシリアライズ
+ * - 再試行（指数バックオフ）と失敗時のDB更新
+ */
 class CheckQueueManager {
   private queue: QueueItem[] = []
   private processing: Map<number, Promise<void>> = new Map()
@@ -28,6 +42,12 @@ class CheckQueueManager {
 
   /**
    * Add a check to the queue
+   */
+  /**
+   * キューへ新規チェックを追加する。
+   *
+   * - 優先度に応じて `unshift` か `push`
+   * - 非処理中であれば処理ループを開始
    */
   async addToQueue(
     checkId: number,
@@ -56,8 +76,6 @@ class CheckQueueManager {
       this.queue.push(queueItem)
     }
 
-    console.log(`[QUEUE] Added check ${checkId} to queue (priority: ${priority}, type: ${inputType})`)
-
     // Start processing if not already running
     if (!this.isProcessing) {
       this.processQueue()
@@ -67,27 +85,29 @@ class CheckQueueManager {
   /**
    * Process the queue
    */
+  /**
+   * キュー全体の処理ループ。
+   *
+   * - 既に処理中ならスキップ
+   * - 空きがある限り新規アイテムを `processItem` で処理
+   * - 1件完了まで待機し、残件があれば再スケジューリング
+   */
   private async processQueue(): Promise<void> {
     if (this.isProcessing) {
-      console.log('[QUEUE] Already processing, skipping')
       return
     }
     this.isProcessing = true
-    console.log(`[QUEUE] Starting queue processing (queue: ${this.queue.length}, processing: ${this.processing.size})`)
 
     try {
       // 利用可能な容量がある限り新しいアイテムを処理開始
       while (this.queue.length > 0 && this.processing.size < this.maxConcurrent) {
         const item = this.queue.shift()
         if (!item) continue
-
-        console.log(`[QUEUE] Starting processing check ${item.id} (${this.processing.size + 1}/${this.maxConcurrent})`)
         const processingPromise = this.processItem(item)
         this.processing.set(item.id, processingPromise)
 
         // 処理完了時のクリーンアップ
         processingPromise.finally(() => {
-          console.log(`[QUEUE] Completed processing check ${item.id}`)
           this.processing.delete(item.id)
           
           // 処理完了後、キューに残りがあれば再度処理開始
@@ -106,16 +126,14 @@ class CheckQueueManager {
         }
       }
     } catch (error) {
-      console.error('[QUEUE] Error in processQueue:', error)
+      console.error('[QUEUE] キュー処理中にエラーが発生しました:', error)
     } finally {
       // 確実にisProcessingフラグをリセット
       // キューが空または処理中のアイテムがない場合のみリセット
       if (this.queue.length === 0 && this.processing.size === 0) {
-        console.log('[QUEUE] Queue processing completed - resetting isProcessing flag')
         this.isProcessing = false
       } else {
         // まだ処理すべきアイテムがある場合は状態を維持
-        console.log(`[QUEUE] Queue processing paused (queue: ${this.queue.length}, processing: ${this.processing.size})`)
         this.isProcessing = false // 次の処理サイクルのためにリセット
         
         // 残りのアイテムがある場合は次の処理を予約
@@ -129,16 +147,20 @@ class CheckQueueManager {
   /**
    * Process a single queue item
    */
+  /**
+   * 個々のキューアイテムを処理する。
+   *
+   * - `processCheck` を呼び出して本処理を実施
+   * - 失敗時は指数バックオフで再試行（上限超過で `checks.status='failed'`）
+   */
   private async processItem(item: QueueItem): Promise<void> {
-    console.log(`[QUEUE] Processing check ${item.id} (attempt ${item.retryCount + 1}/${item.maxRetries + 1})`)
     const { processCheck } = await import('@/lib/check-processor')
     
     try {
       await processCheck(item.id, item.text, item.organizationId, item.inputType, item.imageUrl)
-      console.log(`[QUEUE] Successfully processed check ${item.id}`)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
-      console.error(`[QUEUE] Error processing check ${item.id}:`, {
+      const errorMessage = error instanceof Error ? error.message : '不明な処理エラー'
+      console.error(`[QUEUE] チェック ${item.id} の処理でエラーが発生しました:`, {
         error: errorMessage,
         inputType: item.inputType,
         textLength: item.text.length,
@@ -159,11 +181,10 @@ class CheckQueueManager {
           this.queue.unshift({ ...item, priority: retryPriority })
           
           // 確実にキューの再処理を開始
-          console.log(`[QUEUE] Retry queued for check ${item.id}, restarting queue processing`)
           setTimeout(() => this.processQueue(), 50)
         }, retryDelay)
       } else {
-        console.error(`[QUEUE] Max retries exceeded for check ${item.id}, marking as failed`)
+        console.error(`[QUEUE] チェック ${item.id} はリトライ上限に達しました（失敗としてマーク）`)
         
         // Mark check as permanently failed
         try {
@@ -180,7 +201,7 @@ class CheckQueueManager {
             .eq('id', item.id)
             
         } catch (updateError) {
-          console.error(`[QUEUE] Failed to mark check ${item.id} as failed:`, updateError)
+          console.error(`[QUEUE] チェック ${item.id} を失敗として更新できませんでした:`, updateError)
         }
       }
     }
@@ -188,6 +209,9 @@ class CheckQueueManager {
 
   /**
    * Get queue status
+   */
+  /**
+   * 現在のキュー状況を返す（監視/テスト用）。
    */
   getStatus(): {
     queueLength: number
@@ -208,6 +232,9 @@ class CheckQueueManager {
   /**
    * Clear the queue (for testing)
    */
+  /**
+   * キューをクリア（テスト・復旧用）。
+   */
   clear(): void {
     this.queue = []
     this.processing.clear()
@@ -215,6 +242,9 @@ class CheckQueueManager {
   }
   /**
    * デバッグ用: キューの現在状態を出力
+   */
+  /**
+   * デバッグ用: 現在のキュー詳細を返す。
    */
   getQueueStatus() {
     return {
@@ -234,8 +264,10 @@ class CheckQueueManager {
   /**
    * 強制的にキュー処理を再開（デバッグ用）
    */
+  /**
+   * 強制再開（デバッグ用途）。
+   */
   forceRestart() {
-    console.log('[QUEUE] Force restarting queue processing')
     this.isProcessing = false
     setTimeout(() => this.processQueue(), 100)
   }
