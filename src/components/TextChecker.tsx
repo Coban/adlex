@@ -369,7 +369,7 @@ export default function TextChecker() {
       const sseSessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 500)
+          setTimeout(() => resolve({ data: { session: null } }), 3000)
         ),
       ])
       const sseToken = (sseSessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
@@ -627,16 +627,13 @@ export default function TextChecker() {
             ))
           }
         } catch (parseError) {
-          clearInterval(pollingIntervalId)
-          clearTimeout(timeout)
-          cancelControllers.current.delete(checkId)
+          // SSE メッセージの解析に失敗した場合は、SSE を閉じてポーリング継続にフォールバック
           console.error('Failed to parse SSE data:', parseError, 'Raw data:', event.data)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
               ? { 
                   ...check, 
-                  status: 'failed',
-                  statusMessage: 'データ解析エラー' 
+                  statusMessage: 'SSEのデータ解析に失敗しました。ポーリングで結果の取得を継続します…' 
                 }
               : check
           ))
@@ -645,21 +642,17 @@ export default function TextChecker() {
       }
 
       eventSource.onerror = (error) => {
-        clearInterval(pollingIntervalId)
-        clearTimeout(timeout)
-        cancelControllers.current.delete(checkId)
+        // SSE 接続に失敗した場合でも、ポーリングは継続しているため失敗扱いにしない
         console.error('SSE connection error:', error)
         setChecks(prev => prev.map(check => 
           check.id === checkId 
             ? { 
                 ...check, 
-                status: 'failed',
-                statusMessage: 'サーバー接続エラー' 
+                statusMessage: 'SSE接続に失敗しました。ポーリングで結果の取得を継続します…' 
               }
             : check
         ))
         safeCloseEventSource(eventSource)
-        setErrorMessage('サーバーとの接続でエラーが発生しました。もう一度お試しください。')
       }
 
     } catch (error) {
