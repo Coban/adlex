@@ -42,7 +42,7 @@ const openaiClient = (aiProvider === 'openai' && apiKey) ? new OpenAI({
 
 // OpenAIクライアント（埋め込み用 - メインプロバイダーと独立して初期化）
 // OPENAI_API_KEY が存在する場合、または AI_PROVIDER が openai で AI_API_KEY が設定されている場合に作成
-const openaiEmbeddingClient = (() => {
+let openaiEmbeddingClient: OpenAI | null = (() => {
   // OPENAI専用キー（推奨）
   const explicitOpenAIKey = legacyOpenAIKey ? process.env.OPENAI_API_KEY! : null
   // AI_PROVIDER が openai の場合は統一キーも利用可能
@@ -50,6 +50,27 @@ const openaiEmbeddingClient = (() => {
   const key = explicitOpenAIKey ?? providerOpenAIKey
   return key ? new OpenAI({ apiKey: key }) : null
 })()
+
+// 埋め込み用のOpenAIクライアントをオンデマンドで初期化して取得
+function ensureOpenAIEmbeddingClient(): OpenAI | null {
+  if (openaiEmbeddingClient) return openaiEmbeddingClient
+
+  // 優先: 明示的な OPENAI_API_KEY
+  const openaiKey = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here')
+    ? process.env.OPENAI_API_KEY!
+    : null
+
+  // 次点: メインプロバイダーが OpenAI の場合は AI_API_KEY
+  const providerKey = (aiProvider === 'openai' && apiKey) ? apiKey : null
+
+  const keyToUse = openaiKey ?? providerKey
+  if (keyToUse) {
+    openaiEmbeddingClient = new OpenAI({ apiKey: keyToUse })
+    return openaiEmbeddingClient
+  }
+
+  return null
+}
 
 // OpenRouterクライアント
 const openRouterClient = (aiProvider === 'openrouter' && apiKey) ? new OpenAI({
@@ -540,7 +561,7 @@ export function estimateOcrConfidence(text: string): number {
  */
 // OpenAI埋め込み用ヘルパー関数
 async function createOpenAIEmbedding(input: string): Promise<number[]> {
-  const client = openaiEmbeddingClient ?? openaiClient
+  const client = ensureOpenAIEmbeddingClient() ?? openaiClient
   if (!client) {
     throw new Error('OpenAI埋め込みクライアントが利用できません。OPENAI_API_KEY 環境変数を設定してください。')
   }
