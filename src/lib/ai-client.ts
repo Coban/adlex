@@ -106,6 +106,20 @@ const lmStudioClient = aiProvider === 'lmstudio' ? new OpenAI({
 // 適切なクライアントを選択
 export const aiClient = aiProvider === 'lmstudio' ? lmStudioClient : aiProvider === 'openrouter' ? openRouterClient : openaiClient
 
+// 埋め込みプロバイダー解決ヘルパー（重複回避のため集約）
+type EmbeddingProvider = 'openai' | 'lmstudio' | 'auto'
+function getEmbeddingProvider(): EmbeddingProvider {
+  if (aiProvider === 'openrouter') {
+    const value = (process.env.AI_EMBEDDING_PROVIDER ?? 'openai').toLowerCase()
+    if (value === 'openai' || value === 'lmstudio' || value === 'auto') {
+      return value as EmbeddingProvider
+    }
+    return 'openai'
+  }
+  if (aiProvider === 'lmstudio') return 'lmstudio'
+  return 'openai'
+}
+
 // バリデーション付きモデル設定
 const getChatModel = () => {
   // 統一AI_CHAT_MODELを使用し、プロバイダー固有のデフォルトにフォールバック
@@ -661,31 +675,23 @@ export async function createEmbedding(input: string): Promise<number[]> {
   try {
     // OpenRouter用: embeddings APIはサポートされていないため、選択されたproviderを使用
     if (aiProvider === 'openrouter') {
-      const embeddingProvider = process.env.AI_EMBEDDING_PROVIDER ?? 'openai'
-      // OpenRouterは埋め込みAPIをサポートしていないため、選択されたプロバイダーを使用
-      
-      switch (embeddingProvider) {
+      const provider = getEmbeddingProvider()
+      switch (provider) {
         case 'openai':
           return await createOpenAIEmbedding(input)
-        
         case 'lmstudio':
           return await createLMStudioEmbedding(input)
-        
         case 'auto':
           // OpenAI -> LM Studio の順で自動フォールバック
           try {
             return await createOpenAIEmbedding(input)
           } catch (openaiError) {
-            // OpenAI埋め込みが失敗したため、LM Studioにフォールバック
             try {
               return await createLMStudioEmbedding(input)
             } catch (lmstudioError) {
               throw new Error(`すべての埋め込みプロバイダーが失敗しました。OpenAI: ${openaiError instanceof Error ? openaiError.message : '不明なエラー'}。LM Studio: ${lmstudioError instanceof Error ? lmstudioError.message : '不明なエラー'}`)
             }
           }
-        
-        default:
-          throw new Error(`無効なAI_EMBEDDING_PROVIDER: ${embeddingProvider}。'openai', 'lmstudio', または 'auto' である必要があります。`)
       }
     }
 
@@ -714,7 +720,7 @@ export async function createEmbedding(input: string): Promise<number[]> {
  * @returns 設定、利用中モデル、キー有無、クライアント可用性などのメタ情報
  */
 export function getAIClientInfo() {
-  const embeddingProvider = aiProvider === 'openrouter' ? (process.env.AI_EMBEDDING_PROVIDER ?? 'openai') : aiProvider
+  const embeddingProvider = getEmbeddingProvider()
   
   return {
     aiProvider: aiProvider,
@@ -756,7 +762,7 @@ export function getAIClientInfo() {
 export function validateModelConfiguration() {
   const issues = []
   const suggestions = []
-  const embeddingProvider = aiProvider === 'openrouter' ? (process.env.AI_EMBEDDING_PROVIDER ?? 'openai') : aiProvider
+  const embeddingProvider = getEmbeddingProvider()
   
   // メインAIプロバイダー設定の検証
   if (aiProvider === 'lmstudio') {

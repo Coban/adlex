@@ -429,18 +429,50 @@ async function performActualCheck(
     let violations: ViolationData[]
     let modifiedText: string
 
-    if (result.type === 'openai') {
-      const responseAny = result.response as unknown as { choices?: Array<{ message?: { function_call?: { arguments?: string } } }> }
-      const functionCall = responseAny?.choices?.[0]?.message?.function_call
-      if (!functionCall) {
-        throw new Error('OpenAIの応答に期待したfunction_callが含まれていません')
+    if (result.type === 'openai' || result.type === 'openrouter') {
+      // OpenAI/OpenRouter 双方で function_call または tool_calls をサポート
+      const responseAny = result.response as unknown as {
+        choices?: Array<{
+          message?: {
+            function_call?: { arguments?: string }
+            tool_calls?: Array<{
+              type?: string
+              function?: { name?: string; arguments?: string }
+            }>
+          }
+        }>
       }
-      
-      const analysisResult = JSON.parse(functionCall.arguments ?? '{}') as {
+
+      const message = responseAny?.choices?.[0]?.message as
+        | {
+            function_call?: { arguments?: string }
+            tool_calls?: Array<{ type?: string; function?: { name?: string; arguments?: string } }>
+          }
+        | undefined
+
+      // 1) OpenAI 互換の function_call.arguments
+      let argsJson: string | null = message?.function_call?.arguments ?? null
+
+      // 2) tool_calls 配列（OpenRouter/一部OpenAI実装）
+      const toolCalls = Array.isArray(message?.tool_calls) ? message?.tool_calls : []
+      if (!argsJson && toolCalls.length > 0) {
+        const targetCall =
+          toolCalls.find(
+            (tc) => tc?.type === 'function' && tc.function?.name === 'apply_yakukiho_rules'
+          ) ?? toolCalls[0]
+        argsJson = targetCall?.function?.arguments ?? null
+      }
+
+      if (!argsJson?.trim()) {
+        throw new Error('OpenAI/OpenRouterの応答に期待したfunction/tool callが含まれていません')
+      }
+
+      const analysisResult = JSON.parse(argsJson) as {
         modified?: string
         violations?: Array<{ start: number; end: number; reason: string; dictionaryId?: number }>
       }
-      // OpenAI形式から内部形式に変換
+
+      // 共通形式から内部形式に変換
       violations = (analysisResult.violations ?? []).map((v) => ({
         start_pos: v.start,
         end_pos: v.end,
