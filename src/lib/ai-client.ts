@@ -336,10 +336,10 @@ export async function createChatCompletion(params: {
             throw new Error('OpenRouterのクォータを超過しました。アカウントの残高を確認してください。')
           }
           if (error.message.includes('invalid_api_key') || error.message.includes('unauthorized')) {
-            throw new Error('OpenRouter APIキーが無効です。OPENROUTER_API_KEY環境変数を確認してください。')
+            throw new Error('OpenRouter APIキーが無効です。AI_API_KEY環境変数を確認してください。')
           }
           if (error.message.includes('model_not_found') || error.message.includes('not found')) {
-            throw new Error(`OpenRouterモデル "${AI_MODELS.chat}" が見つかりません。OPENROUTER_CHAT_MODEL設定を確認してください。`)
+            throw new Error(`OpenRouterモデル "${AI_MODELS.chat}" が見つかりません。AI_CHAT_MODEL設定を確認してください。`)
           }
         }
         throw new Error(`OpenRouterチャット完了に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
@@ -461,7 +461,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
         error.message.includes('not supported') ||
         error.message.includes('unsupported')
       )) {
-        throw new Error('OpenRouterの現在のモデルは画像入力（Vision）をサポートしていません。Vision対応のモデル（gpt-4-vision-preview等）を選択してください。')
+        throw new Error('OpenRouterの現在のモデルは画像入力（Vision）をサポートしていません。Vision対応のモデル（gpt-4oやgpt-4-turbo等）を選択してください。')
       }
       throw error
     }
@@ -789,7 +789,7 @@ export function validateModelConfiguration() {
     if (embeddingProvider === 'openai' || embeddingProvider === 'auto') {
       if (!openaiEmbeddingClient && !openaiClient) {
         issues.push('OpenAI client not available for embeddings')
-        suggestions.push('Set OPENAI_API_KEY environment variable for OpenAI embeddings')
+        suggestions.push('Set AI_API_KEY environment variable and AI_PROVIDER=openai (preferred), or OPENAI_API_KEY for backward compatibility, for OpenAI embeddings')
       }
     }
     
