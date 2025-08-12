@@ -81,7 +81,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const pdfBuffer = await generatePdfBuffer(check)
 
     const filename = `check_${check.id}.pdf`
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -242,5 +242,3 @@ function statusLabel(status: string | null | undefined): string {
       return String(status ?? '')
   }
 }
-
-

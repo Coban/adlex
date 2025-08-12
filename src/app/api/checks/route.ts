@@ -41,15 +41,13 @@ export async function POST(request: NextRequest) {
           } else {
             authError = tokenError ?? new Error('Invalid token')
           }
-        } catch (tokenValidationError) {
-          console.error('Token validation error:', tokenValidationError)
+        } catch {
           authError = new Error('Token validation failed')
         }
       }
     }
 
     if (authError || !user) {
-      console.log('Authentication failed:', authError?.message)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

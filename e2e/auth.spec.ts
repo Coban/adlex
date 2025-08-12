@@ -1,27 +1,27 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function waitForSignOutButton(page: any) {
-  // Try to find the sign out button in desktop view first
+async function waitForSignOutButton(page: Page) {
+  // まずデスクトップ表示でサインアウトボタンを探す
   try {
     await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
     return true;
   } catch {
-    // If not found, check if we're on mobile and need to open the menu
+    // 見つからない場合はモバイル表示を想定してメニューを開く
     try {
       const menuButton = page.locator('.md\\:hidden button').first();
       const isMenuButtonVisible = await menuButton.isVisible();
       if (isMenuButtonVisible) {
         await menuButton.click();
-        await page.waitForTimeout(500); // Wait for menu to open
+        await page.waitForTimeout(500); // メニューが開くのを待機
         await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
-        // Close the menu after checking
+        // 確認後にメニューを閉じる
         await menuButton.click();
         return true;
       }
     } catch {
-      // Still not found
+      // それでも見つからない場合
     }
-    // If still not found, just wait a bit and try again
+    // さらに見つからない場合は少し待って再試行
     try {
       await page.waitForTimeout(2000);
       await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
@@ -32,14 +32,14 @@ async function waitForSignOutButton(page: any) {
   }
 }
 
-async function clickSignOutButton(page: any) {
-  // First, verify we're actually logged in
+async function clickSignOutButton(page: Page) {
+  // まずログイン済みであることを確認
   const isLoggedIn = await waitForSignOutButton(page);
   if (!isLoggedIn) {
     throw new Error('Cannot sign out - user is not logged in');
   }
   
-  // Try to find the sign out button in desktop view first
+  // まずデスクトップ表示でサインアウトボタンをクリック
   try {
     const signOutButton = page.getByRole('button', { name: 'サインアウト' });
     if (await signOutButton.isVisible()) {
@@ -47,102 +47,102 @@ async function clickSignOutButton(page: any) {
       return;
     }
   } catch {
-    // Button not visible in desktop view
+    // デスクトップ表示では見つからない場合
   }
   
-  // If not found, check if we're on mobile and need to open the menu
+  // 見つからない場合はモバイルメニューから操作
   try {
     const menuButton = page.locator('.md\\:hidden button').first();
     const isMenuButtonVisible = await menuButton.isVisible();
     if (isMenuButtonVisible) {
       await menuButton.click();
-      await page.waitForTimeout(500); // Wait for menu to open
+      await page.waitForTimeout(500); // メニューが開くのを待機
       await page.getByRole('button', { name: 'サインアウト' }).click();
       return;
     }
   } catch {
-    // Menu approach failed
+    // メニュー操作が失敗
   }
   
-  // Final fallback
+  // 最終フォールバック
   await page.getByRole('button', { name: 'サインアウト' }).click();
 }
 
-test.describe("Authentication", () => {
-  // Use unauthenticated context for these tests
+test.describe('認証', () => {
+  // このスイートでは未認証の状態を使用
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test.beforeEach(async ({ page }) => {
-    // Navigate to the app
+    // アプリに遷移
     await page.goto("/");
   });
 
   test("should display sign in page for unauthenticated users", async ({ page }) => {
-    // Should redirect to sign in page or show sign in option
+    // サインインページへリダイレクト、またはサインイン導線が表示される
     await expect(page.getByRole('main').getByRole('link', { name: 'サインイン' })).toBeVisible();
   });
 
   test("should allow user to sign in with test credentials", async ({ page }) => {
-    // Navigate to sign in page
+    // サインインページへ遷移
     await page.getByRole('main').getByRole('link', { name: 'サインイン' }).click();
 
-    // Wait for sign in form to load
+    // サインインフォームの表示を待機
     await expect(page.getByRole('heading', { name: 'サインイン' })).toBeVisible();
 
-    // Fill in test credentials
+    // テスト用の認証情報を入力
     await page.fill('input[type="email"]', "admin@test.com");
     await page.fill('input[type="password"]', "password123");
 
-    // Submit form - use more specific selector for the form submit button
+    // フォーム送信（submit ボタンを明確に指定）
     await page.locator('form button[type="submit"]').click();
 
-    // Should be redirected to home page and authenticated
+    // ホームへリダイレクトされ、認証済みになる
     await expect(page).toHaveURL("/");
     
-    // Check for authenticated state indicators - look for sign out button instead
+    // 認証状態の指標としてサインアウトボタンを確認
     await waitForSignOutButton(page);
   });
 
   test("should show error for invalid credentials", async ({ page }) => {
-    // Navigate to sign in page
+    // サインインページへ遷移
     await page.getByRole('main').getByRole('link', { name: 'サインイン' }).click();
 
-    // Fill in invalid credentials
+    // 不正な認証情報を入力
     await page.fill('input[type="email"]', "invalid@test.com");
     await page.fill('input[type="password"]', "wrongpassword");
 
-    // Submit form
+    // 送信
     await page.locator('form button[type="submit"]').click();
 
-    // Should show error message (look for any red error text, not specific "エラー")
+    // エラーメッセージが表示される（"エラー" 文言に限定せず赤系のエラー表示を確認）
     await expect(page.locator('.text-red-600')).toBeVisible();
   });
 
   test("should allow user to sign out", async ({ page }) => {
-    // First sign in
+    // まずサインイン
     await page.getByRole('main').getByRole('link', { name: 'サインイン' }).click();
     await page.fill('input[type="email"]', "admin@test.com");
     await page.fill('input[type="password"]', "password123");
     await page.locator('form button[type="submit"]').click();
 
-    // Wait for authentication
+    // 認証完了を待機
     await waitForSignOutButton(page);
 
-    // Look for sign out option in navigation
+    // ナビゲーションからサインアウトを実行
     await clickSignOutButton(page);
 
-    // Should return to sign in page - wait for sign out to complete
+    // サインアウト完了後、サインイン導線が表示される
     await page.waitForTimeout(1000);
     
-    // Check for sign in link more flexibly across different platforms
+    // プラットフォーム差異を考慮して柔軟にサインイン導線を確認
     try {
       await expect(page.getByRole('main').getByRole('link', { name: 'サインイン' })).toBeVisible({ timeout: 5000 });
     } catch {
-      // Alternative: check if we're back to unauthenticated state by looking for sign in anywhere
+      // 代替: 任意の場所でサインイン導線が見えるか確認
       try {
         await expect(page.getByRole('link', { name: 'サインイン' })).toBeVisible({ timeout: 3000 });
       } catch {
-        // Final fallback: check if sign out was successful by verifying we don't see authenticated content
+        // 最終フォールバック: 認証済み要素（サインアウトボタン）が無いことを確認
         const signOutButton = page.getByRole('button', { name: 'サインアウト' });
         const hasSignOutButton = await signOutButton.count();
         expect(hasSignOutButton).toBe(0);
@@ -154,35 +154,35 @@ test.describe("Authentication", () => {
     // 直接組織アカウント作成ページにアクセス
     await page.goto('/auth/organization-signup');
 
-    // Wait for form to load
+    // フォームの表示を待機
     await expect(page.getByRole('heading', { name: '組織アカウント作成' })).toBeVisible();
 
-    // Generate unique email for this test run
+    // このテスト実行用のユニークなメールを生成
     const timestamp = Date.now();
     const testEmail = `test-org-${timestamp}@example.com`;
 
-    // Fill organization signup form using id selectors
+    // 組織作成フォームを id セレクタで入力
     await page.fill('#organizationName', "テスト組織E2E");
     await page.fill('#email', testEmail);
     await page.fill('#password', "password123");
     await page.fill('#confirmPassword', "password123");
 
-    // Submit form
+    // 送信
     await page.getByRole('button', { name: '組織アカウント作成' }).click();
 
-    // Should show success message or redirect
+    // 成功メッセージ表示、またはリダイレクトを確認
     try {
       await expect(page.locator('text=組織とアカウントが作成されました')).toBeVisible({ timeout: 8000 });
     } catch {
-      // Alternative success indicators
+      // 代替の成功指標
       try {
         await expect(page).toHaveURL('/');
       } catch {
         try {
-          // Check for any success indicator
+          // 何らかの成功インジケータがあるか
           await expect(page.locator('.text-green-600, .bg-green-50')).toBeVisible({ timeout: 2000 });
         } catch {
-          // Final fallback - just check that we're not on the signup page anymore or there's no error
+          // 最終フォールバック: サインアップページから遷移済み、または明確なエラーが無いこと
           try {
             await expect(page.locator('.text-red-600')).not.toBeVisible();
             console.log('Organization signup completed without visible errors');

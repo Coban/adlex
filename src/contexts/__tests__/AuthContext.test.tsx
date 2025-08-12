@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { createClient } from '@/lib/supabase/client'
@@ -11,25 +11,53 @@ const mockSupabaseClient = createClient() as any
 
 // Test component that uses the AuthContext
 function TestComponent() {
-  const { user, loading, signOut } = useAuth()
+  const { user, userProfile, organization, loading, signOut } = useAuth()
 
   return (
     <div>
       <div data-testid="loading">{loading ? 'Loading' : 'Not Loading'}</div>
       <div data-testid="user">{user ? user.email : 'No User'}</div>
+      <div data-testid="user-profile">{userProfile ? JSON.stringify(userProfile) : 'No Profile'}</div>
+      <div data-testid="organization">{organization ? organization.name : 'No Organization'}</div>
       <button onClick={signOut}>Sign Out</button>
     </div>
   )
 }
 
+// Mock fetch
+global.fetch = vi.fn()
+
 describe.skip('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    
+    // Mock fetch
+    const mockFetch = fetch as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({})
+    } as Response)
     
     // Mock default auth state
     mockSupabaseClient.auth.getSession.mockResolvedValue({
       data: { session: null },
       error: null
+    })
+    
+    mockSupabaseClient.auth.signOut.mockResolvedValue({
+      error: null
+    })
+    
+    // Mock Supabase queries
+    mockSupabaseClient.from.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: null
+          })
+        })
+      })
     })
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,6 +82,8 @@ describe.skip('AuthContext', () => {
 
     expect(screen.getByTestId('loading')).toHaveTextContent('Loading')
     expect(screen.getByTestId('user')).toHaveTextContent('No User')
+    expect(screen.getByTestId('user-profile')).toHaveTextContent('No Profile')
+    expect(screen.getByTestId('organization')).toHaveTextContent('No Organization')
     
     // Wait for loading to complete
     await waitFor(() => {
@@ -61,83 +91,31 @@ describe.skip('AuthContext', () => {
     })
   })
 
-  it('should handle successful sign in', async () => {
+  it('should handle user with profile and organization', async () => {
     const mockUser = {
       id: 'user-123',
       email: 'test@example.com'
     }
 
-    mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'mock-token',
-          user: mockUser
-        }
-      },
-      error: null
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    const signInButton = screen.getByText('Sign In')
-    
-    await act(async () => {
-      signInButton.click()
-    })
-
-    await waitFor(() => {
-      expect(mockSupabaseClient.auth.signInWithPassword).toHaveBeenCalledWith({
-        email: 'test@example.com',
-        password: 'password123'
-      })
-    })
-  })
-
-  it('should handle sign in errors', async () => {
-    mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({
-      data: { user: null, session: null },
-      error: new Error('Invalid credentials')
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    const signInButton = screen.getByText('Sign In')
-    
-    await act(async () => {
-      signInButton.click()
-    })
-
-    await waitFor(() => {
-      expect(mockSupabaseClient.auth.signInWithPassword).toHaveBeenCalled()
-    })
-  })
-
-  it('should handle sign out', async () => {
-    const mockUser = {
+    const mockProfile = {
       id: 'user-123',
-      email: 'test@example.com'
+      email: 'test@example.com',
+      organization_id: 1,
+      role: 'admin',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z'
     }
 
-    // Start with authenticated user
+    const mockOrganization = {
+      id: 1,
+      name: 'Test Organization',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      monthly_limit: 1000,
+      monthly_usage: 50
+    }
+
+    // Mock session with user
     mockSupabaseClient.auth.getSession.mockResolvedValue({
       data: {
         session: {
@@ -148,73 +126,39 @@ describe.skip('AuthContext', () => {
       error: null
     })
 
-    mockSupabaseClient.auth.signOut.mockResolvedValue({
-      error: null
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    const signOutButton = screen.getByText('Sign Out')
-    
-    await act(async () => {
-      signOutButton.click()
-    })
-
-    await waitFor(() => {
-      expect(mockSupabaseClient.auth.signOut).toHaveBeenCalled()
-    })
-  })
-
-  it('should handle sign out errors', async () => {
-    mockSupabaseClient.auth.signOut.mockResolvedValue({
-      error: new Error('Sign out failed')
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    const signOutButton = screen.getByText('Sign Out')
-    
-    await act(async () => {
-      signOutButton.click()
-    })
-
-    await waitFor(() => {
-      expect(mockSupabaseClient.auth.signOut).toHaveBeenCalled()
-    })
-  })
-
-  it('should restore session on initialization', async () => {
-    const mockUser = {
-      id: 'user-123',
-      email: 'test@example.com'
-    }
-
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: {
-        session: {
-          access_token: 'mock-token',
-          user: mockUser
+    // Mock profile and organization queries
+  mockSupabaseClient.from.mockImplementation((table: string) => {
+      if (table === 'users') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: mockProfile,
+                error: null
+              })
+            })
+          })
         }
-      },
-      error: null
+      }
+      if (table === 'organizations') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: mockOrganization,
+                error: null
+              })
+            })
+          })
+        }
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      }
     })
 
     render(
@@ -226,6 +170,76 @@ describe.skip('AuthContext', () => {
     await waitFor(() => {
       expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
       expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
+      expect(screen.getByTestId('organization')).toHaveTextContent('Test Organization')
+    }, { timeout: 3000 })
+  })
+
+  it('should handle profile fetch errors', async () => {
+    const mockUser = {
+      id: 'user-123',
+      email: 'test@example.com'
+    }
+
+    mockSupabaseClient.auth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: 'mock-token',
+          user: mockUser
+        }
+      },
+      error: null
+    })
+
+    // Mock profile query with error
+    mockSupabaseClient.from.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: new Error('Profile fetch failed')
+          })
+        })
+      })
+    })
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
+      expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
+      expect(screen.getByTestId('user-profile')).toHaveTextContent('No Profile')
+      expect(screen.getByTestId('organization')).toHaveTextContent('No Organization')
+    })
+  })
+
+  it('should handle sign out', async () => {
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    )
+
+    // Wait for initial loading to complete
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
+    })
+
+    const signOutButton = screen.getByText('Sign Out')
+    
+    await act(async () => {
+      fireEvent.click(signOutButton)
+    })
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/auth/signout', { method: 'POST' })
+      expect(mockSupabaseClient.auth.signOut).toHaveBeenCalled()
+      expect(screen.getByTestId('user')).toHaveTextContent('No User')
+      expect(screen.getByTestId('user-profile')).toHaveTextContent('No Profile')
+      expect(screen.getByTestId('organization')).toHaveTextContent('No Organization')
     })
   })
 
@@ -308,93 +322,6 @@ describe.skip('AuthContext', () => {
     consoleSpy.mockRestore()
   })
 
-  it('should handle user profile loading', async () => {
-    const mockUser = {
-      id: 'user-123',
-      email: 'test@example.com'
-    }
-
-    const mockProfile = {
-      id: 'user-123',
-      email: 'test@example.com',
-      organization_id: 'org-123',
-      role: 'user'
-    }
-
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: {
-        session: {
-          access_token: 'mock-token',
-          user: mockUser
-        }
-      },
-      error: null
-    })
-
-    mockSupabaseClient.from.mockReturnValue({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({
-            data: mockProfile,
-            error: null
-          }))
-        }))
-      }))
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-      expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
-    })
-
-    expect(mockSupabaseClient.from).toHaveBeenCalledWith('users')
-  })
-
-  it('should handle user profile loading errors', async () => {
-    const mockUser = {
-      id: 'user-123',
-      email: 'test@example.com'
-    }
-
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: {
-        session: {
-          access_token: 'mock-token',
-          user: mockUser
-        }
-      },
-      error: null
-    })
-
-    mockSupabaseClient.from.mockReturnValue({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({
-            data: null,
-            error: new Error('Profile not found')
-          }))
-        }))
-      }))
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-      expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
-    })
-  })
-
   it('should clean up auth subscription on unmount', async () => {
     const mockUnsubscribe = vi.fn()
 
@@ -417,98 +344,19 @@ describe.skip('AuthContext', () => {
     expect(mockUnsubscribe).toHaveBeenCalled()
   })
 
-  it('should handle multiple rapid auth state changes', async () => {
+  it('should handle organization fetch error', async () => {
     const mockUser = {
       id: 'user-123',
       email: 'test@example.com'
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let authStateCallback: (event: string, session: any) => void
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback: any) => {
-      authStateCallback = callback
-      return {
-        data: { subscription: { unsubscribe: vi.fn() } }
-      }
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    // Simulate rapid auth state changes
-    await act(async () => {
-      authStateCallback('SIGNED_IN', {
-        access_token: 'mock-token',
-        user: mockUser
-      })
-      authStateCallback('SIGNED_OUT', null)
-      authStateCallback('SIGNED_IN', {
-        access_token: 'mock-token-2',
-        user: mockUser
-      })
-    })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
-    })
-  })
-
-  it('should handle concurrent sign in attempts', async () => {
-    const mockUser = {
+    const mockProfile = {
       id: 'user-123',
-      email: 'test@example.com'
-    }
-
-    mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'mock-token',
-          user: mockUser
-        }
-      },
-      error: null
-    })
-
-    render(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
-    })
-
-    const signInButton = screen.getByText('Sign In')
-    
-    // Simulate rapid clicks
-    await act(async () => {
-      signInButton.click()
-      signInButton.click()
-      signInButton.click()
-    })
-
-    await waitFor(() => {
-      expect(mockSupabaseClient.auth.signInWithPassword).toHaveBeenCalledTimes(3)
-    })
-  })
-
-  it('should preserve user state during re-renders', async () => {
-    const mockUser = {
-      id: 'user-123',
-      email: 'test@example.com'
+      email: 'test@example.com',
+      organization_id: 1,
+      role: 'user',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z'
     }
 
     mockSupabaseClient.auth.getSession.mockResolvedValue({
@@ -521,23 +369,51 @@ describe.skip('AuthContext', () => {
       error: null
     })
 
-    const { rerender } = render(
+    // Mock profile query success, organization query failure
+    mockSupabaseClient.from.mockImplementation((table: string) => {
+      if (table === 'users') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: mockProfile,
+                error: null
+              })
+            })
+          })
+        }
+      }
+      if (table === 'organizations') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null,
+                error: new Error('Organization fetch failed')
+              })
+            })
+          })
+        }
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      }
+    })
+
+    render(
       <AuthProvider>
         <TestComponent />
       </AuthProvider>
     )
 
     await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading')
       expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
+      expect(screen.getByTestId('organization')).toHaveTextContent('No Organization')
     })
-
-    // Re-render the component
-    rerender(
-      <AuthProvider>
-        <TestComponent />
-      </AuthProvider>
-    )
-
-    expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
   })
 })

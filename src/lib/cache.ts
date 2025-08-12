@@ -94,9 +94,7 @@ class MemoryCache {
 
     expiredKeys.forEach(key => this.cache.delete(key))
     
-    if (expiredKeys.length > 0) {
-      console.log(`[CACHE] Cleaned up ${expiredKeys.length} expired entries`)
-    }
+    // Cleanup expired entries from cache
   }
 
   /**
@@ -138,12 +136,10 @@ export function cached<T extends (...args: unknown[]) => Promise<unknown>>(
       // Check cache first
       const cachedResult = cache.get<Awaited<ReturnType<T>>>(cacheKey)
       if (cachedResult !== null) {
-        console.log(`[CACHE] Cache hit for key: ${cacheKey}`)
         return cachedResult
       }
 
-      // Execute original method
-      console.log(`[CACHE] Cache miss for key: ${cacheKey}`)
+      // Execute original method - cache miss
       const result = await originalMethod.apply(this, args) as Awaited<ReturnType<T>>
       
       // Store in cache
@@ -220,12 +216,10 @@ export function withCache<T>(
       // Check cache
       const cached = cache.get<T>(cacheKey)
       if (cached !== null) {
-        console.log(`[API-CACHE] Cache hit for: ${cacheKey}`)
         return cached
       }
 
-      // Execute handler
-      console.log(`[API-CACHE] Cache miss for: ${cacheKey}`)
+      // Execute handler - cache miss
       const result = await handler(req, ...args)
       
       // Store in cache
@@ -244,9 +238,7 @@ export function invalidatePattern(pattern: RegExp): number {
   
   keysToDelete.forEach(key => cache.delete(key))
   
-  if (keysToDelete.length > 0) {
-    console.log(`[CACHE] Invalidated ${keysToDelete.length} entries matching pattern: ${pattern}`)
-  }
+  // Cache entries invalidated
   
   return keysToDelete.length
 }
@@ -255,12 +247,12 @@ export function invalidatePattern(pattern: RegExp): number {
  * Pre-warm cache with commonly accessed data
  */
 export async function preWarmCache() {
-  console.log('[CACHE] Pre-warming cache with common data...')
+  // Pre-warming cache with common data
   
   try {
     // This would typically load frequently accessed data
     // Implementation depends on specific use cases
-    console.log('[CACHE] Cache pre-warming completed')
+    // Cache pre-warming completed
   } catch (error) {
     console.error('[CACHE] Cache pre-warming failed:', error)
   }
@@ -269,12 +261,10 @@ export async function preWarmCache() {
 // Graceful shutdown
 if (typeof process !== 'undefined') {
   process.on('SIGTERM', () => {
-    console.log('[CACHE] Shutting down cache...')
     cache.destroy()
   })
   
   process.on('SIGINT', () => {
-    console.log('[CACHE] Shutting down cache...')
     cache.destroy()
   })
 }

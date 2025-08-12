@@ -5,7 +5,6 @@ import {
   FileText, 
   Users, 
   Book,
-  Bug,
   LogIn,
   UserPlus,
   Clock,
@@ -14,7 +13,7 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -66,17 +65,13 @@ const navigationItems: NavigationItem[] = [
     requireRole: 'admin',
     showInMobile: true
   },
-  {
-    name: 'デバッグ',
-    href: '/debug/auth',
-    icon: Bug,
-    showInMobile: false
-  }
+
 ]
 
 export default function GlobalNavigation() {
   const { user, userProfile, organization, loading, signOut } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -160,7 +155,7 @@ export default function GlobalNavigation() {
             {mounted && !loading && user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                  <div className="text-sm font-medium text-gray-900">{user?.email ?? ''}</div>
                   {organization && userProfile && (
                     <span className="text-sm text-gray-600">
                       {userProfile.role === 'admin' ? '管理者' : 'ユーザー'} | {organization.name}
@@ -172,10 +167,10 @@ export default function GlobalNavigation() {
                   size="sm" 
                   onClick={async () => {
                     try {
-                            await signOut()
+                      await signOut()
+                      router.replace('/auth/signin')
                     } catch (error) {
                       console.error('GlobalNavigation: SignOut failed:', error)
-                      // エラーメッセージを表示（必要に応じて）
                       alert('サインアウトに失敗しました。もう一度お試しください。')
                     }
                   }}
@@ -262,7 +257,7 @@ export default function GlobalNavigation() {
               {!loading && user && (
                 <div className="space-y-3">
                   <div className="px-3">
-                    <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                    <div className="text-sm font-medium text-gray-900">{user?.email ?? ''}</div>
                     {organization && userProfile && (
                       <div className="text-sm text-gray-600">
                         {userProfile.role === 'admin' ? '管理者' : 'ユーザー'} | {organization.name}
@@ -273,13 +268,13 @@ export default function GlobalNavigation() {
                     variant="outline" 
                     size="sm" 
                     onClick={async () => {
+                      setMobileMenuOpen(false)
                       try {
-                                            await signOut()
-                        setMobileMenuOpen(false)
+                        await signOut()
+                        await new Promise((r) => setTimeout(r, 50))
+                        router.replace('/auth/signin')
                       } catch (error) {
                         console.error('GlobalNavigation Mobile: SignOut failed:', error)
-                        setMobileMenuOpen(false)
-                        // エラーメッセージを表示（必要に応じて）
                         alert('サインアウトに失敗しました。もう一度お試しください。')
                       }
                     }}

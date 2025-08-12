@@ -1,33 +1,33 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Real-time SSE Updates', () => {
+test.describe('リアルタイムSSE更新', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/checker')
   })
 
   test('should receive real-time updates during text processing', async ({ page }) => {
-    // Fill in text to check
+    // チェック対象のテキストを入力
     const testText = 'このサプリメントで驚異的な効果を実感できます。'
     await page.locator('[data-testid="text-input"]').fill(testText)
     
-    // Start check
+    // チェックを開始
     await page.locator('[data-testid="check-button"]').click()
     
-    // Verify initial queued status
+    // 初期のキュー投入ステータスを確認
     await expect(page.locator('[data-testid="status-message"]')).toContainText('チェックをキューに追加しています')
     
-    // Wait for processing status update
+    // 処理中ステータスへの更新を待機
     await expect(page.locator('[data-testid="status-message"]')).toContainText('AIによるテキスト解析を実行中', { timeout: 10000 })
     
-    // Wait for completion
+    // 完了まで待機
     await expect(page.locator('[data-testid="status-message"]')).toContainText('チェック完了', { timeout: 30000 })
     
-    // Verify results are displayed
+    // 結果の表示を確認
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible()
   })
 
   test('should handle SSE connection errors gracefully', async ({ page }) => {
-    // Intercept SSE requests to simulate connection errors
+    // SSEを妨害して接続エラーを再現
     await page.route('**/api/checks/*/stream', route => {
       route.abort('connectionfailed')
     })
@@ -36,64 +36,64 @@ test.describe('Real-time SSE Updates', () => {
     await page.locator('[data-testid="text-input"]').fill(testText)
     await page.locator('[data-testid="check-button"]').click()
     
-    // Should fall back to polling mechanism
+    // ポーリングへのフォールバックを確認
     await expect(page.locator('[data-testid="status-message"]')).toContainText('チェック完了', { timeout: 30000 })
     
-    // Results should still be displayed
+    // 結果は表示されること
     await expect(page.locator('[data-testid="results-section"]')).toBeVisible()
   })
 
   test('should handle multiple concurrent checks', async ({ page }) => {
-    // Start first check
+    // 1件目のチェックを開始
     await page.locator('[data-testid="text-input"]').fill('最初のテキスト')
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for processing to start
+    // 処理開始を待機
     await expect(page.locator('[data-testid="status-message"]')).toContainText('チェックをキューに追加しています')
     
-    // Start second check while first is processing
+    // 1件目の処理中に2件目のチェックを開始
     await page.locator('[data-testid="text-input"]').fill('二番目のテキスト')
     await page.locator('[data-testid="check-button"]').click()
     
-    // Verify both checks are in history
+    // 履歴に2件が表示されること
     await expect(page.locator('[data-testid="history-item"]')).toHaveCount(2)
     
-    // Wait for both checks to complete
+    // 両方のチェックが完了するまで待機
     await expect(page.locator('[data-testid="history-item"]').first().locator('[data-testid="status-indicator"]')).toContainText('完了', { timeout: 30000 })
     await expect(page.locator('[data-testid="history-item"]').last().locator('[data-testid="status-indicator"]')).toContainText('完了', { timeout: 30000 })
   })
 
   test('should update check history in real-time', async ({ page }) => {
-    // Start a check
+    // チェックを開始
     await page.locator('[data-testid="text-input"]').fill('履歴テストテキスト')
     await page.locator('[data-testid="check-button"]').click()
     
-    // Verify check appears in history immediately
+    // 履歴に即時反映されること
     await expect(page.locator('[data-testid="history-item"]')).toHaveCount(1)
     
-    // Verify initial status in history
+    // 履歴側の初期ステータスを確認
     await expect(page.locator('[data-testid="history-item"]').first().locator('[data-testid="status-indicator"]')).toContainText('処理中')
     
-    // Wait for status to update to completed
+    // 完了に更新されるまで待機
     await expect(page.locator('[data-testid="history-item"]').first().locator('[data-testid="status-indicator"]')).toContainText('完了', { timeout: 30000 })
   })
 
   test('should handle SSE timeout gracefully', async ({ page }) => {
-    // Block SSE requests to simulate connection timeout
+    // SSEをブロックしてタイムアウトを再現
     await page.route('**/api/checks/*/stream', route => route.abort('timedout'))
     
     const testText = 'タイムアウトテスト'
     await page.locator('[data-testid="text-input"]').fill(testText)
     await page.locator('[data-testid="check-button"]').click()
     
-    // Wait for some processing status first
+    // まずは処理中ステータスの表示を待機
     await page.waitForTimeout(3000)
     
-    // Should show some kind of processing or error status (not stuck in initial state)
+    // 何らかの処理中またはエラーステータスが表示される（初期状態のままではない）
     const statusMessage = await page.locator('[data-testid="status-message"]').textContent()
     console.log(`SSE timeout test status: ${statusMessage}`)
     
-    // Test passes if we get some kind of status update (timeout or error handling)
+    // タイムアウトやエラーハンドリングなどのステータス更新があれば合格
     expect(statusMessage).toBeTruthy()
     expect(statusMessage).not.toBe('') // Should not be empty
   })
@@ -102,16 +102,16 @@ test.describe('Real-time SSE Updates', () => {
     await page.locator('[data-testid="text-input"]').fill('プログレステスト')
     await page.locator('[data-testid="check-button"]').click()
     
-    // Check for loading spinner during processing
+    // 処理中のスピナーを確認
     await expect(page.locator('[data-testid="loading-spinner"]')).toBeVisible()
     
-    // Check for progress bar if available
+    // 進捗バーがあれば表示を確認
     const progressBar = page.locator('[data-testid="progress-bar"]')
     if (await progressBar.isVisible()) {
       await expect(progressBar).toBeVisible()
     }
     
-    // Loading should disappear when completed
+    // 完了時にはローディングが消える
     await expect(page.locator('[data-testid="loading-spinner"]')).not.toBeVisible({ timeout: 30000 })
   })
 
