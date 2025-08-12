@@ -40,11 +40,7 @@ export default function CheckerPage() {
               </Button>
             </div>
             
-            <div>
-              <Button asChild variant="ghost">
-                <Link href="/debug/auth">開発者向けデバッグ（匿名ログイン）</Link>
-              </Button>
-            </div>
+
             
             <div className="mt-6">
               <Button asChild variant="link">

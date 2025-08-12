@@ -82,20 +82,22 @@ export default function TextChecker() {
     // 統合SSEエンドポイントに接続
     // EventSource は Authorization ヘッダを付けられないため、
     // セッショントークンが取得できた場合はクエリに付与してサーバ側で検証する
-    const connectGlobalSSE = async () => {
-      try {
-        const sessionResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 500))
-        ])
-        const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
-        const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
-        return new EventSource(url)
-      } catch {
-        return new EventSource('/api/checks/stream')
+    // ページ表示後に遅延でSSE接続を開始（UI表示を優先）
+    const timer = setTimeout(() => {
+      const connectGlobalSSE = async () => {
+        try {
+          const sessionResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 200))
+          ])
+          const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
+          const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
+          return new EventSource(url)
+        } catch {
+          return new EventSource('/api/checks/stream')
+        }
       }
-    }
-    connectGlobalSSE().then((eventSource) => {
+      connectGlobalSSE().then((eventSource) => {
       globalStreamRef.current = eventSource
       
       eventSource.onmessage = (event) => {
@@ -123,8 +125,10 @@ export default function TextChecker() {
         globalStreamRef.current = null
       }
     })
+    }, 100) // 100ms遅延でSSE接続を開始
 
     return () => {
+      clearTimeout(timer)
       if (globalStreamRef.current) {
         safeCloseEventSource(globalStreamRef.current)
       }
@@ -310,7 +314,7 @@ export default function TextChecker() {
       const sessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 500)
+          setTimeout(() => resolve({ data: { session: null } }), 200)
         ),
       ])
       const session = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session
@@ -623,16 +627,13 @@ export default function TextChecker() {
             ))
           }
         } catch (parseError) {
-          clearInterval(pollingIntervalId)
-          clearTimeout(timeout)
-          cancelControllers.current.delete(checkId)
+          // SSE メッセージの解析に失敗した場合は、SSE を閉じてポーリング継続にフォールバック
           console.error('Failed to parse SSE data:', parseError, 'Raw data:', event.data)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
               ? { 
                   ...check, 
-                  status: 'failed',
-                  statusMessage: 'データ解析エラー' 
+                  statusMessage: 'SSEのデータ解析に失敗しました。ポーリングで結果の取得を継続します…' 
                 }
               : check
           ))
@@ -641,21 +642,17 @@ export default function TextChecker() {
       }
 
       eventSource.onerror = (error) => {
-        clearInterval(pollingIntervalId)
-        clearTimeout(timeout)
-        cancelControllers.current.delete(checkId)
+        // SSE 接続に失敗した場合でも、ポーリングは継続しているため失敗扱いにしない
         console.error('SSE connection error:', error)
         setChecks(prev => prev.map(check => 
           check.id === checkId 
             ? { 
                 ...check, 
-                status: 'failed',
-                statusMessage: 'サーバー接続エラー' 
+                statusMessage: 'SSE接続に失敗しました。ポーリングで結果の取得を継続します…' 
               }
             : check
         ))
         safeCloseEventSource(eventSource)
-        setErrorMessage('サーバーとの接続でエラーが発生しました。もう一度お試しください。')
       }
 
     } catch (error) {

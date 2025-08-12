@@ -72,11 +72,7 @@ export default function Home() {
               </Button>
             </div>
             
-            <div className="mt-4">
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/debug/auth">開発者向けデバッグ（匿名ログイン）</Link>
-              </Button>
-            </div>
+
           </div>
         )}
       </div>

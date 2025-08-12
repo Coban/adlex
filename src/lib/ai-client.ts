@@ -1,51 +1,173 @@
 import OpenAI from 'openai'
 
-// Environment detection
+// 環境検出
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
 // モックはテスト時のみ有効
-const hasValidOpenAIKey = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here')
+const aiProvider = process.env.AI_PROVIDER ?? (isProduction ? 'openai' : 'lmstudio')
+const hasValidApiKey = Boolean(process.env.AI_API_KEY && process.env.AI_API_KEY !== 'your-api-key')
 
-// AI client configuration
-// Local development → LM Studio, Production → OpenAI, Test → Mock
-const USE_LM_STUDIO = !isProduction && !isTest
+// 古い環境変数との後方互換性
+const legacyOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here'
+const legacyOpenRouterKey = process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your-openrouter-api-key'
+
+// AIクライアント設定
 const USE_MOCK = isTest
 
-// AI Client Configuration - initialized based on environment
+// プロバイダーベースのAPIキー取得（後方互換性付き）
+function getApiKey(): string | null {
+  if (process.env.AI_API_KEY && process.env.AI_API_KEY !== 'your-api-key') {
+    return process.env.AI_API_KEY
+  }
+  // 後方互換性
+  if (aiProvider === 'openai' && legacyOpenAIKey) {
+    return process.env.OPENAI_API_KEY!
+  }
+  if (aiProvider === 'openrouter' && legacyOpenRouterKey) {
+    return process.env.OPENROUTER_API_KEY!
+  }
+  if (aiProvider === 'lmstudio') {
+    return process.env.LM_STUDIO_API_KEY ?? 'lm-studio'
+  }
+  return null
+}
 
-// OpenAI client (for production)
-const openaiClient = hasValidOpenAIKey ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+// AIクライアント設定 - プロバイダーに基づいて初期化
+const apiKey = getApiKey()
+
+// OpenAIクライアント（チャット用）
+const openaiClient = (aiProvider === 'openai' && apiKey) ? new OpenAI({
+  apiKey: apiKey,
 }) : null
 
-// LM Studio client (for local development)
-const lmStudioClient = new OpenAI({
+// OpenAIクライアント（埋め込み用 - メインプロバイダーと独立して初期化）
+// OPENAI_API_KEY が存在する場合、または AI_PROVIDER が openai で AI_API_KEY が設定されている場合に作成
+let openaiEmbeddingClient: OpenAI | null = (() => {
+  // OPENAI専用キー（推奨）
+  const explicitOpenAIKey = legacyOpenAIKey ? process.env.OPENAI_API_KEY! : null
+  // AI_PROVIDER が openai の場合は統一キーも利用可能
+  const providerOpenAIKey = (aiProvider === 'openai' && apiKey) ? apiKey : null
+  const key = explicitOpenAIKey ?? providerOpenAIKey
+  return key ? new OpenAI({ apiKey: key }) : null
+})()
+
+// 埋め込み用のOpenAIクライアントをオンデマンドで初期化して取得
+function ensureOpenAIEmbeddingClient(): OpenAI | null {
+  if (openaiEmbeddingClient) return openaiEmbeddingClient
+
+  // 優先: 明示的な OPENAI_API_KEY
+  const openaiKey = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-api-key-here')
+    ? process.env.OPENAI_API_KEY!
+    : null
+
+  // 次点: メインプロバイダーが OpenAI の場合は AI_API_KEY
+  const providerKey = (aiProvider === 'openai' && apiKey) ? apiKey : null
+
+  const keyToUse = openaiKey ?? providerKey
+  if (keyToUse) {
+    openaiEmbeddingClient = new OpenAI({ apiKey: keyToUse })
+    return openaiEmbeddingClient
+  }
+
+  return null
+}
+
+// OpenRouterクライアント
+function getSanitizedReferer(): string {
+  const fallback = 'http://localhost:3000'
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? fallback
+  try {
+    const url = new URL(raw)
+    // http/https のみ許可し、クレデンシャル・パス等は含めず origin に固定
+    if (!/^https?:$/.test(url.protocol)) return fallback
+    const origin = url.origin
+    // 長さを制限（ヘッダー肥大対策）
+    return origin.length > 200 ? origin.slice(0, 200) : origin
+  } catch {
+    return fallback
+  }
+}
+
+const openRouterClient = (aiProvider === 'openrouter' && apiKey) ? new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: apiKey,
+  defaultHeaders: {
+    'HTTP-Referer': getSanitizedReferer(),
+    'X-Title': 'AdLex - Pharmaceutical Law Compliance Checker',
+  },
+}) : null
+
+// LM Studioクライアント
+const lmStudioClient = aiProvider === 'lmstudio' ? new OpenAI({
   baseURL: process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234/v1',
-  apiKey: process.env.LM_STUDIO_API_KEY ?? 'lm-studio',
-})
+  apiKey: apiKey ?? 'lm-studio',
+}) : null
 
-// Select the appropriate client
-export const aiClient = USE_LM_STUDIO ? lmStudioClient : openaiClient
+// 適切なクライアントを選択
+export const aiClient = aiProvider === 'lmstudio' ? lmStudioClient : aiProvider === 'openrouter' ? openRouterClient : openaiClient
 
-// Model configurations with validation
+// 埋め込みプロバイダー解決ヘルパー（重複回避のため集約）
+type EmbeddingProvider = 'openai' | 'lmstudio' | 'auto'
+function getEmbeddingProvider(): EmbeddingProvider {
+  if (aiProvider === 'openrouter') {
+    const value = (process.env.AI_EMBEDDING_PROVIDER ?? 'openai').toLowerCase()
+    if (value === 'openai' || value === 'lmstudio' || value === 'auto') {
+      return value as EmbeddingProvider
+    }
+    return 'openai'
+  }
+  if (aiProvider === 'lmstudio') return 'lmstudio'
+  return 'openai'
+}
+
+// バリデーション付きモデル設定
 const getChatModel = () => {
-  if (!USE_LM_STUDIO) return 'gpt-4o'
-  
-  const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? 'openai/gpt-oss-20b'
-  
-  // Prevent using embedding models for chat
-  if (chatModel.includes('embedding') || chatModel.includes('embed')) {
-    console.warn(`Warning: Chat model "${chatModel}" appears to be an embedding model. Using default chat model.`)
-    return 'openai/gpt-oss-20b'
+  // 統一AI_CHAT_MODELを使用し、プロバイダー固有のデフォルトにフォールバック
+  if (process.env.AI_CHAT_MODEL && process.env.AI_CHAT_MODEL !== 'gpt-4o') {
+    return process.env.AI_CHAT_MODEL
   }
   
-  return chatModel
+  // 後方互換性
+  if (aiProvider === 'openrouter' && process.env.OPENROUTER_CHAT_MODEL) {
+    return process.env.OPENROUTER_CHAT_MODEL
+  }
+  if (aiProvider === 'lmstudio' && process.env.LM_STUDIO_CHAT_MODEL) {
+    return process.env.LM_STUDIO_CHAT_MODEL
+  }
+  
+  // プロバイダー固有のデフォルト
+  if (aiProvider === 'openrouter') return 'openai/gpt-4o'
+  if (aiProvider === 'lmstudio') {
+    const defaultModel = 'openai/gpt-oss-20b'
+    // チャット用に埋め込みモデルの使用を防止
+    const chatModel = process.env.LM_STUDIO_CHAT_MODEL ?? defaultModel
+    if (chatModel.includes('embedding') || chatModel.includes('embed')) {
+      console.warn(`警告: チャットモデル "${chatModel}" は埋め込みモデルのようです。デフォルトチャットモデルを使用します。`)
+      return defaultModel
+    }
+    return chatModel
+  }
+  return 'gpt-4o' // OpenAIデフォルト
 }
 
 const getEmbeddingModel = () => {
-  if (!USE_LM_STUDIO) return 'text-embedding-3-small'
+  // 統一AI_EMBEDDING_MODELを使用し、プロバイダー固有のデフォルトにフォールバック
+  if (process.env.AI_EMBEDDING_MODEL && process.env.AI_EMBEDDING_MODEL !== 'text-embedding-3-small') {
+    return process.env.AI_EMBEDDING_MODEL
+  }
   
-  return process.env.LM_STUDIO_EMBEDDING_MODEL ?? 'text-embedding-nomic-embed-text-v1.5'
+  // 後方互換性
+  if (aiProvider === 'openrouter' && process.env.OPENROUTER_EMBEDDING_MODEL) {
+    return process.env.OPENROUTER_EMBEDDING_MODEL
+  }
+  if (aiProvider === 'lmstudio' && process.env.LM_STUDIO_EMBEDDING_MODEL) {
+    return process.env.LM_STUDIO_EMBEDDING_MODEL
+  }
+  
+  // プロバイダー固有のデフォルト
+  if (aiProvider === 'openrouter') return 'text-embedding-3-small'
+  if (aiProvider === 'lmstudio') return 'text-embedding-nomic-embed-text-v1.5'
+  return 'text-embedding-3-small' // OpenAIデフォルト
 }
 
 export const AI_MODELS = {
@@ -53,11 +175,11 @@ export const AI_MODELS = {
   embedding: getEmbeddingModel()
 }
 
-// Basic utility to sanitize plain text from model outputs (strip code fences)
+// モデル出力からプレーンテキストをサニタイズする基本ユーティリティ（コードフェンス除去）
 function sanitizePlainText(text: string | null | undefined): string {
   if (!text) return ''
   const trimmed = text.trim()
-  // Remove ``` blocks if present
+  // ```ブロックが存在する場合は削除
   const fenced = trimmed.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/)
   if (fenced?.[1]) return fenced[1].trim()
   return trimmed
@@ -111,7 +233,7 @@ function generateMockViolations(messages: OpenAI.Chat.Completions.ChatCompletion
   return violations
 }
 
-// Utility function to create chat completion
+// チャット完了を作成するユーティリティ関数
 /**
  * AIクライアントを使用してチャット完了を作成する
  * OpenAIまたはLM Studioのクライアントを使用してLLMとの対話を行う
@@ -201,12 +323,45 @@ export async function createChatCompletion(params: {
   }
 
   if (!aiClient) {
-    throw new Error('AI client is not available. Please check your configuration.')
+    throw new Error('AIクライアントが利用できません。設定を確認してください。')
   }
 
   try {
+    // OpenRouter用のパラメータ（OpenAIと同様の機能をサポート）
+    if (aiProvider === 'openrouter') {
+      // Base64サニタイゼーションなしで元のメッセージを使用
+      const sanitizedMessages = params.messages
+
+      const openRouterParams = {
+        model: AI_MODELS.chat,
+        messages: sanitizedMessages,
+        tools: params.tools,
+        tool_choice: params.tool_choice,
+        temperature: params.temperature ?? 0.7,
+        max_tokens: params.max_tokens,
+      }
+
+      try {
+        const response = await aiClient!.chat.completions.create(openRouterParams)
+        return response
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message.includes('insufficient_quota') || error.message.includes('quota')) {
+            throw new Error('OpenRouterのクォータを超過しました。アカウントの残高を確認してください。')
+          }
+          if (error.message.includes('invalid_api_key') || error.message.includes('unauthorized')) {
+            throw new Error('OpenRouter APIキーが無効です。AI_API_KEY環境変数を確認してください。')
+          }
+          if (error.message.includes('model_not_found') || error.message.includes('not found')) {
+            throw new Error(`OpenRouterモデル "${AI_MODELS.chat}" が見つかりません。AI_CHAT_MODEL設定を確認してください。`)
+          }
+        }
+        throw new Error(`OpenRouterチャット完了に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+      }
+    }
+
     // LM Studio用のパラメータ簡略化（サポートされていない機能を回避）
-    if (USE_LM_STUDIO) {
+    if (aiProvider === 'lmstudio') {
       const lmParams = {
         model: AI_MODELS.chat,
         messages: params.messages,
@@ -215,11 +370,11 @@ export async function createChatCompletion(params: {
         // LM Studioはtools/tool_choiceをサポートしていない可能性があるため除外
       }
       
-      // Making LM Studio chat completion request
+      // LM Studioチャット完了リクエストの実行
       
       // LM Studioリクエスト用のタイムアウト処理を追加
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('LM Studio chat completion timed out (90 seconds)')), 90000)
+        setTimeout(() => reject(new Error('LM Studioチャット完了がタイムアウトしました（90秒）')), 90000)
       })
       
       const chatPromise = aiClient.chat.completions.create(lmParams)
@@ -228,28 +383,28 @@ export async function createChatCompletion(params: {
         const response = await Promise.race([chatPromise, timeoutPromise])
         return response
       } catch (error) {
-        // Handle LM Studio specific errors
+        // LM Studio固有のエラーを処理
         
         if (error instanceof Error) {
           // LM Studioの一般的なモデル関連エラーを処理
           if (error.message.includes('Failed to load model') && error.message.includes('not llm')) {
-            throw new Error(`LM Studio model error: "${AI_MODELS.chat}" is not a chat/LLM model. Please load a chat model in LM Studio (e.g., microsoft/Phi-3-mini-4k-instruct-gguf, google/gemma-2-2b-it-gguf). Current model appears to be an embedding model. Check /api/debug/model-validation for configuration help.`)
+            throw new Error(`LM Studioモデルエラー: "${AI_MODELS.chat}" はチャット/LLMモデルではありません。LM Studioでチャットモデルを読み込んでください（例: microsoft/Phi-3-mini-4k-instruct-gguf, google/gemma-2-2b-it-gguf）。現在のモデルは埋め込みモデルのようです。設定のヘルプは /api/debug/model-validation を確認してください。`)
           }
           if (error.message.includes('model') && error.message.includes('not found')) {
-            throw new Error(`LM Studio model not found: ${AI_MODELS.chat}. Please ensure this model is loaded in LM Studio. Check /api/debug/model-validation for available models.`)
+            throw new Error(`LM Studioモデルが見つかりません: ${AI_MODELS.chat}。このモデルがLM Studioで読み込まれていることを確認してください。利用可能なモデルは /api/debug/model-validation で確認してください。`)
           }
           if (error.message.includes('connection') || error.message.includes('ECONNREFUSED')) {
-            throw new Error('LM Studio is not running or not accessible. Please start LM Studio and load a chat model. Check /api/debug/model-validation for connection status.')
+            throw new Error('LM Studioが起動していないかアクセスできません。LM Studioを起動してチャットモデルを読み込んでください。接続状態は /api/debug/model-validation で確認してください。')
           }
           if (error.message.includes('timed out')) {
-            throw new Error('LM Studio request timed out. The model may be overloaded or the request too complex.')
+            throw new Error('LM Studioリクエストがタイムアウトしました。モデルが過負荷状態かリクエストが複雑すぎる可能性があります。')
           }
           if (error.message.includes('404')) {
-            throw new Error(`LM Studio 404 error: Model "${AI_MODELS.chat}" not found or not properly loaded. Please check LM Studio and ensure a chat model is loaded. Check /api/debug/model-validation for configuration help.`)
+            throw new Error(`LM Studio 404エラー: モデル "${AI_MODELS.chat}" が見つからないか正しく読み込まれていません。LM Studioを確認してチャットモデルが読み込まれていることを確認してください。設定のヘルプは /api/debug/model-validation を確認してください。`)
           }
         }
         
-        throw new Error(`LM Studio chat completion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(`LM Studioチャット完了に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
       }
     }
     
@@ -260,29 +415,16 @@ export async function createChatCompletion(params: {
     })
     return response
   } catch (error) {
-    console.error('Error in createChatCompletion:', error)
+    // チャット完了でエラーが発生
     
-    // デバッグ用の詳細なエラー情報をログに出力
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        currentModel: AI_MODELS.chat,
-        usingLMStudio: USE_LM_STUDIO,
-        hasValidOpenAIKey,
-        aiClientAvailable: !!aiClient
-      })
-    }
-    
-    throw new Error(`Failed to create chat completion: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    throw new Error(`チャット完了の作成に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
   }
 }
 
 /**
- * Extract text from an image using an LLM with vision capability.
- * - Production: OpenAI (gpt-4o)
- * - Development: LM Studio if available; may not support vision → throws with guidance
+ * Vision機能を持つLLMを使用して画像からテキストを抽出する
+ * - 本番環境: OpenAI (gpt-4o)
+ * - 開発環境: 利用可能な場合はLM Studio; visionをサポートしていない場合はガイダンス付きでエラーを投げる
  */
 /**
  * LLMを使用して画像からテキストを抽出する（OCR処理）
@@ -292,10 +434,10 @@ export async function createChatCompletion(params: {
  */
 export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   text: string
-  provider: 'openai' | 'lmstudio'
+  provider: 'openai' | 'lmstudio' | 'openrouter'
   model: string
 }> {
-  // 本番環境ではOpenAIを優先、開発環境ではUSE_LM_STUDIOフラグに従う
+  // 本番環境ではOpenAIを優先、開発環境ではaiProviderの設定に従う
   // ただし、LM StudioがVision対応でない場合は明確なエラーを表示
 
   // マルチモーダル用のユーザーコンテンツを構築（OpenAI Vision 仕様に準拠）
@@ -304,8 +446,8 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     { type: 'image_url', image_url: { url: imageUrl } }
   ]
 
-  // 開発環境でLM Studioが設定されている場合は最初に試行
-  if (isUsingLMStudio()) {
+  // OpenRouterを使用する場合
+  if (aiProvider === 'openrouter') {
     try {
       const response: unknown = await createChatCompletion({
         messages: [
@@ -318,7 +460,42 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
 
       const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
       if (!content || typeof content !== 'string') {
-        throw new Error('LM Studio did not return textual content for vision request')
+        throw new Error('OpenRouterが画像リクエストに対してテキスト内容を返しませんでした')
+      }
+      return {
+        text: sanitizePlainText(content),
+        provider: 'openrouter',
+        model: AI_MODELS.chat
+      }
+    } catch (error) {
+      // OpenRouterでVision機能をサポートしていない場合の分かりやすいエラーメッセージ
+      if (error instanceof Error && (
+        error.message.includes('image') ||
+        error.message.toLowerCase().includes('vision') ||
+        error.message.includes('not supported') ||
+        error.message.includes('unsupported')
+      )) {
+        throw new Error('OpenRouterの現在のモデルは画像入力（Vision）をサポートしていません。Vision対応のモデル（gpt-4oやgpt-4-turbo等）を選択してください。')
+      }
+      throw error
+    }
+  }
+
+  // 開発環境でLM Studioが設定されている場合は最初に試行
+  if (aiProvider === 'lmstudio') {
+    try {
+      const response: unknown = await createChatCompletion({
+        messages: [
+          { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
+          { role: 'user', content: userContent }
+        ],
+        temperature: 0,
+        max_tokens: 4000
+      })
+
+      const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
+      if (!content || typeof content !== 'string') {
+        throw new Error('LM Studioが画像リクエストに対してテキスト内容を返しませんでした')
       }
       return {
         text: sanitizePlainText(content),
@@ -365,7 +542,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   }
 }
 
-// Heuristic score for OCR quality (length / unique chars / presence of mojibake)
+// OCR品質のヒューリスティックスコア（長さ/ユニーク文字数/文字化けの有無）
 /**
  * OCR結果テキストの簡易信頼度を 0.0〜1.0 で推定するヒューリスティック関数。
  *
@@ -404,13 +581,84 @@ export function estimateOcrConfidence(text: string): number {
   return Number(score.toFixed(2))
 }
 
-// Utility function to create embeddings
+// 埋め込み作成用ユーティリティ関数
 /**
  * テキストの埋め込みベクトルを生成する
  * 辞書エントリの類似性検索に使用される
  * @param input 埋め込みベクトルを生成するテキスト
  * @returns 埋め込みベクトルの数値配列
  */
+// OpenAI埋め込み用ヘルパー関数
+async function createOpenAIEmbedding(input: string): Promise<number[]> {
+  const client = ensureOpenAIEmbeddingClient() ?? openaiClient
+  if (!client) {
+    throw new Error('OpenAI埋め込みクライアントが利用できません。OPENAI_API_KEY 環境変数を設定してください。')
+  }
+  
+  const response = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input,
+  })
+
+  if (!response.data || response.data.length === 0) {
+    throw new Error('OpenAI APIから埋め込みデータが返されませんでした')
+  }
+  
+  if (!response.data[0]?.embedding) {
+    throw new Error('OpenAI応答に埋め込みデータがありません')
+  }
+  
+  return response.data[0].embedding
+}
+
+// LM Studio埋め込み用ヘルパー関数
+async function createLMStudioEmbedding(input: string): Promise<number[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60000) // 60秒タイムアウト
+  
+  try {
+    const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY ?? 'lm-studio'}`
+      },
+      body: JSON.stringify({
+        model: AI_MODELS.embedding,
+        input,
+      }),
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
+    
+    if (!response.ok) {
+      throw new Error(`LM Studio APIエラー: ${response.status} ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    
+    if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
+      // LM Studioの次元が異なる場合の処理
+      const targetDim = getEmbeddingDimension()
+      const emb: number[] = data.data[0].embedding
+      if (emb.length === targetDim) return emb
+      if (emb.length < targetDim) {
+        return [...emb, ...new Array(targetDim - emb.length).fill(0)]
+      }
+      return emb.slice(0, targetDim)
+    }
+    
+    throw new Error('LM Studio埋め込み応答にデータがありません')
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('LM Studio埋め込みリクエストがタイムアウトしました（60秒）')
+    }
+    throw error
+  }
+}
+
 export async function createEmbedding(input: string): Promise<number[]> {
   // テスト/モックモードでは模擬埋め込みを返す
   if (USE_MOCK) {
@@ -421,135 +669,141 @@ export async function createEmbedding(input: string): Promise<number[]> {
   }
 
   if (!aiClient) {
-    throw new Error('AI client is not available. Please check your configuration.')
+    throw new Error('AIクライアントが利用できません。設定を確認してください。')
   }
 
   try {
-    // LM Studio用：OpenAI SDKのパース問題を回避するため直接fetchを使用
-    if (USE_LM_STUDIO) {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60秒タイムアウト
-      
-      try {
-        const response = await fetch(`${process.env.LM_STUDIO_BASE_URL ?? 'http://127.0.0.1:1234/v1'}/embeddings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.LM_STUDIO_API_KEY ?? 'lm-studio'}`
-          },
-          body: JSON.stringify({
-            model: AI_MODELS.embedding,
-            input,
-          }),
-          signal: controller.signal
-        })
-        
-        clearTimeout(timeoutId)
-        
-        if (!response.ok) {
-          throw new Error(`LM Studio API error: ${response.status} ${response.statusText}`)
-        }
-        
-        const data = await response.json()
-        
-        if (data.data && data.data.length > 0 && data.data[0]?.embedding) {
-          // LM Studio の次元が 768 の場合でも、DBは1536に統一しているため拡張
-          const targetDim = getEmbeddingDimension()
-          const emb: number[] = data.data[0].embedding
-          if (emb.length === targetDim) return emb
-          if (emb.length < targetDim) {
-            return [...emb, ...new Array(targetDim - emb.length).fill(0)]
+    // OpenRouter用: embeddings APIはサポートされていないため、選択されたproviderを使用
+    if (aiProvider === 'openrouter') {
+      const provider = getEmbeddingProvider()
+      switch (provider) {
+        case 'openai':
+          return await createOpenAIEmbedding(input)
+        case 'lmstudio':
+          return await createLMStudioEmbedding(input)
+        case 'auto':
+          // OpenAI -> LM Studio の順で自動フォールバック
+          try {
+            return await createOpenAIEmbedding(input)
+          } catch (openaiError) {
+            try {
+              return await createLMStudioEmbedding(input)
+            } catch (lmstudioError) {
+              throw new Error(`すべての埋め込みプロバイダーが失敗しました。OpenAI: ${openaiError instanceof Error ? openaiError.message : '不明なエラー'}。LM Studio: ${lmstudioError instanceof Error ? lmstudioError.message : '不明なエラー'}`)
+            }
           }
-          return emb.slice(0, targetDim)
-        }
-        
-        throw new Error('LM Studio embedding response is missing data')
-      } catch (error) {
-        clearTimeout(timeoutId)
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error('LM Studio embedding request timed out (60 seconds)')
-        }
-        throw error
       }
     }
-    
-    // OpenAI用：SDKを使用
-    const response = await aiClient.embeddings.create({
-      model: AI_MODELS.embedding,
-      input,
-    })
 
-    if (!response.data || response.data.length === 0) {
-      console.error('No data array in response:', response)
-      throw new Error('No embedding data returned from OpenAI API')
+    // LM Studio用：統一されたヘルパー関数を使用
+    if (aiProvider === 'lmstudio') {
+      return await createLMStudioEmbedding(input)
     }
     
-    if (!response.data[0]) {
-      console.error('No first item in data array:', response.data)
-      throw new Error('Embedding data array is empty')
-    }
-
-    if (!response.data[0].embedding) {
-      console.error('No embedding in first item:', response.data[0])
-      throw new Error('Embedding data is missing from response')
-    }
-    
-    return response.data[0].embedding
+    // OpenAI用：統一されたヘルパー関数を使用
+    return await createOpenAIEmbedding(input)
   } catch (error) {
-    console.error('Error in createEmbedding:', error)
+    // 埋め込み作成中にエラーが発生
     
-    if (USE_LM_STUDIO) {
-      throw new Error(`LM Studio embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please check if LM Studio is running and the embedding model is loaded.`)
+    if (aiProvider === 'lmstudio') {
+      throw new Error(`LM Studio埋め込みに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}。LM Studioが実行中で埋め込みモデルが読み込まれているか確認してください。`)
     }
     
-    throw new Error(`Failed to create embedding: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    throw new Error(`埋め込みの作成に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
   }
 }
 
-// Utility function to check if we're using LM Studio
-export function isUsingLMStudio(): boolean {
-  return USE_LM_STUDIO
-}
-
-// Additional utility functions for debugging and monitoring
-export function getCurrentAIModel(): string {
-  return AI_MODELS.chat
-}
-
+// デバッグとモニタリング用の追加ユーティリティ関数
+/**
+ * 現在のAIクライアント設定と可用性の概要を返す。
+ *
+ * @returns 設定、利用中モデル、キー有無、クライアント可用性などのメタ情報
+ */
 export function getAIClientInfo() {
+  const embeddingProvider = getEmbeddingProvider()
+  
   return {
-    isUsingLMStudio: USE_LM_STUDIO,
+    aiProvider: aiProvider,
+    embeddingProvider: embeddingProvider,
+    isUsingLMStudio: aiProvider === 'lmstudio',
+    isUsingOpenRouter: aiProvider === 'openrouter',
+    isUsingOpenAI: aiProvider === 'openai',
     currentChatModel: AI_MODELS.chat,
     currentEmbeddingModel: AI_MODELS.embedding,
-    hasValidOpenAIKey,
+    hasValidApiKey: hasValidApiKey,
     clientAvailable: !!aiClient,
     environment: process.env.NODE_ENV,
     isMockMode: USE_MOCK,
-    lmStudioChatModelEnv: process.env.LM_STUDIO_CHAT_MODEL,
-    lmStudioEmbeddingModelEnv: process.env.LM_STUDIO_EMBEDDING_MODEL,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL
+    // 新しい統一設定
+    aiApiKey: process.env.AI_API_KEY ? '***' : undefined,
+    aiChatModel: process.env.AI_CHAT_MODEL,
+    aiEmbeddingModel: process.env.AI_EMBEDDING_MODEL,
+    aiEmbeddingProvider: process.env.AI_EMBEDDING_PROVIDER,
+    // 後方互換性情報
+    legacyOpenAIKey: legacyOpenAIKey ? '***' : undefined,
+    legacyOpenRouterKey: legacyOpenRouterKey ? '***' : undefined,
+    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    // クライアント可用性（チャット/埋め込み）
+    openaiClientAvailable: !!openaiClient,
+    openaiEmbeddingClientAvailable: !!openaiEmbeddingClient,
+    lmStudioEmbeddingAvailable: !!process.env.LM_STUDIO_BASE_URL
   }
 }
 
-// Function to validate and suggest model configurations
+// モデル設定の検証と提案を行う関数
+/**
+ * モデル設定の妥当性を検証し、問題点と提案を返す。
+ *
+ * - LM Studio のチャット/埋め込みモデルの取り違いを検出
+ * - OpenRouter 使用時の埋め込みプロバイダー設定を検証
+ *
+ * @returns 妥当性、検出された課題、提案、現在構成
+ */
 export function validateModelConfiguration() {
   const issues = []
   const suggestions = []
+  const embeddingProvider = getEmbeddingProvider()
   
-  if (USE_LM_STUDIO) {
+  // メインAIプロバイダー設定の検証
+  if (aiProvider === 'lmstudio') {
     const chatModel = AI_MODELS.chat
     const embeddingModel = AI_MODELS.embedding
     
-    // Check if chat model looks like an embedding model
+    // チャットモデルが埋め込みモデルのように見えるかをチェック
     if (chatModel.includes('embedding') || chatModel.includes('embed')) {
-      issues.push(`Chat model "${chatModel}" appears to be an embedding model`)
-      suggestions.push('Set LM_STUDIO_CHAT_MODEL to a proper chat model like "microsoft/Phi-3-mini-4k-instruct-gguf"')
+      issues.push(`チャットモデル "${chatModel}" は埋め込みモデルのようです`)
+      suggestions.push('AI_CHAT_MODELを適切なチャットモデル（例："microsoft/Phi-3-mini-4k-instruct-gguf"）に設定してください')
     }
     
-    // Check if embedding model looks like a chat model
+    // 埋め込みモデルがチャットモデルのように見えるかをチェック
     if (!embeddingModel.includes('embedding') && !embeddingModel.includes('embed')) {
-      issues.push(`Embedding model "${embeddingModel}" might not be an embedding model`)
-      suggestions.push('Set LM_STUDIO_EMBEDDING_MODEL to a proper embedding model like "text-embedding-nomic-embed-text-v1.5"')
+      issues.push(`埋め込みモデル "${embeddingModel}" は埋め込みモデルではない可能性があります`)
+      suggestions.push('AI_EMBEDDING_MODELを適切な埋め込みモデル（例："text-embedding-nomic-embed-text-v1.5"）に設定してください')
+    }
+  }
+  
+  // OpenRouter用の埋め込みプロバイダー設定を検証
+  if (aiProvider === 'openrouter') {
+    const embeddingProviderValue = process.env.AI_EMBEDDING_PROVIDER
+    
+    if (embeddingProviderValue && !['openai', 'lmstudio', 'auto'].includes(embeddingProviderValue)) {
+      issues.push(`Invalid AI_EMBEDDING_PROVIDER: "${embeddingProviderValue}"`)
+      suggestions.push('Set AI_EMBEDDING_PROVIDER to "openai", "lmstudio", or "auto"')
+    }
+    
+    // 各プロバイダーに必要な依存関係が利用可能かをチェック
+    if (embeddingProvider === 'openai' || embeddingProvider === 'auto') {
+      if (!openaiEmbeddingClient && !openaiClient) {
+        issues.push('OpenAI client not available for embeddings')
+        suggestions.push('Set AI_API_KEY environment variable and AI_PROVIDER=openai (preferred), or OPENAI_API_KEY for backward compatibility, for OpenAI embeddings')
+      }
+    }
+    
+    if (embeddingProvider === 'lmstudio' || embeddingProvider === 'auto') {
+      if (!process.env.LM_STUDIO_BASE_URL) {
+        issues.push('LM Studio base URL not configured for embeddings')
+        suggestions.push('Set LM_STUDIO_BASE_URL environment variable for LM Studio embeddings')
+      }
     }
   }
   
@@ -561,21 +815,33 @@ export function validateModelConfiguration() {
   }
 }
 
-// Utility function to check if we're using mock mode
+// モックモードを使用しているかをチェックするユーティリティ関数
+/**
+ * モックモード（テスト環境）かどうかを返す。
+ *
+ * @returns モック使用中ならtrue
+ */
 export function isUsingMock(): boolean {
   return USE_MOCK
 }
 
-// Get embedding dimension based on the model being used
+// 使用中のモデルに基づいて埋め込み次元数を取得
+/**
+ * 使用中モデルに対する埋め込み次元数を返す。
+ *
+ * - モック時は 384、通常時は DB に合わせ 1536
+ *
+ * @returns 埋め込み次元数
+ */
 export function getEmbeddingDimension(): number {
   if (USE_MOCK) {
-    return 384 // Mock embedding dimension
+    return 384 // モック埋め込み次元数
   }
   // DBは1536次元に統一（migrations参照）
   return 1536
 }
 
-// Legacy createChatCompletion for check-processor compatibility
+// check-processor互換性のためのレガシーcreateChatCompletion
 
 type LegacyDictionaryEntry = {
   id: number
@@ -591,8 +857,18 @@ type LegacyViolationData = {
   dictionary_id?: number
 }
 
+/**
+ * チェック処理用のチャット補完を実行するユーティリティ（レガシー互換）。
+ *
+ * - OpenAI/OpenRouter: Function calling を用いて JSON を取得
+ * - LM Studio: テキスト応答から JSON を抽出・検証
+ *
+ * @param text 解析対象テキスト（OCR済みを含む）
+ * @param relevantEntries 参考辞書エントリー（上位スコア順）
+ * @returns プロバイダー種別、（必要に応じて）生レスポンス、違反配列、修正文
+ */
 export async function createChatCompletionForCheck(text: string, relevantEntries: LegacyDictionaryEntry[]): Promise<{
-  type: 'openai' | 'lmstudio'
+  type: 'openai' | 'lmstudio' | 'openrouter'
   response?: OpenAI.Chat.Completions.ChatCompletion
   violations: LegacyViolationData[]
   modified: string
@@ -625,8 +901,56 @@ JSON形式:
     }
   ]
 
-  if (USE_LM_STUDIO) {
-    // LM Studio mode - parse JSON from content
+  if (aiProvider === 'openrouter') {
+    // OpenRouterモード - ファンクション呼び出しを使用（OpenAIと同様）
+    const tools = [{
+      type: 'function' as const,
+      function: {
+        name: 'apply_yakukiho_rules',
+        description: '薬機法ルールを適用してテキストを分析・修正する',
+        parameters: {
+          type: 'object',
+          properties: {
+            modified: {
+              type: 'string',
+              description: '薬機法に準拠するよう修正されたテキスト'
+            },
+            violations: {
+              type: 'array',
+              description: '検出された違反項目のリスト',
+              items: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number', description: '違反箇所の開始位置' },
+                  end: { type: 'number', description: '違反箇所の終了位置' },
+                  reason: { type: 'string', description: '違反理由' },
+                  dictionaryId: { type: 'number', description: '対応する辞書項目ID' }
+                },
+                required: ['start', 'end', 'reason']
+              }
+            }
+          },
+          required: ['modified', 'violations']
+        }
+      }
+    }]
+
+    const response = await createChatCompletion({
+      messages,
+      tools,
+      tool_choice: { type: 'function', function: { name: 'apply_yakukiho_rules' } },
+      temperature: 0.1,
+      max_tokens: 2000
+    })
+
+    return {
+      type: 'openrouter',
+      response: response as OpenAI.Chat.Completions.ChatCompletion,
+      violations: [],
+      modified: ''
+    }
+  } else if (aiProvider === 'lmstudio') {
+    // LM Studioモード - コンテンツからJSONを解析
     const response = await createChatCompletion({
       messages,
       temperature: 0.1,
@@ -635,26 +959,25 @@ JSON形式:
 
     const content = (response as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
     if (!content) {
-      throw new Error('LM Studio did not return content')
+      throw new Error('LM Studioが応答内容を返しませんでした')
     }
 
-    // Extract JSON from response with improved parsing
-    console.log('LM Studio raw response:', content.substring(0, 500) + '...')
+    // 改善された解析でレスポンスからJSONを抽出
     
-    // Try multiple JSON extraction patterns
+    // 複数のJSON抽出パターンを試行
     let jsonStr = null
     
-    // Pattern 1: JSON within markdown code blocks
+    // パターン1: Markdownコードブロック内のJSON
     let jsonMatch = content.match(/```json([^`]+)```/)
     if (jsonMatch) {
       jsonStr = jsonMatch[1].trim()
     } else {
-      // Pattern 2: Look for complete JSON object at end
+      // パターン2: 末尾の完全なJSONオブジェクトを検索
       jsonMatch = content.match(/\{[^}]*\}$/m)
       if (jsonMatch) {
         jsonStr = jsonMatch[0]
       } else {
-        // Pattern 3: Look for any JSON-like structure
+        // パターン3: 任意のJSON様構造を検索
         jsonMatch = content.match(/\{[^}]*\}/m)
         if (jsonMatch) {
           jsonStr = jsonMatch[0]
@@ -663,21 +986,20 @@ JSON形式:
     }
     
     if (!jsonStr) {
-      console.error('No JSON pattern found in LM Studio response:', content)
-      throw new Error('No JSON found in LM Studio response')
+      throw new Error('LM Studio応答にJSON形式が見つかりませんでした')
     }
     
-    console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...')
+    // JSON文字列を抽出完了
 
     try {
       const parsed = JSON.parse(jsonStr)
       
       if (!parsed.modified || typeof parsed.modified !== 'string') {
-        throw new Error('Invalid modified field in response')
+        throw new Error('応答の修正フィールドが無効です')
       }
       
       if (!Array.isArray(parsed.violations)) {
-        throw new Error('Invalid violations field in response')
+        throw new Error('応答の違反フィールドが無効です')
       }
 
       return {
@@ -686,12 +1008,10 @@ JSON形式:
         modified: parsed.modified
       }
     } catch (error) {
-      console.error('JSON parsing failed:', error)
-      console.error('Original JSON string:', jsonStr)
-      throw new Error(`Failed to parse LM Studio JSON response: ${error}`)
+      throw new Error(`LM Studio JSON応答の解析に失敗しました: ${error}`)
     }
   } else {
-    // OpenAI mode - use function calling
+    // OpenAIモード - ファンクション呼び出しを使用
     const tools = [{
       type: 'function' as const,
       function: {
@@ -735,8 +1055,8 @@ JSON形式:
     return {
       type: 'openai',
       response: response as OpenAI.Chat.Completions.ChatCompletion,
-      violations: [], // Will be extracted by caller
-      modified: '' // Will be extracted by caller
+      violations: [], // 呼び出し元で抽出される
+      modified: '' // 呼び出し元で抽出される
     }
   }
 }

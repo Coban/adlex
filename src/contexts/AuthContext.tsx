@@ -33,10 +33,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      // First get the user profile
-      const { data: profile, error } = await supabase
+      // JOINクエリで一回でユーザー情報と組織情報を取得
+      const { data: userWithOrg, error } = await supabase
         .from('users')
-        .select('*')
+        .select(`
+          *,
+          organizations (*)
+        `)
         .eq('id', userId)
         .maybeSingle()
 
@@ -53,28 +56,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       
-      if (!profile) {
+      if (!userWithOrg) {
         setUserProfile(null)
         setOrganization(null)
         return
       }
 
-      setUserProfile(profile)
+      setUserProfile(userWithOrg)
       
-      // If user has an organization_id, fetch the organization separately
-      if (profile?.organization_id) {
-        const { data: org, error: orgError } = await supabase
-          .from('organizations')
-          .select('*')
-          .eq('id', profile.organization_id)
-          .maybeSingle()
-
-        if (orgError) {
-          console.error('Error fetching organization:', orgError)
-          setOrganization(null)
-        } else {
-          setOrganization(org)
-        }
+      // Set organization data from JOIN result
+      if (userWithOrg.organizations) {
+        setOrganization(userWithOrg.organizations)
       } else {
         setOrganization(null)
       }
@@ -164,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isMounted) {
         setLoading(false)
       }
-    }, 5000) // 5 seconds timeout
+    }, 2000) // 2 seconds timeout
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
