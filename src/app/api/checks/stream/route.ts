@@ -13,28 +13,10 @@ export async function GET(request: NextRequest) {
   const user = authResult.data.user
   const authError = authResult.error
   
-  let currentUser = user
+  const currentUser = user
   if (authError || !currentUser) {
-    // クッキー認証に失敗した場合は、クエリパラメータの token を検証（EventSource はカスタムヘッダ不可のため）
-    const token = request.nextUrl.searchParams.get('token')
-    if (token) {
-      try {
-        const { createClient: createServiceClient } = await import('@supabase/supabase-js')
-        const supabaseService = createServiceClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        )
-        const { data: { user: tokenUser } } = await supabaseService.auth.getUser(token)
-        if (tokenUser) {
-          currentUser = tokenUser
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (!currentUser) {
-      return new Response('Unauthorized', { status: 401 })
-    }
+    // 同一オリジンではクッキー認証のみを許可
+    return new Response('Unauthorized', { status: 401 })
   }
 
   // ユーザー組織情報を取得

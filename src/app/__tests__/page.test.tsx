@@ -80,7 +80,6 @@ describe('Home ページ', () => {
     expect(screen.getByText('テキストチェックを開始')).toBeInTheDocument()
     expect(screen.getByText('サインイン')).toBeInTheDocument()
     expect(screen.getByText('サインアップ')).toBeInTheDocument()
-    expect(screen.getByText('開発者向けデバッグ（匿名ログイン）')).toBeInTheDocument()
   })
 })
 

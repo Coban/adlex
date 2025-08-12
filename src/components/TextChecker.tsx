@@ -84,19 +84,7 @@ export default function TextChecker() {
     // セッショントークンが取得できた場合はクエリに付与してサーバ側で検証する
     // ページ表示後に遅延でSSE接続を開始（UI表示を優先）
     const timer = setTimeout(() => {
-      const connectGlobalSSE = async () => {
-        try {
-          const sessionResult = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 200))
-          ])
-          const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
-          const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
-          return new EventSource(url)
-        } catch {
-          return new EventSource('/api/checks/stream')
-        }
-      }
+      const connectGlobalSSE = async () => new EventSource('/api/checks/stream')
       connectGlobalSSE().then((eventSource) => {
       globalStreamRef.current = eventSource
       
@@ -366,17 +354,7 @@ export default function TextChecker() {
       
       // SSEで結果を待機（ヘッダ不可のため、トークンはクエリで渡す）
       // 個別SSEはできるだけ確実にトークンを付与したいので、タイムアウトを長めにする
-      const sseSessionResult = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 3000)
-        ),
-      ])
-      const sseToken = (sseSessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
-      const streamUrl = sseToken
-        ? `/api/checks/${checkData.id}/stream?token=${encodeURIComponent(sseToken)}`
-        : `/api/checks/${checkData.id}/stream`
-      const eventSource = new EventSource(streamUrl)
+      const eventSource = new EventSource(`/api/checks/${checkData.id}/stream`)
       
       // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0

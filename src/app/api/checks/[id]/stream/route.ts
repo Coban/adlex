@@ -22,30 +22,12 @@ export async function GET(
 
   // ユーザーがこのチェックにアクセス権があるかを検証
   const authResult = await supabase.auth.getUser()
-  let user = authResult.data.user
+  const user = authResult.data.user
   const authError = authResult.error
   
   if (authError || !user) {
-    // EventSource はヘッダが使えないため、トークンをクエリから検証
-    const token = request.nextUrl.searchParams.get('token')
-    if (token) {
-      try {
-        const { createClient: createServiceClient } = await import('@supabase/supabase-js')
-        const supabaseService = createServiceClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        )
-        const { data: { user: tokenUser } } = await supabaseService.auth.getUser(token)
-        if (tokenUser) {
-          user = tokenUser
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (!user) {
-      return new Response('Unauthorized', { status: 401 })
-    }
+    // 同一オリジンではクッキー認証のみを許可
+    return new Response('Unauthorized', { status: 401 })
   }
 
   const { data: checkRecord, error: checkError } = await supabase

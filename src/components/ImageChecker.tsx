@@ -132,17 +132,7 @@ export default function ImageChecker() {
       // 進捗と結果のためのSSE接続（可能なら認証トークンを付与。取得に時間がかかる場合は最大3秒待つ）
       setState('processing')
       setStatusMessage('OCRおよび薬機法チェックを実行中...')
-      const sessionRace = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 3000)
-        ),
-      ])
-      const token = (sessionRace as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
-      const streamUrl = token
-        ? `/api/checks/${checkData.id}/stream?token=${encodeURIComponent(token)}`
-        : `/api/checks/${checkData.id}/stream`
-      const es = new EventSource(streamUrl)
+      const es = new EventSource(`/api/checks/${checkData.id}/stream`)
       sseRef.current = es
 
       // ポーリングのフォールバック（SSE が利用できない・途切れた場合でも結果を取得）
