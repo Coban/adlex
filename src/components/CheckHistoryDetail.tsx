@@ -370,7 +370,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               </CardHeader>
               <CardContent>
                 <div 
-                  className="bg-gray-50 p-4 rounded border min-h-[400px] whitespace-pre-wrap text-sm leading-relaxed"
+                  className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 p-4 rounded border min-h-[400px] whitespace-pre-wrap text-sm leading-relaxed"
                   dangerouslySetInnerHTML={{
                     __html: highlightViolations(check.originalText, check.violations)
                   }}
@@ -395,7 +395,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="bg-blue-50 p-4 rounded border min-h-[400px] whitespace-pre-wrap text-sm leading-relaxed">
+                <div className="bg-blue-50 dark:bg-blue-900 dark:text-blue-100 p-4 rounded border min-h-[400px] whitespace-pre-wrap text-sm leading-relaxed">
                   {check.modifiedText ?? '修正文が生成されていません'}
                 </div>
               </CardContent>
@@ -420,7 +420,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
             </CardHeader>
             <CardContent>
               <div 
-                className="bg-gray-50 p-4 rounded border whitespace-pre-wrap text-sm leading-relaxed"
+                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 p-4 rounded border whitespace-pre-wrap text-sm leading-relaxed"
                 dangerouslySetInnerHTML={{
                   __html: highlightViolations(check.originalText, check.violations)
                 }}
@@ -445,7 +445,7 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-blue-50 p-4 rounded border whitespace-pre-wrap text-sm leading-relaxed">
+              <div className="bg-blue-50 dark:bg-blue-900 dark:text-blue-100 p-4 rounded border whitespace-pre-wrap text-sm leading-relaxed">
                 {check.modifiedText ?? '修正文が生成されていません'}
               </div>
             </CardContent>
