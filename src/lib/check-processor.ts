@@ -144,28 +144,92 @@ export async function processCheck(
     // より具体的なエラーメッセージを生成
     let errorMessage = 'チェック処理中にエラーが発生しました'
     if (error instanceof Error) {
-      if (error.message.includes('処理がタイムアウトしました')) {
+      const msg = error.message || ''
+      if (msg.includes('処理がタイムアウトしました')) {
         errorMessage = inputType === 'image' 
           ? '画像処理がタイムアウトしました。もう一度お試しください。'
           : 'チェック処理がタイムアウトしました。もう一度お試しください。'
-      } else if (error.message.includes('Failed to create embedding')) {
+      } 
+      // 埋め込み失敗（日英両対応）
+      else if (
+        [
+          '埋め込みの作成に失敗しました',
+          'LM Studio埋め込みに失敗しました',
+          'OpenAI埋め込みクライアントが利用できません',
+          'OpenAI APIから埋め込みデータが返されませんでした',
+          'LM Studio埋め込み応答にデータがありません',
+          'Failed to create embedding', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'テキスト解析エラー: 埋め込みベクトルの生成に失敗しました'
-      } else if (error.message.includes('Failed to create chat completion')) {
-        errorMessage = `AI分析エラー: テキスト処理に失敗しました - ${error.message}`
-      } else if (error.message.includes('OpenAI did not return expected function call')) {
+      } 
+      // チャット完了作成失敗（日英両対応）
+      else if (
+        [
+          'チャット完了の作成に失敗しました',
+          'LM Studioチャット完了に失敗しました',
+          'Failed to create chat completion', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
+        errorMessage = `AI分析エラー: テキスト処理に失敗しました - ${msg}`
+      } 
+      // OpenAI/OR 応答形式不一致（日英両対応）
+      else if (
+        [
+          'OpenAI/OpenRouterの応答に期待したfunction/tool callが含まれていません',
+          'OpenAI did not return expected function call', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'AI分析エラー: OpenAI応答形式が期待と異なります'
-      } else if (error.message.includes('LM Studio did not return content')) {
+      } 
+      // LM Studio 応答が空（日英両対応）
+      else if (
+        [
+          'LM Studioが応答内容を返しませんでした',
+          'LM Studio did not return content', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'AI分析エラー: LM Studio応答が空です'
-      } else if (error.message.includes('No JSON found in LM Studio response')) {
+      } 
+      // LM Studio JSONが見つからない（日英両対応）
+      else if (
+        [
+          'LM Studio応答にJSON形式が見つかりませんでした',
+          'No JSON found in LM Studio response', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'AI分析エラー: LM Studio応答にJSON形式が見つかりません'
-      } else if (error.message.includes('Invalid modified field') || error.message.includes('Invalid violations field')) {
+      } 
+      // LM Studio 応答のフィールドが無効（日英両対応）
+      else if (
+        [
+          '応答の修正フィールドが無効です',
+          '応答の違反フィールドが無効です',
+          'Invalid modified field', // 旧英語
+          'Invalid violations field', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'AI分析エラー: LM Studio応答形式が無効です'
-      } else if (error.message.includes('OCR processing failed')) {
+      } 
+      // OCR処理失敗（日英両対応）
+      else if (
+        [
+          'OCR処理に失敗しました',
+          'OCR processing failed', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = 'OCR処理エラー: 画像からテキストを抽出できませんでした'
-      } else if (error.message.includes('Image processing failed')) {
+      } 
+      // 画像読み込み失敗（新規日本語にも対応）
+      else if (
+        [
+          '画像の読み込みに失敗',
+          'Image processing failed', // 旧英語
+        ].some((s) => msg.includes(s))
+      ) {
         errorMessage = '画像処理エラー: 画像の読み込みに失敗しました'
       } else {
-        errorMessage = `処理エラー: ${error.message}`
+        errorMessage = `処理エラー: ${msg}`
       }
     }
 
