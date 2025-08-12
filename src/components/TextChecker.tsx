@@ -82,20 +82,22 @@ export default function TextChecker() {
     // 統合SSEエンドポイントに接続
     // EventSource は Authorization ヘッダを付けられないため、
     // セッショントークンが取得できた場合はクエリに付与してサーバ側で検証する
-    const connectGlobalSSE = async () => {
-      try {
-        const sessionResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 500))
-        ])
-        const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
-        const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
-        return new EventSource(url)
-      } catch {
-        return new EventSource('/api/checks/stream')
+    // ページ表示後に遅延でSSE接続を開始（UI表示を優先）
+    const timer = setTimeout(() => {
+      const connectGlobalSSE = async () => {
+        try {
+          const sessionResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<{ data: { session: null } }>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 200))
+          ])
+          const token = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token
+          const url = token ? `/api/checks/stream?token=${encodeURIComponent(token)}` : '/api/checks/stream'
+          return new EventSource(url)
+        } catch {
+          return new EventSource('/api/checks/stream')
+        }
       }
-    }
-    connectGlobalSSE().then((eventSource) => {
+      connectGlobalSSE().then((eventSource) => {
       globalStreamRef.current = eventSource
       
       eventSource.onmessage = (event) => {
@@ -123,8 +125,10 @@ export default function TextChecker() {
         globalStreamRef.current = null
       }
     })
+    }, 100) // 100ms遅延でSSE接続を開始
 
     return () => {
+      clearTimeout(timer)
       if (globalStreamRef.current) {
         safeCloseEventSource(globalStreamRef.current)
       }
@@ -310,7 +314,7 @@ export default function TextChecker() {
       const sessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 500)
+          setTimeout(() => resolve({ data: { session: null } }), 200)
         ),
       ])
       const session = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session
@@ -365,7 +369,7 @@ export default function TextChecker() {
       const sseSessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 3000)
+          setTimeout(() => resolve({ data: { session: null } }), 500)
         ),
       ])
       const sseToken = (sseSessionResult as { data?: { session?: { access_token?: string } } })?.data?.session?.access_token

@@ -16,7 +16,7 @@ function TestComponent() {
   return (
     <div>
       <div data-testid="loading">{loading ? 'Loading' : 'Not Loading'}</div>
-      <div data-testid="user">{user ? (user as any).email : 'No User'}</div>
+      <div data-testid="user">{user ? user.email : 'No User'}</div>
       <div data-testid="user-profile">{userProfile ? JSON.stringify(userProfile) : 'No Profile'}</div>
       <div data-testid="organization">{organization ? organization.name : 'No Organization'}</div>
       <button onClick={signOut}>Sign Out</button>
