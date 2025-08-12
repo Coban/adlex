@@ -73,11 +73,26 @@ function ensureOpenAIEmbeddingClient(): OpenAI | null {
 }
 
 // OpenRouterクライアント
+function getSanitizedReferer(): string {
+  const fallback = 'http://localhost:3000'
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? fallback
+  try {
+    const url = new URL(raw)
+    // http/https のみ許可し、クレデンシャル・パス等は含めず origin に固定
+    if (!/^https?:$/.test(url.protocol)) return fallback
+    const origin = url.origin
+    // 長さを制限（ヘッダー肥大対策）
+    return origin.length > 200 ? origin.slice(0, 200) : origin
+  } catch {
+    return fallback
+  }
+}
+
 const openRouterClient = (aiProvider === 'openrouter' && apiKey) ? new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: apiKey,
   defaultHeaders: {
-    'HTTP-Referer': (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/[^ -~]/g, ''),
+    'HTTP-Referer': getSanitizedReferer(),
     'X-Title': 'AdLex - Pharmaceutical Law Compliance Checker',
   },
 }) : null
