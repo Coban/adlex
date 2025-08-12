@@ -35,10 +35,21 @@ function getApiKey(): string | null {
 // AIクライアント設定 - プロバイダーに基づいて初期化
 const apiKey = getApiKey()
 
-// OpenAIクライアント
+// OpenAIクライアント（チャット用）
 const openaiClient = (aiProvider === 'openai' && apiKey) ? new OpenAI({
   apiKey: apiKey,
 }) : null
+
+// OpenAIクライアント（埋め込み用 - メインプロバイダーと独立して初期化）
+// OPENAI_API_KEY が存在する場合、または AI_PROVIDER が openai で AI_API_KEY が設定されている場合に作成
+const openaiEmbeddingClient = (() => {
+  // OPENAI専用キー（推奨）
+  const explicitOpenAIKey = legacyOpenAIKey ? process.env.OPENAI_API_KEY! : null
+  // AI_PROVIDER が openai の場合は統一キーも利用可能
+  const providerOpenAIKey = (aiProvider === 'openai' && apiKey) ? apiKey : null
+  const key = explicitOpenAIKey ?? providerOpenAIKey
+  return key ? new OpenAI({ apiKey: key }) : null
+})()
 
 // OpenRouterクライアント
 const openRouterClient = (aiProvider === 'openrouter' && apiKey) ? new OpenAI({
@@ -529,11 +540,12 @@ export function estimateOcrConfidence(text: string): number {
  */
 // OpenAI埋め込み用ヘルパー関数
 async function createOpenAIEmbedding(input: string): Promise<number[]> {
-  if (!openaiClient) {
-    throw new Error('OpenAIクライアントが利用できません。OPENAI_API_KEY環境変数を設定してください。')
+  const client = openaiEmbeddingClient ?? openaiClient
+  if (!client) {
+    throw new Error('OpenAI埋め込みクライアントが利用できません。OPENAI_API_KEY 環境変数を設定してください。')
   }
   
-  const response = await openaiClient.embeddings.create({
+  const response = await client.embeddings.create({
     model: 'text-embedding-3-small',
     input,
   })
@@ -660,6 +672,11 @@ export async function createEmbedding(input: string): Promise<number[]> {
 }
 
 // デバッグとモニタリング用の追加ユーティリティ関数
+/**
+ * 現在のAIクライアント設定と可用性の概要を返す。
+ *
+ * @returns 設定、利用中モデル、キー有無、クライアント可用性などのメタ情報
+ */
 export function getAIClientInfo() {
   const embeddingProvider = aiProvider === 'openrouter' ? (process.env.AI_EMBEDDING_PROVIDER ?? 'openai') : aiProvider
   
@@ -684,13 +701,22 @@ export function getAIClientInfo() {
     legacyOpenAIKey: legacyOpenAIKey ? '***' : undefined,
     legacyOpenRouterKey: legacyOpenRouterKey ? '***' : undefined,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    // 埋め込みプロバイダーの可用性
+    // クライアント可用性（チャット/埋め込み）
     openaiClientAvailable: !!openaiClient,
+    openaiEmbeddingClientAvailable: !!openaiEmbeddingClient,
     lmStudioEmbeddingAvailable: !!process.env.LM_STUDIO_BASE_URL
   }
 }
 
 // モデル設定の検証と提案を行う関数
+/**
+ * モデル設定の妥当性を検証し、問題点と提案を返す。
+ *
+ * - LM Studio のチャット/埋め込みモデルの取り違いを検出
+ * - OpenRouter 使用時の埋め込みプロバイダー設定を検証
+ *
+ * @returns 妥当性、検出された課題、提案、現在構成
+ */
 export function validateModelConfiguration() {
   const issues = []
   const suggestions = []
@@ -725,7 +751,7 @@ export function validateModelConfiguration() {
     
     // 各プロバイダーに必要な依存関係が利用可能かをチェック
     if (embeddingProvider === 'openai' || embeddingProvider === 'auto') {
-      if (!openaiClient) {
+      if (!openaiEmbeddingClient && !openaiClient) {
         issues.push('OpenAI client not available for embeddings')
         suggestions.push('Set OPENAI_API_KEY environment variable for OpenAI embeddings')
       }
@@ -748,11 +774,23 @@ export function validateModelConfiguration() {
 }
 
 // モックモードを使用しているかをチェックするユーティリティ関数
+/**
+ * モックモード（テスト環境）かどうかを返す。
+ *
+ * @returns モック使用中ならtrue
+ */
 export function isUsingMock(): boolean {
   return USE_MOCK
 }
 
 // 使用中のモデルに基づいて埋め込み次元数を取得
+/**
+ * 使用中モデルに対する埋め込み次元数を返す。
+ *
+ * - モック時は 384、通常時は DB に合わせ 1536
+ *
+ * @returns 埋め込み次元数
+ */
 export function getEmbeddingDimension(): number {
   if (USE_MOCK) {
     return 384 // モック埋め込み次元数
@@ -777,6 +815,16 @@ type LegacyViolationData = {
   dictionary_id?: number
 }
 
+/**
+ * チェック処理用のチャット補完を実行するユーティリティ（レガシー互換）。
+ *
+ * - OpenAI/OpenRouter: Function calling を用いて JSON を取得
+ * - LM Studio: テキスト応答から JSON を抽出・検証
+ *
+ * @param text 解析対象テキスト（OCR済みを含む）
+ * @param relevantEntries 参考辞書エントリー（上位スコア順）
+ * @returns プロバイダー種別、（必要に応じて）生レスポンス、違反配列、修正文
+ */
 export async function createChatCompletionForCheck(text: string, relevantEntries: LegacyDictionaryEntry[]): Promise<{
   type: 'openai' | 'lmstudio' | 'openrouter'
   response?: OpenAI.Chat.Completions.ChatCompletion
