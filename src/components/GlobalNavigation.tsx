@@ -66,12 +66,7 @@ const navigationItems: NavigationItem[] = [
     requireRole: 'admin',
     showInMobile: true
   },
-  {
-    name: 'デバッグ',
-    href: '/debug/auth',
-    icon: Bug,
-    showInMobile: false
-  }
+
 ]
 
 export default function GlobalNavigation() {
