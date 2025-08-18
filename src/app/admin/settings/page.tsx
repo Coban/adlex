@@ -51,6 +51,18 @@ export default function OrganizationSettingsPage() {
     setLoading(false)
   }, [organization])
 
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (iconPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(iconPreview)
+      }
+      if (logoPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview)
+      }
+    }
+  }, [iconPreview, logoPreview])
+
   const handleFileSelect = (type: 'icon' | 'logo', file: File | null) => {
     if (!file) return
 
@@ -76,9 +88,17 @@ export default function OrganizationSettingsPage() {
     }
 
     if (type === 'icon') {
+      // Clean up previous preview URL
+      if (iconPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(iconPreview)
+      }
       setIconFile(file)
       setIconPreview(URL.createObjectURL(file))
     } else {
+      // Clean up previous preview URL
+      if (logoPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview)
+      }
       setLogoFile(file)
       setLogoPreview(URL.createObjectURL(file))
     }
@@ -86,10 +106,18 @@ export default function OrganizationSettingsPage() {
 
   const removeImage = (type: 'icon' | 'logo') => {
     if (type === 'icon') {
+      // Clean up preview URL if it's a blob URL
+      if (iconPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(iconPreview)
+      }
       setIconFile(null)
       setIconPreview(null)
       setSettings(prev => ({ ...prev, icon_url: null }))
     } else {
+      // Clean up preview URL if it's a blob URL
+      if (logoPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview)
+      }
       setLogoFile(null)
       setLogoPreview(null)
       setSettings(prev => ({ ...prev, logo_url: null }))
