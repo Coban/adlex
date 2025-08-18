@@ -44,8 +44,13 @@
       "mcp__serena__insert_after_symbol",
       "mcp__serena__check_onboarding_performed",
       "WebFetch(domain:openrouter.ai)",
-      "WebFetch(domain:platform.openai.com)"
+      "WebFetch(domain:platform.openai.com)",
+      "mcp__serena__think_about_whether_you_are_done",
+      "mcp__serena__read_memory",
+      "Bash(npx supabase:*)",
+      "Bash(/dev/null)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }
