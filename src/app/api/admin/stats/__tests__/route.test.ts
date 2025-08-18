@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { GET } from '../route'
@@ -55,7 +54,7 @@ describe('/api/admin/stats', () => {
     const supabaseModule = await import('@/lib/supabase/server')
     const nextServerModule = await import('next/server')
     
-    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as any)
+    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as unknown as ReturnType<typeof supabaseModule.createClient>)
     vi.mocked(nextServerModule.NextResponse.json).mockImplementation(mockNextResponse.json)
   })
 
@@ -65,8 +64,7 @@ describe('/api/admin/stats', () => {
       error: new Error('Unauthorized')
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
-    const response = await GET()
+    await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
       { error: 'Unauthorized' },
@@ -100,8 +98,7 @@ describe('/api/admin/stats', () => {
       return { eq: mockEq, single: mockSingle }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
-    const response = await GET()
+    await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
       { error: 'Forbidden' },
@@ -145,7 +142,6 @@ describe('/api/admin/stats', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
     await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
@@ -167,8 +163,6 @@ describe('/api/admin/stats', () => {
       throw new Error('Database connection error')
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
-    
     // エラーがthrowされることを期待してテストを実行
     try {
       await GET()
@@ -213,8 +207,7 @@ describe('/api/admin/stats', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
-    const response = await GET()
+    await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
     expect(responseCall[0]).toMatchObject({
@@ -297,8 +290,7 @@ describe('/api/admin/stats', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/stats')
-    const response = await GET()
+    await GET()
 
     const responseData = await mockNextResponse.json.mock.results[0].value.json()
     expect(responseData.dailyChecks).toHaveLength(7) // 過去7日間

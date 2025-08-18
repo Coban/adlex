@@ -40,7 +40,7 @@ export async function GET() {
         return (end - start) / 1000 // 秒単位
       }
       return null
-    }).filter(Boolean) || []
+    }).filter(Boolean) ?? []
 
     // 統計計算
     const avgProcessingTime = processingTimes.length > 0
@@ -57,18 +57,18 @@ export async function GET() {
 
     // ステータス別の集計
     const statusCounts = checks?.reduce((acc: Record<string, number>, check) => {
-      const status = check.status || 'unknown'
-      acc[status] = (acc[status] || 0) + 1
+      const status = check.status ?? 'unknown'
+      acc[status] = (acc[status] ?? 0) + 1
       return acc
-    }, {}) || {}
+    }, {}) ?? {}
 
     // 時間帯別のチェック数
     const hourlyChecks = checks?.reduce((acc: Record<string, number>, check) => {
-      const hour = new Date(check.created_at || '').getHours()
+      const hour = new Date(check.created_at ?? '').getHours()
       const key = `${hour}:00`
-      acc[key] = (acc[key] || 0) + 1
+      acc[key] = (acc[key] ?? 0) + 1
       return acc
-    }, {}) || {}
+    }, {}) ?? {}
 
     // 過去24時間の時間配列を作成
     const hours = Array.from({ length: 24 }, (_, i) => {
@@ -79,16 +79,16 @@ export async function GET() {
 
     const hourlyData = hours.map(hour => ({
       hour,
-      count: hourlyChecks[hour] || 0
+      count: hourlyChecks[hour] ?? 0
     }))
 
     // システムヘルス指標
     const successRate = statusCounts.completed 
-      ? (statusCounts.completed / (checks?.length || 1)) * 100
+      ? (statusCounts.completed / (checks?.length ?? 1)) * 100
       : 0
 
     const errorRate = statusCounts.error
-      ? (statusCounts.error / (checks?.length || 1)) * 100
+      ? (statusCounts.error / (checks?.length ?? 1)) * 100
       : 0
 
     return NextResponse.json({
@@ -96,7 +96,7 @@ export async function GET() {
         avgProcessingTime: avgProcessingTime.toFixed(2),
         maxProcessingTime: maxProcessingTime.toFixed(2),
         minProcessingTime: minProcessingTime.toFixed(2),
-        totalChecks24h: checks?.length || 0,
+        totalChecks24h: checks?.length ?? 0,
         successRate: successRate.toFixed(2),
         errorRate: errorRate.toFixed(2)
       },

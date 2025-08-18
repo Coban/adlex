@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { GET } from '../route'
@@ -55,7 +54,7 @@ describe('/api/admin/performance', () => {
     const supabaseModule = await import('@/lib/supabase/server')
     const nextServerModule = await import('next/server')
     
-    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as any)
+    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as unknown as ReturnType<typeof supabaseModule.createClient>)
     vi.mocked(nextServerModule.NextResponse.json).mockImplementation(mockNextResponse.json)
   })
 
@@ -65,8 +64,7 @@ describe('/api/admin/performance', () => {
       error: new Error('Unauthorized')
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
-    const response = await GET()
+    await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
       { error: 'Unauthorized' },
@@ -91,8 +89,7 @@ describe('/api/admin/performance', () => {
 
     mockSupabaseClient.from.mockReturnValue(mockUserQuery)
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
-    const response = await GET()
+    await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
       { error: 'Forbidden' },
@@ -107,7 +104,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -158,8 +156,7 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
-    const response = await GET()
+    await GET()
 
     expect(mockNextResponse.json).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -189,7 +186,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -234,7 +232,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
@@ -255,7 +252,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -287,7 +285,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
@@ -312,7 +309,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -342,7 +340,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
@@ -353,7 +350,7 @@ describe('/api/admin/performance', () => {
     expect(responseData.hourlyActivity).toHaveLength(24)
 
     // 各時間帯のデータ構造を確認
-    responseData.hourlyActivity.forEach((hour: any) => {
+    responseData.hourlyActivity.forEach((hour: unknown) => {
       expect(hour).toHaveProperty('hour')
       expect(hour).toHaveProperty('count')
       expect(typeof hour.count).toBe('number')
@@ -368,7 +365,8 @@ describe('/api/admin/performance', () => {
 
     // 高いエラー率のテストケース（15%エラー）
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -399,7 +397,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
@@ -416,7 +413,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -441,7 +439,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     const responseCall = mockNextResponse.json.mock.calls[0]
@@ -467,8 +464,6 @@ describe('/api/admin/performance', () => {
       throw new Error('Database connection error')
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
-    
     // エラーがthrowされることを期待してテストを実行
     try {
       await GET()
@@ -486,7 +481,8 @@ describe('/api/admin/performance', () => {
     })
 
     let callCount = 0
-    mockSupabaseClient.from.mockImplementation((table) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockSupabaseClient.from.mockImplementation((_table) => {
       callCount++
       
       if (callCount === 1) {
@@ -524,7 +520,6 @@ describe('/api/admin/performance', () => {
       }
     })
 
-    const request = new NextRequest('http://localhost/api/admin/performance')
     await GET()
 
     // エラーが発生せずにレスポンスが返されることを確認

@@ -32,9 +32,11 @@ describe('AdminDashboard', () => {
 
   it('認証中はローディング表示する', () => {
     mockUseAuth.mockReturnValue({
+      user: null,
       userProfile: null,
       loading: true,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -45,9 +47,11 @@ describe('AdminDashboard', () => {
 
   it('未認証ユーザーにはアクセス拒否メッセージを表示する', () => {
     mockUseAuth.mockReturnValue({
+      user: null,
       userProfile: null,
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -59,14 +63,25 @@ describe('AdminDashboard', () => {
 
   it('非管理者ユーザーにはアクセス拒否メッセージを表示する', () => {
     mockUseAuth.mockReturnValue({
+      user: { 
+        id: 'user-1', 
+        email: 'test@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2024-01-01T00:00:00Z'
+      },
       userProfile: {
         id: 'user-1',
-        display_name: 'Test User',
         email: 'test@example.com',
-        role: 'user'
+        role: 'user',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        organization_id: null
       },
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -78,14 +93,25 @@ describe('AdminDashboard', () => {
 
   it('管理者ユーザーには管理ダッシュボードを表示する', () => {
     mockUseAuth.mockReturnValue({
+      user: { 
+        id: 'admin-1', 
+        email: 'admin@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2024-01-01T00:00:00Z'
+      },
       userProfile: {
         id: 'admin-1',
-        display_name: 'Admin User',
         email: 'admin@example.com',
-        role: 'admin'
+        role: 'admin',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        organization_id: null
       },
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -108,14 +134,25 @@ describe('AdminDashboard', () => {
 
   it('ナビゲーションリンクが正しく設定されている', () => {
     mockUseAuth.mockReturnValue({
+      user: { 
+        id: 'admin-1', 
+        email: 'admin@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2024-01-01T00:00:00Z'
+      },
       userProfile: {
         id: 'admin-1',
-        display_name: 'Admin User',
         email: 'admin@example.com',
-        role: 'admin'
+        role: 'admin',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        organization_id: null
       },
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -132,17 +169,31 @@ describe('AdminDashboard', () => {
   it('開発環境ではデバッグ情報を表示する', () => {
     // NODE_ENVを開発環境に設定
     const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'development',
+      writable: true
+    })
 
     mockUseAuth.mockReturnValue({
+      user: { 
+        id: 'user-1', 
+        email: 'test@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2024-01-01T00:00:00Z'
+      },
       userProfile: {
         id: 'user-1',
-        display_name: 'Test User',
         email: 'test@example.com',
-        role: 'user'
+        role: 'user',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        organization_id: null
       },
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -153,23 +204,40 @@ describe('AdminDashboard', () => {
     expect(debugElement).toBeInTheDocument()
 
     // 環境変数を元に戻す
-    process.env.NODE_ENV = originalEnv
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: originalEnv,
+      writable: true
+    })
   })
 
   it('本番環境ではデバッグ情報を表示しない', () => {
     // NODE_ENVを本番環境に設定
     const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'production',
+      writable: true
+    })
 
     mockUseAuth.mockReturnValue({
+      user: { 
+        id: 'user-1', 
+        email: 'test@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2024-01-01T00:00:00Z'
+      },
       userProfile: {
         id: 'user-1',
-        display_name: 'Test User',
         email: 'test@example.com',
-        role: 'user'
+        role: 'user',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        organization_id: null
       },
       loading: false,
       organization: null,
+      signOut: vi.fn(),
       refresh: vi.fn()
     })
 
@@ -179,6 +247,9 @@ describe('AdminDashboard', () => {
     expect(screen.queryByText(/Debug:/)).not.toBeInTheDocument()
 
     // 環境変数を元に戻す
-    process.env.NODE_ENV = originalEnv
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: originalEnv,
+      writable: true
+    })
   })
 })

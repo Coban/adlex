@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -191,8 +191,8 @@ describe('AdminSupport', () => {
       
       // 注意事項
       expect(screen.getByText('お問い合わせの前に')).toBeInTheDocument()
-      expect(screen.getByText((content, element) => {
-        return content && content.includes('営業時間：平日 9:00-18:00') && content.includes('土日祝を除く')
+      expect(screen.getByText((content) => {
+        return Boolean(content && content.includes('営業時間：平日 9:00-18:00') && content.includes('土日祝を除く'))
       })).toBeInTheDocument()
     })
 

@@ -97,10 +97,10 @@ export async function GET() {
 
     // 日別にグループ化
     const checksByDay = dailyChecks?.reduce((acc: Record<string, number>, check) => {
-      const date = new Date(check.created_at || '').toLocaleDateString('ja-JP')
-      acc[date] = (acc[date] || 0) + 1
+      const date = new Date(check.created_at ?? '').toLocaleDateString('ja-JP')
+      acc[date] = (acc[date] ?? 0) + 1
       return acc
-    }, {}) || {}
+    }, {}) ?? {}
 
     // 過去7日間の日付配列を作成
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -111,18 +111,18 @@ export async function GET() {
 
     const dailyCheckData = last7Days.map(date => ({
       date,
-      count: checksByDay[date] || 0
+      count: checksByDay[date] ?? 0
     }))
 
     return NextResponse.json({
       stats: {
-        totalUsers: usersResult.count || 0,
-        totalChecks: checksResult.count || 0,
-        totalDictionaries: dictionariesResult.count || 0,
-        totalOrganizations: organizationsResult.count || 0,
-        activeUsers: activeUsersResult.count || 0,
-        checksThisMonth: checksThisMonthResult.count || 0,
-        totalViolations: violationsResult.count || 0,
+        totalUsers: usersResult.count ?? 0,
+        totalChecks: checksResult.count ?? 0,
+        totalDictionaries: dictionariesResult.count ?? 0,
+        totalOrganizations: organizationsResult.count ?? 0,
+        activeUsers: activeUsersResult.count ?? 0,
+        checksThisMonth: checksThisMonthResult.count ?? 0,
+        totalViolations: violationsResult.count ?? 0,
         errorRate: errorRate.toFixed(2)
       },
       recentActivity: recentChecksResult.data?.map(check => ({
@@ -132,7 +132,7 @@ export async function GET() {
         text: 'チェック実行',
         status: check.status,
         timestamp: check.created_at
-      })) || [],
+      })) ?? [],
       dailyChecks: dailyCheckData
     })
   } catch (error) {

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -68,7 +68,7 @@ describe('AdminSystemSettings', () => {
       const switches = screen.getAllByRole('switch')
       const rateLimitSwitch = switches.find(sw => 
         sw.closest('.space-y-2')?.textContent?.includes('レート制限を有効化')
-      ) || screen.getByText('レート制限を有効化').closest('button')
+      ) ?? screen.getByText('レート制限を有効化').closest('button')
       
       if (rateLimitSwitch) {
         await user.click(rateLimitSwitch)
