@@ -78,10 +78,15 @@ describe('Check History API Route', () => {
           original_text: 'Test text',
           modified_text: 'Modified text',
           status: 'completed',
+          input_type: 'text',
+          image_url: null,
+          extracted_text: null,
+          ocr_status: null,
           created_at: '2024-01-01T00:00:00Z',
           completed_at: '2024-01-01T00:01:00Z',
           user_id: 'user1',
-          users: { email: 'user@test.com' }
+          users: { email: 'user@test.com' },
+          violations: [{ id: 'v1' }, { id: 'v2' }]
         }
       ]
 
@@ -135,9 +140,14 @@ describe('Check History API Route', () => {
         originalText: 'Test text',
         modifiedText: 'Modified text',
         status: 'completed',
+        inputType: 'text',
+        imageUrl: null,
+        extractedText: null,
+        ocrStatus: null,
         createdAt: '2024-01-01T00:00:00Z',
         completedAt: '2024-01-01T00:01:00Z',
-        userEmail: 'user@test.com'
+        userEmail: 'user@test.com',
+        violationCount: 2
       })
       expect(body.userRole).toBe('admin')
     })
@@ -281,6 +291,7 @@ describe('Check History API Route', () => {
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         range: vi.fn().mockResolvedValue({
           data: null,
           error: new Error('Database error')
@@ -288,7 +299,21 @@ describe('Check History API Route', () => {
         single: vi.fn().mockResolvedValue({ data: userData, error: null })
       }
 
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockSupabaseClient.from.mockImplementation((table) => {
+        if (table === 'users') {
+          return {
+            ...mockFrom,
+            single: () => Promise.resolve({ data: userData, error: null })
+          }
+        }
+        if (table === 'checks') {
+          return {
+            ...mockFrom,
+            range: () => Promise.resolve({ data: null, error: new Error('Database error') })
+          }
+        }
+        return mockFrom
+      })
 
       const request = new NextRequest('http://localhost:3000/api/check-history')
       const response = await GET(request)

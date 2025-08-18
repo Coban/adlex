@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') ?? '20')
     const search = searchParams.get('search') ?? ''
     const status = searchParams.get('status') ?? ''
+    const inputType = searchParams.get('inputType') ?? ''
+    const dateFilter = searchParams.get('dateFilter') ?? ''
     const userId = searchParams.get('userId') ?? ''
     
     const offset = (page - 1) * limit
@@ -41,10 +43,15 @@ export async function GET(request: NextRequest) {
         original_text,
         modified_text,
         status,
+        input_type,
+        image_url,
+        extracted_text,
+        ocr_status,
         created_at,
         completed_at,
         user_id,
-        users!inner(email)
+        users!inner(email),
+        violations:violations(id)
       `)
       .eq('organization_id', userData.organization_id)
       .is('deleted_at', null)
@@ -69,6 +76,35 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status as 'pending' | 'processing' | 'completed' | 'failed')
     }
 
+    // Apply input type filter
+    if (inputType && ['text', 'image'].includes(inputType)) {
+      query = query.eq('input_type', inputType as 'text' | 'image')
+    }
+
+    // Apply date filter
+    if (dateFilter && ['today', 'week', 'month'].includes(dateFilter)) {
+      const now = new Date()
+      let startDate: Date
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          break
+        case 'week':
+          const dayOfWeek = now.getDay()
+          startDate = new Date(now.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000))
+          startDate.setHours(0, 0, 0, 0)
+          break
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+          break
+        default:
+          startDate = new Date(0) // fallback
+      }
+
+      query = query.gte('created_at', startDate.toISOString())
+    }
+
     // Get total count for pagination
     let countQuery = supabase
       .from('checks')
@@ -88,6 +124,33 @@ export async function GET(request: NextRequest) {
 
     if (status && ['pending', 'processing', 'completed', 'failed'].includes(status)) {
       countQuery = countQuery.eq('status', status as 'pending' | 'processing' | 'completed' | 'failed')
+    }
+
+    if (inputType && ['text', 'image'].includes(inputType)) {
+      countQuery = countQuery.eq('input_type', inputType as 'text' | 'image')
+    }
+
+    if (dateFilter && ['today', 'week', 'month'].includes(dateFilter)) {
+      const now = new Date()
+      let startDate: Date
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          break
+        case 'week':
+          const dayOfWeek = now.getDay()
+          startDate = new Date(now.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000))
+          startDate.setHours(0, 0, 0, 0)
+          break
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+          break
+        default:
+          startDate = new Date(0)
+      }
+
+      countQuery = countQuery.gte('created_at', startDate.toISOString())
     }
 
     const { count, error: countError } = await countQuery
@@ -112,9 +175,14 @@ export async function GET(request: NextRequest) {
       originalText: check.original_text,
       modifiedText: check.modified_text,
       status: check.status,
+      inputType: check.input_type,
+      imageUrl: check.image_url,
+      extractedText: check.extracted_text,
+      ocrStatus: check.ocr_status,
       createdAt: check.created_at,
       completedAt: check.completed_at,
-      userEmail: check.users?.email
+      userEmail: check.users?.email,
+      violationCount: check.violations?.length ?? 0
     })) ?? []
 
     const totalPages = Math.ceil((count ?? 0) / limit)
