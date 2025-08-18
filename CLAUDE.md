@@ -224,6 +224,7 @@ Use `npm run seed` to create test accounts:
 - Implement proper error handling and loading states
 - Use Supabase client for database operations
 - Follow the established ESLint configuration
+- **コード内のコメントは日本語で記述すること**
 
 ### Authentication
 - Use `createClient()` from `@/lib/supabase/server` for API routes
