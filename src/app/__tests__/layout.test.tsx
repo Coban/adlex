@@ -17,7 +17,8 @@ vi.mock('@/contexts/AuthContext', () => ({
     userProfile: null,
     organization: null,
     loading: false,
-    signOut: vi.fn()
+    signOut: vi.fn(),
+    refresh: vi.fn()
   }))
 }))
 

@@ -28,7 +28,8 @@ describe('Home ページ', () => {
       userProfile: null,
       organization: null,
       loading: true,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refresh: vi.fn()
     })
 
     render(<Home />)
@@ -41,7 +42,8 @@ describe('Home ページ', () => {
       userProfile: { role: 'user', id: 'u1', email: 'user@example.com', organization_id: 1, created_at: '2024-01-01', updated_at: '2024-01-01' } as UserProfile,
       organization: null,
       loading: false,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refresh: vi.fn()
     })
 
     render(<Home />)
@@ -57,7 +59,8 @@ describe('Home ページ', () => {
       userProfile: { role: 'admin', id: 'a1', email: 'admin@example.com', organization_id: 1, created_at: '2024-01-01', updated_at: '2024-01-01' } as UserProfile,
       organization: { id: 1, name: 'Org', created_at: '2024-01-01', updated_at: '2024-01-01', max_checks: 1000, used_checks: 50, plan: 'basic', trial_ends_at: null } as Organization,
       loading: false,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refresh: vi.fn()
     })
 
     render(<Home />)
@@ -72,7 +75,8 @@ describe('Home ページ', () => {
       userProfile: null,
       organization: null,
       loading: false,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refresh: vi.fn()
     })
 
     render(<Home />)

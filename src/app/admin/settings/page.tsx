@@ -20,7 +20,7 @@ interface OrganizationSettings {
 }
 
 export default function OrganizationSettingsPage() {
-  const { organization, userProfile, loading: authLoading } = useAuth()
+  const { organization, userProfile, loading: authLoading, refresh } = useAuth()
   const { toast } = useToast()
   const [settings, setSettings] = useState<OrganizationSettings>({
     name: '',
@@ -202,14 +202,29 @@ export default function OrganizationSettingsPage() {
       // Clear file selections
       setIconFile(null)
       setLogoFile(null)
+      
+      // Update settings state with new values
+      setSettings(prev => ({
+        ...prev,
+        icon_url: iconUrl,
+        logo_url: logoUrl
+      }))
+      
+      // Update preview URLs to reflect uploaded images
+      if (iconUrl && iconFile) {
+        setIconPreview(iconUrl)
+      }
+      if (logoUrl && logoFile) {
+        setLogoPreview(logoUrl)
+      }
+
+      // Refresh auth context to get updated organization data
+      await refresh()
 
       toast({
         title: '成功',
         description: '組織設定を保存しました。',
       })
-
-      // Refresh the page to update the auth context
-      window.location.reload()
     } catch (error) {
       console.error('Save error:', error)
       toast({

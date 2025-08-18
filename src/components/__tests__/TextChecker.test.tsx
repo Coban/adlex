@@ -104,6 +104,7 @@ describe('TextCheckerコンポーネント', () => {
       user: mockUser,
       loading: false,
       signOut: vi.fn(),
+      refresh: vi.fn(),
       userProfile: null,
       organization: null
     })
@@ -182,6 +183,7 @@ describe('TextCheckerコンポーネント', () => {
       user: null,
       loading: false,
       signOut: vi.fn(),
+      refresh: vi.fn(),
       userProfile: null,
       organization: null
     })

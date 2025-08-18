@@ -20,7 +20,8 @@ describe('AdminDashboard', () => {
       organization: null,
       userProfile: null,
       loading: true,
-      signOut: async () => {}
+      signOut: async () => {},
+      refresh: async () => {}
     }
     vi.mocked(useAuth).mockReturnValue(value)
 
@@ -34,7 +35,8 @@ describe('AdminDashboard', () => {
       organization: null,
       userProfile: { id: 'u', role: 'user', created_at: '', email: '', updated_at: null, organization_id: null } as UserProfile,
       loading: false,
-      signOut: async () => {}
+      signOut: async () => {},
+      refresh: async () => {}
     }
     vi.mocked(useAuth).mockReturnValue(value)
 
@@ -48,7 +50,8 @@ describe('AdminDashboard', () => {
       organization: { id: 1, name: 'Org', created_at: '', updated_at: null, max_checks: 100, plan: 'basic', trial_ends_at: null, used_checks: 10, icon_url: null, logo_url: null } as Organization,
       userProfile: { id: 'u', role: 'admin', created_at: '', email: '', updated_at: null, organization_id: 1 } as UserProfile,
       loading: false,
-      signOut: async () => {}
+      signOut: async () => {},
+      refresh: async () => {}
     }
     vi.mocked(useAuth).mockReturnValue(value)
 
