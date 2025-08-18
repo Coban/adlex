@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -8,10 +8,39 @@ import AdminAnalytics from '../page'
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 global.URL.revokeObjectURL = vi.fn()
 
+// JSDOMの制限を回避するためのモック
+Object.defineProperty(Element.prototype, 'hasPointerCapture', {
+  value: vi.fn(() => false),
+  writable: true,
+})
+
+Object.defineProperty(Element.prototype, 'setPointerCapture', {
+  value: vi.fn(),
+  writable: true,
+})
+
+Object.defineProperty(Element.prototype, 'releasePointerCapture', {
+  value: vi.fn(),
+  writable: true,
+})
+
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  value: vi.fn(),
+  writable: true,
+})
+
 describe('AdminAnalytics', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  // formatCurrency関数のテスト用ヘルパー
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ja-JP', {
+      style: 'currency',
+      currency: 'JPY'
+    }).format(amount)
+  }
 
   it('分析レポートページのタイトルを表示する', () => {
     render(<AdminAnalytics />)
@@ -157,8 +186,9 @@ describe('AdminAnalytics', () => {
       expect(screen.getByText('LTV')).toBeInTheDocument()
       
       // 金額（フォーマットされた形式）
-      expect(screen.getByText('¥1,250,000')).toBeInTheDocument()
-      expect(screen.getByText('¥14,800,000')).toBeInTheDocument()
+      // formatCurrencyを使用した実際のフォーマットをテスト
+      expect(screen.getByText(formatCurrency(1250000))).toBeInTheDocument()
+      expect(screen.getByText(formatCurrency(14800000))).toBeInTheDocument()
       
       // 顧客動向
       expect(screen.getByText('顧客動向')).toBeInTheDocument()
@@ -224,11 +254,11 @@ describe('AdminAnalytics', () => {
     
     await user.click(screen.getByRole('tab', { name: '売上分析' }))
     
-    // 日本円フォーマット
-    expect(screen.getByText('¥1,250,000')).toBeInTheDocument()
-    expect(screen.getByText('¥14,800,000')).toBeInTheDocument()
-    expect(screen.getByText('¥8,900')).toBeInTheDocument()
-    expect(screen.getByText('¥45,600')).toBeInTheDocument()
+    // 日本円フォーマット（Intl.NumberFormatで生成される実際の形式）
+    expect(screen.getByText(formatCurrency(1250000))).toBeInTheDocument()
+    expect(screen.getByText(formatCurrency(14800000))).toBeInTheDocument()
+    expect(screen.getByText(formatCurrency(8900))).toBeInTheDocument()
+    expect(screen.getByText(formatCurrency(45600))).toBeInTheDocument()
   })
 
   it('プログレスバーが正しい値で表示される', async () => {

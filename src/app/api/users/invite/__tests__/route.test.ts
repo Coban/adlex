@@ -29,6 +29,9 @@ describe('Users Invite API Route', () => {
 
   describe('POST /api/users/invite', () => {
     it('should return 400 for invalid JSON', async () => {
+      // コンソールエラーを一時的に抑制
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
         headers: {
@@ -42,6 +45,9 @@ describe('Users Invite API Route', () => {
       expect(response.status).toBe(400)
       const body = await response.json()
       expect(body.error).toBe('Invalid JSON in request body')
+      
+      // コンソールスパイを復元
+      consoleSpy.mockRestore()
     })
 
     it('should return 400 when email is missing', async () => {

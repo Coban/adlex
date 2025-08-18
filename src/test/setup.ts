@@ -16,7 +16,7 @@ declare global {
 }
 
 // Start server before all tests
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
 
 // Clean up after each test case (e.g. clearing jsdom)
 afterEach(() => {

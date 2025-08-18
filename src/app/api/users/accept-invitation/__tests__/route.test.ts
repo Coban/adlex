@@ -30,6 +30,9 @@ describe('Accept Invitation API Route', () => {
   })
 
   it('無効なJSONは400', async () => {
+    // コンソールエラーを一時的に抑制
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     const req = new NextRequest('http://localhost:3000/api/users/accept-invitation', {
       method: 'POST',
       headers: {
@@ -39,6 +42,9 @@ describe('Accept Invitation API Route', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(400)
+    
+    // コンソールスパイを復元
+    consoleSpy.mockRestore()
   })
 
   it('token/passwordが空は400', async () => {

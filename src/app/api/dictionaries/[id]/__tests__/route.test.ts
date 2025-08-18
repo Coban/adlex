@@ -53,6 +53,9 @@ describe('Dictionaries [id] API', () => {
   })
 
   it('PUT: 無効JSONは400', async () => {
+    // コンソールエラーを一時的に抑制
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === 'users') {
@@ -71,6 +74,9 @@ describe('Dictionaries [id] API', () => {
     })
     const res = await PUT(req, { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(400)
+    
+    // コンソールスパイを復元
+    consoleSpy.mockRestore()
   })
 
   it('PUT: 未認証は401', async () => {

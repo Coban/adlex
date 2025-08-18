@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach, afterAll } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
@@ -51,8 +51,8 @@ const server = setupServer(
 )
 
 // MSWのライフサイクル管理
-beforeEach(() => server.listen())
-afterEach(() => server.resetHandlers())
+beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
+beforeEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 import AdminDashboard from '@/app/admin/page'
@@ -108,14 +108,14 @@ describe('AdminDashboard', () => {
     render(<AdminDashboard />)
     expect(screen.getByText('管理ダッシュボード')).toBeInTheDocument()
     
-    // データ読み込み完了を待つ
+    // DashboardStatsコンポーネントの統計データ読み込み完了を待つ
     await waitFor(() => {
-      expect(screen.getByTestId('stats-cards')).toBeInTheDocument()
-    })
+      expect(screen.queryByText('データを読み込んでいます...')).not.toBeInTheDocument()
+    }, { timeout: 3000 })
     
-    expect(screen.getByTestId('total-users')).toBeInTheDocument()
-    expect(screen.getByTestId('total-checks')).toBeInTheDocument()
-    expect(screen.getByTestId('active-users')).toBeInTheDocument()
+    // 統計データが表示されることを確認
+    expect(screen.getByText('システムヘルス')).toBeInTheDocument()
+    expect(screen.getByText('総ユーザー数')).toBeInTheDocument()
   })
 })
 

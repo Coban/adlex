@@ -211,4 +211,84 @@ export const handlers = [
       estimatedWait: 0
     });
   }),
+
+  // Mock admin API endpoints
+  http.get("/api/admin/stats", () => {
+    return HttpResponse.json({
+      stats: {
+        totalUsers: 100,
+        totalChecks: 5000,
+        totalDictionaries: 250,
+        totalOrganizations: 20,
+        activeUsers: 75,
+        checksThisMonth: 800,
+        totalViolations: 1200,
+        errorRate: '2.5'
+      },
+      recentActivity: [
+        {
+          id: '1',
+          action: 'チェック実行',
+          user: 'test@example.com',
+          text: 'テストチェック',
+          status: 'completed',
+          timestamp: '2024-01-20T10:00:00Z'
+        },
+        {
+          id: '2',
+          action: 'チェック実行',
+          user: 'user@example.com',
+          text: 'サンプルチェック',
+          status: 'processing',
+          timestamp: '2024-01-20T09:30:00Z'
+        }
+      ],
+      dailyChecks: [
+        { date: '2024-01-14', count: 45 },
+        { date: '2024-01-15', count: 62 },
+        { date: '2024-01-16', count: 38 },
+        { date: '2024-01-17', count: 71 },
+        { date: '2024-01-18', count: 55 },
+        { date: '2024-01-19', count: 89 },
+        { date: '2024-01-20', count: 67 }
+      ]
+    });
+  }),
+
+  http.get("/api/admin/performance", () => {
+    return HttpResponse.json({
+      performance: {
+        avgProcessingTime: '3.2',
+        maxProcessingTime: '8.5',
+        minProcessingTime: '1.1',
+        totalChecks24h: 245,
+        successRate: '97.8',
+        errorRate: '2.2'
+      },
+      statusBreakdown: {
+        completed: 240,
+        processing: 3,
+        failed: 2
+      },
+      hourlyActivity: [
+        { hour: '0:00', count: 5 },
+        { hour: '1:00', count: 2 },
+        { hour: '2:00', count: 1 },
+        { hour: '3:00', count: 3 },
+        { hour: '4:00', count: 4 },
+        { hour: '5:00', count: 8 },
+        { hour: '6:00', count: 12 },
+        { hour: '7:00', count: 18 },
+        { hour: '8:00', count: 25 },
+        { hour: '9:00', count: 32 },
+        { hour: '10:00', count: 28 },
+        { hour: '11:00', count: 22 }
+      ],
+      systemHealth: {
+        status: 'healthy',
+        uptime: '99.9%',
+        lastIncident: null
+      }
+    });
+  }),
 ];
