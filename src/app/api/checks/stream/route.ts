@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { queueManager } from '@/lib/queue-manager'
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database.types'
 
@@ -19,13 +20,11 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  // ユーザー組織情報を取得
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id, organization_id, role')
-    .eq('id', currentUser.id)
-    .single()
+  // Get repositories
+  const repositories = await getRepositories(supabase)
 
+  // ユーザー組織情報を取得
+  const userProfile = await repositories.users.findById(currentUser.id)
   if (!userProfile) {
     return new Response('User profile not found', { status: 404 })
   }
@@ -52,23 +51,18 @@ export async function GET(request: NextRequest) {
           const queueStatus = queueManager.getStatus()
           
           // データベースから処理中のチェック数を取得（より正確な情報）
-          const { data: processingChecks } = await supabase
-            .from('checks')
-            .select('id, status, created_at, input_type')
-            .in('status', ['pending', 'processing'])
-            .order('created_at', { ascending: true })
+          const processingChecks = await repositories.checks.findMany({
+            where: { status: ['pending', 'processing'] },
+            orderBy: [{ field: 'created_at', direction: 'asc' }]
+          })
 
           // 組織の使用制限情報を取得
-          const { data: organizationData } = await supabase
-            .from('organizations')
-            .select('max_checks, used_checks')
-            .eq('id', userProfile.organization_id ?? 0)
-            .single()
+          const organizationData = await repositories.organizations.findById(userProfile.organization_id ?? 0)
 
           // 処理タイプ別の統計
           const processingStats = {
-            text: processingChecks?.filter(c => c.input_type === 'text' || !c.input_type).length ?? 0,
-            image: processingChecks?.filter(c => c.input_type === 'image').length ?? 0
+            text: processingChecks.filter(c => c.input_type === 'text' || !c.input_type).length,
+            image: processingChecks.filter(c => c.input_type === 'image').length
           }
 
           const queueData = {
@@ -78,7 +72,7 @@ export async function GET(request: NextRequest) {
               queueLength: queueStatus.queueLength,
               processingCount: queueStatus.processingCount,
               maxConcurrent: queueStatus.maxConcurrent,
-              databaseProcessingCount: processingChecks?.length ?? 0,
+              databaseProcessingCount: processingChecks.length,
               availableSlots: Math.max(0, queueStatus.maxConcurrent - queueStatus.processingCount),
               processingStats,
               canStartNewCheck: queueStatus.processingCount < queueStatus.maxConcurrent

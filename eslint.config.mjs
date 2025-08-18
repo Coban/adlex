@@ -18,7 +18,7 @@ const eslintConfig = [
     ],
     languageOptions: {
       parserOptions: {
-        project: "./tsconfig.json",
+        project: "./tsconfig.eslint.json",
         tsconfigRootDir: __dirname,
       },
     },
@@ -53,6 +53,21 @@ const eslintConfig = [
         "newlines-between": "always",
         "alphabetize": { "order": "asc" }
       }],
+    },
+  },
+  // Test files: disable type-aware linting to avoid module resolution noise
+  {
+    files: [
+      "src/**/__tests__/**/*.{ts,tsx}",
+      "src/app/**/__tests__/**/*.{ts,tsx}",
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: null,
+      },
+    },
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
     },
   },
 ];

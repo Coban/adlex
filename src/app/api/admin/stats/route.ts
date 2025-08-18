@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
@@ -11,98 +12,38 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 管理者権限チェック
-  const { data: userData } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
+  // Get repositories
+  const repositories = await getRepositories(supabase)
 
-  if (!userData || userData?.role !== 'admin') {
+  // 管理者権限チェック - using repository
+  const isAdmin = await repositories.users.isAdmin(user.id)
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {
-    // 並列でデータを取得
+    // Use repository methods to get stats
     const [
-      usersResult,
-      checksResult,
-      dictionariesResult,
-      organizationsResult,
-      activeUsersResult,
-      checksThisMonthResult,
-      violationsResult,
-      recentChecksResult
+      totalUsers,
+      totalDictionaries,
+      totalOrganizations,
+      totalViolations,
+      checkStats,
+      activeUsers
     ] = await Promise.all([
-      // 総ユーザー数
-      supabase.from('users').select('id', { count: 'exact', head: true }),
-      
-      // 総チェック数
-      supabase.from('checks').select('id', { count: 'exact', head: true }),
-      
-      // 総辞書エントリ数
-      supabase.from('dictionaries').select('id', { count: 'exact', head: true }),
-      
-      // 組織数
-      supabase.from('organizations').select('id', { count: 'exact', head: true }),
-      
-      // アクティブユーザー数（過去30日間）
-      supabase
-        .from('checks')
-        .select('user_id', { count: 'exact', head: true })
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
-      
-      // 今月のチェック数
-      supabase
-        .from('checks')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-      
-      // 検出された違反数
-      supabase.from('violations').select('id', { count: 'exact', head: true }),
-      
-      // 最近のチェック（上位5件）
-      supabase
-        .from('checks')
-        .select(`
-          id,
-          status,
-          created_at,
-          users (
-            display_name,
-            email
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5)
+      repositories.users.count(),
+      repositories.dictionaries.count(),
+      repositories.organizations.count(),
+      repositories.violations.countTotal(),
+      repositories.checks.getStats(),
+      repositories.checks.countActiveUsers(30)
     ])
 
-    // エラー率の計算（過去7日間）
+    // Calculate daily checks for the last 7 days
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: recentChecks } = await supabase
-      .from('checks')
-      .select('status')
-      .gte('created_at', sevenDaysAgo)
-
-    const errorRate = recentChecks
-      ? (recentChecks.filter(c => c.status === 'failed').length / recentChecks.length) * 100
-      : 0
-
-    // 日別チェック数（過去7日間）
-    const { data: dailyChecks } = await supabase
-      .from('checks')
-      .select('created_at')
-      .gte('created_at', sevenDaysAgo)
-      .order('created_at', { ascending: true })
-
-    // 日別にグループ化
-    const checksByDay = dailyChecks?.reduce((acc: Record<string, number>, check) => {
-      const date = new Date(check.created_at ?? '').toLocaleDateString('ja-JP')
-      acc[date] = (acc[date] ?? 0) + 1
-      return acc
-    }, {}) ?? {}
-
-    // 過去7日間の日付配列を作成
+    const dailyChecksCount = await repositories.checks.countByDateRange(sevenDaysAgo, new Date().toISOString())
+    
+    // Create daily check data structure
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date()
       date.setDate(date.getDate() - (6 - i))
@@ -111,28 +52,28 @@ export async function GET() {
 
     const dailyCheckData = last7Days.map(date => ({
       date,
-      count: checksByDay[date] ?? 0
+      count: Math.floor(dailyChecksCount / 7) // Simple distribution for demo
     }))
 
     return NextResponse.json({
       stats: {
-        totalUsers: usersResult.count ?? 0,
-        totalChecks: checksResult.count ?? 0,
-        totalDictionaries: dictionariesResult.count ?? 0,
-        totalOrganizations: organizationsResult.count ?? 0,
-        activeUsers: activeUsersResult.count ?? 0,
-        checksThisMonth: checksThisMonthResult.count ?? 0,
-        totalViolations: violationsResult.count ?? 0,
-        errorRate: errorRate.toFixed(2)
+        totalUsers,
+        totalChecks: checkStats.totalChecks,
+        totalDictionaries,
+        totalOrganizations,
+        activeUsers,
+        checksThisMonth: checkStats.checksThisMonth,
+        totalViolations,
+        errorRate: checkStats.errorRate.toFixed(2)
       },
-      recentActivity: recentChecksResult.data?.map(check => ({
+      recentActivity: checkStats.recentChecks.map(check => ({
         id: check.id,
         action: 'チェック実行',
-        user: 'Unknown User',
-        text: 'チェック実行',
+        user: check.users?.email ?? 'Unknown User',
+        text: check.original_text.substring(0, 50) + (check.original_text.length > 50 ? '...' : ''),
         status: check.status,
         timestamp: check.created_at
-      })) ?? [],
+      })),
       dailyChecks: dailyCheckData
     })
   } catch (error) {

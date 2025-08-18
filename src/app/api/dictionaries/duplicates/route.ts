@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { getRepositories } from "@/lib/repositories"
 import { createClient } from "@/lib/supabase/server"
 
 export async function GET(_request: NextRequest) {
@@ -11,13 +12,11 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 })
     }
 
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (profileError || !userProfile?.organization_id) {
+    const userProfile = await repositories.users.findById(user.id)
+    if (!userProfile?.organization_id) {
       return NextResponse.json({ error: "ユーザープロファイルが見つかりません" }, { status: 404 })
     }
 
@@ -26,19 +25,15 @@ export async function GET(_request: NextRequest) {
     }
 
     // 同一phraseの重複検出
-    const { data: rows, error } = await supabase
-      .from('dictionaries')
-      .select('id, phrase, category, notes, created_at')
-      .eq('organization_id', userProfile.organization_id)
-      .order('phrase', { ascending: true })
-
-    if (error) {
-      console.error('重複検出エラー:', error)
-      return NextResponse.json({ error: '重複検出に失敗しました' }, { status: 500 })
-    }
+    const rows = await repositories.dictionaries.findByOrganizationId(
+      userProfile.organization_id,
+      {
+        orderBy: [{ field: 'phrase', direction: 'asc' }]
+      }
+    )
 
     const map = new Map<string, typeof rows>()
-    for (const r of rows ?? []) {
+    for (const r of rows) {
       const key = (r.phrase ?? '').trim()
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(r)

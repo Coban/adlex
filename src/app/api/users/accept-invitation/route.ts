@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getRepositories } from "@/lib/repositories";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -28,17 +29,11 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
+    const repositories = await getRepositories(supabase);
 
     // 有効な招待を確認
-    const { data: invitation, error: invitationError } = await supabase
-      .from("user_invitations")
-      .select("*")
-      .eq("token", token)
-      .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .single();
-
-    if (invitationError || !invitation) {
+    const invitation = await repositories.userInvitations.findByToken(token);
+    if (!invitation || !repositories.userInvitations.isInvitationValid(invitation)) {
       return NextResponse.json(
         { error: "無効または期限切れの招待リンクです" },
         { status: 400 },
@@ -46,12 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 既にユーザーが存在するかチェック
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", invitation.email)
-      .single();
-
+    const existingUser = await repositories.users.findByEmail(invitation.email);
     if (existingUser) {
       return NextResponse.json(
         { error: "このメールアドレスは既に登録されています" },

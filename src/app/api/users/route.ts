@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -15,14 +16,12 @@ export async function GET() {
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // Get repositories
+    const repositories = await getRepositories(supabase);
 
-    if (userError || !currentUser) {
+    // 現在のユーザー情報を取得（管理者権限をチェック）
+    const currentUser = await repositories.users.findById(user.id);
+    if (!currentUser) {
       return NextResponse.json(
         { error: "ユーザー情報の取得に失敗しました" },
         { status: 400 },
@@ -46,22 +45,13 @@ export async function GET() {
     }
 
     // 組織に所属するユーザー一覧を取得
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, email, role, created_at, updated_at")
-      .eq("organization_id", currentUser.organization_id)
-      .order("created_at", { ascending: false });
-
-    if (usersError) {
-      console.error("Users fetch error:", usersError);
-      return NextResponse.json(
-        { error: "ユーザー一覧の取得に失敗しました" },
-        { status: 500 },
-      );
-    }
+    const users = await repositories.users.findByOrganizationId(
+      currentUser.organization_id,
+      { orderBy: [{ field: 'created_at', direction: 'desc' }] }
+    );
 
     return NextResponse.json({
-      users: users || [],
+      users,
     });
   } catch (error) {
     console.error("Get users error:", error);

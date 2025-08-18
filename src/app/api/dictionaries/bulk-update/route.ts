@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { getRepositories } from "@/lib/repositories"
 import { createClient } from "@/lib/supabase/server"
 import { Database } from "@/types/database.types"
 
@@ -14,13 +15,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 })
     }
 
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (profileError || !userProfile?.organization_id) {
+    const userProfile = await repositories.users.findById(user.id)
+    if (!userProfile?.organization_id) {
       return NextResponse.json({ error: "ユーザープロファイルが見つかりません" }, { status: 404 })
     }
 
@@ -40,21 +39,31 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'updates配列が必要です' }, { status: 400 })
     }
 
-    // 1件ずつ更新（SupabaseのRLS・制約を考慮）
+    // 1件ずつ更新（組織チェックを含めた安全な更新）
     let success = 0
     let failure = 0
     for (const u of payload.updates) {
       if (!u?.id || !u.patch) { failure++; continue }
-      const updates: DictionaryUpdate = {
-        ...u.patch,
-        updated_at: new Date().toISOString(),
+      
+      try {
+        // 組織に属する辞書アイテムか検証
+        const existingItem = await repositories.dictionaries.findByIdAndOrganization(u.id, userProfile.organization_id)
+        if (!existingItem) {
+          failure++
+          continue
+        }
+
+        const updates: DictionaryUpdate = {
+          ...u.patch,
+          updated_at: new Date().toISOString(),
+        }
+        
+        const updated = await repositories.dictionaries.update(u.id, updates)
+        if (updated) { success++ } else { failure++ }
+      } catch (error) {
+        console.error(`Error updating dictionary item ${u.id}:`, error)
+        failure++
       }
-      const { error } = await supabase
-        .from('dictionaries')
-        .update(updates)
-        .eq('id', u.id)
-        .eq('organization_id', userProfile.organization_id)
-      if (error) { failure++ } else { success++ }
     }
 
     return NextResponse.json({ success, failure })

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 
@@ -30,23 +31,16 @@ export async function GET(
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const { data: checkRecord, error: checkError } = await supabase
-    .from('checks')
-    .select('id, user_id, organization_id')
-    .eq('id', checkId)
-    .single()
+  // Get repositories
+  const repositories = await getRepositories(supabase)
 
-  if (checkError || !checkRecord) {
+  const checkRecord = await repositories.checks.findById(checkId)
+  if (!checkRecord) {
     return new Response('Check not found', { status: 404 })
   }
   
   // ユーザーがこのチェックにアクセス可能かさらに検証
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id, organization_id, role')
-    .eq('id', user.id)
-    .single()
-
+  const userProfile = await repositories.users.findById(user.id)
   if (!userProfile || (userProfile.role === 'user' && checkRecord.user_id !== user.id) || (userProfile.organization_id !== checkRecord.organization_id)) {
       return new Response('Forbidden', { status: 403 })
   }
@@ -64,15 +58,11 @@ export async function GET(
   })
 
   // 処理タイプを事前にチェックしてタイムアウト値を決定
-  const { data: checkTypeData } = await supabase
-    .from('checks')
-    .select('input_type')
-    .eq('id', checkId)
-    .single()
+  const checkTypeData = checkRecord
   
   // 段階的タイムアウト値: 画像処理は長めの設定
-  const maxConnectionTime = checkTypeData?.input_type === 'image' ? 180000 : 90000  // 画像: 3分、テキスト: 1.5分
-  const maxProgressTime = checkTypeData?.input_type === 'image' ? 60000 : 30000     // 画像: 1分、テキスト: 30秒
+  const maxConnectionTime = checkTypeData.input_type === 'image' ? 180000 : 90000  // 画像: 3分、テキスト: 1.5分
+  const maxProgressTime = checkTypeData.input_type === 'image' ? 60000 : 30000     // 画像: 1分、テキスト: 30秒
 
   // タイムアウト処理付きのReadableStreamを作成
   const stream = new ReadableStream({
@@ -265,7 +255,12 @@ async function sendFinalData(
   supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
 ) {
   try {
+    // Get repositories for the sendFinalData function
+    const repositories = await getRepositories(supabase)
+
     // 違反情報を含む完全なチェックデータを取得
+    // Use a temporary direct query since detailed violations method isn't available in this scope
+    // TODO: Could be improved by adding checkId parameter to findByIdWithDetailedViolations
     const { data: checkData, error } = await supabase
       .from('checks')
       .select(`

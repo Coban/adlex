@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { getRepositories } from "@/lib/repositories";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -40,14 +41,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // Get repositories
+    const repositories = await getRepositories(supabase);
 
-    if (userError || !currentUser) {
+    // 現在のユーザー情報を取得
+    const currentUser = await repositories.users.findById(user.id);
+    if (!currentUser) {
       return NextResponse.json(
         { error: "ユーザー情報の取得に失敗しました" },
         { status: 400 },
@@ -71,12 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 既に同じメールアドレスのユーザーが存在するかチェック
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .single();
-
+    const existingUser = await repositories.users.findByEmail(email);
     if (existingUser) {
       return NextResponse.json(
         { error: "このメールアドレスは既に登録されています" },
@@ -85,15 +79,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 既存の未承認の招待があるかチェック
-    const { data: existingInvitation } = await supabase
-      .from("user_invitations")
-      .select("id")
-      .eq("email", email)
-      .eq("organization_id", currentUser.organization_id)
-      .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .single();
-
+    const existingInvitation = await repositories.userInvitations.findActiveInvitationByEmail(
+      email, 
+      currentUser.organization_id
+    );
     if (existingInvitation) {
       return NextResponse.json(
         { error: "このメールアドレスには既に招待が送信されています" },
@@ -105,25 +94,13 @@ export async function POST(request: NextRequest) {
     const token = randomBytes(32).toString("hex");
 
     // 招待レコードを作成
-    const { data: invitation, error: inviteError } = await supabase
-      .from("user_invitations")
-      .insert({
-        organization_id: currentUser.organization_id,
-        email,
-        role,
-        token,
-        invited_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (inviteError) {
-      console.error("Invitation creation error:", inviteError);
-      return NextResponse.json(
-        { error: "招待の作成に失敗しました" },
-        { status: 500 },
-      );
-    }
+    const invitation = await repositories.userInvitations.create({
+      organization_id: currentUser.organization_id,
+      email,
+      role,
+      token,
+      invited_by: user.id,
+    });
 
     // 招待メールを送信（実装は簡略化）
     const invitationUrl = `${

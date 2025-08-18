@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -14,14 +15,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // Get user data with role and organization
+    const userData = await repositories.users.findById(user.id)
+    if (!userData || !userData.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
@@ -40,86 +39,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid format. Supported: csv, json, excel' }, { status: 400 })
     }
 
-    // Build query for export (no pagination limits)
-    let query = supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        input_type,
-        image_url,
-        extracted_text,
-        ocr_status,
-        created_at,
-        completed_at,
-        user_id,
-        users!inner(email),
-        violations:violations(id)
-      `)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-
-    // Apply filters based on user role
+    // Determine userId based on user role
+    let searchUserId: string | undefined
     if (userData.role === 'user') {
-      query = query.eq('user_id', userData.id)
+      // Regular users can only export their own checks
+      searchUserId = userData.id
     } else if (userData.role === 'admin' && userId) {
-      query = query.eq('user_id', userId)
+      // Admins can filter by specific user
+      searchUserId = userId
     }
 
-    // Apply filters
-    if (search) {
-      query = query.ilike('original_text', `%${search}%`)
-    }
+    // Validate and cast parameters
+    const searchStatus = status && ['pending', 'processing', 'completed', 'failed'].includes(status) 
+      ? status as 'pending' | 'processing' | 'completed' | 'failed' 
+      : undefined
 
-    if (status && ['pending', 'processing', 'completed', 'failed'].includes(status)) {
-      query = query.eq('status', status as 'pending' | 'processing' | 'completed' | 'failed')
-    }
+    const searchInputType = inputType && ['text', 'image'].includes(inputType)
+      ? inputType as 'text' | 'image'
+      : undefined
 
-    if (inputType && ['text', 'image'].includes(inputType)) {
-      query = query.eq('input_type', inputType as 'text' | 'image')
-    }
+    const searchDateFilter = dateFilter && ['today', 'week', 'month'].includes(dateFilter)
+      ? dateFilter as 'today' | 'week' | 'month'
+      : undefined
 
-    // Apply date filters
-    if (startDate) {
-      query = query.gte('created_at', startDate)
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate)
-    }
+    // Use repository search method with high limit for export (no pagination)
+    const searchResult = await repositories.checks.searchChecks({
+      organizationId: userData.organization_id,
+      userId: searchUserId,
+      search: search || undefined,
+      status: searchStatus,
+      inputType: searchInputType,
+      dateFilter: searchDateFilter,
+      page: 1,
+      limit: 10000 // High limit for export
+    })
 
-    if (dateFilter && ['today', 'week', 'month'].includes(dateFilter)) {
-      const now = new Date()
-      let filterStartDate: Date
-
-      switch (dateFilter) {
-        case 'today':
-          filterStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          break
-        case 'week':
-          const dayOfWeek = now.getDay()
-          filterStartDate = new Date(now.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000))
-          filterStartDate.setHours(0, 0, 0, 0)
-          break
-        case 'month':
-          filterStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
-          break
-        default:
-          filterStartDate = new Date(0)
-      }
-
-      query = query.gte('created_at', filterStartDate.toISOString())
-    }
-
-    // Execute query
-    const { data: checks, error: checksError } = await query
-
-    if (checksError) {
-      console.error('Export query error:', checksError)
-      return NextResponse.json({ error: 'Failed to fetch checks for export' }, { status: 500 })
-    }
+    const checks = searchResult.checks
 
     if (!checks || checks.length === 0) {
       return NextResponse.json({ error: 'No data to export' }, { status: 404 })

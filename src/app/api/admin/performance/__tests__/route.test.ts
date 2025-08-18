@@ -13,7 +13,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('next/server', async (importOriginal) => {
-  const actual = await importOriginal()
+  const actual: typeof import('next/server') = await importOriginal()
   return {
     ...actual,
     NextResponse: {
@@ -54,7 +54,9 @@ describe('/api/admin/performance', () => {
     const supabaseModule = await import('@/lib/supabase/server')
     const nextServerModule = await import('next/server')
     
-    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as unknown as ReturnType<typeof supabaseModule.createClient>)
+    vi.mocked(supabaseModule.createClient).mockReturnValue(
+      mockSupabaseClient as unknown as ReturnType<typeof supabaseModule.createClient>
+    )
     vi.mocked(nextServerModule.NextResponse.json).mockImplementation(mockNextResponse.json)
   })
 
@@ -350,10 +352,11 @@ describe('/api/admin/performance', () => {
     expect(responseData.hourlyActivity).toHaveLength(24)
 
     // 各時間帯のデータ構造を確認
-    responseData.hourlyActivity.forEach((hour: unknown) => {
-      expect(hour).toHaveProperty('hour')
-      expect(hour).toHaveProperty('count')
-      expect(typeof hour.count).toBe('number')
+    type HourActivity = { hour: string; count: number }
+    ;(responseData.hourlyActivity as HourActivity[]).forEach((item) => {
+      expect(item).toHaveProperty('hour')
+      expect(item).toHaveProperty('count')
+      expect(typeof item.count).toBe('number')
     })
   })
 

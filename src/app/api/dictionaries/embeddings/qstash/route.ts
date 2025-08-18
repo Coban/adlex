@@ -2,6 +2,7 @@ import { Receiver } from '@upstash/qstash'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createEmbedding } from '@/lib/ai-client'
+import { getRepositories } from '@/lib/repositories'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Verify QStash signature
@@ -36,17 +37,15 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const repositories = await getRepositories(supabase)
 
     // regenerate embedding
     const vector = await createEmbedding(phrase)
-    const { error: updateError } = await supabase
-      .from('dictionaries')
-      .update({ vector: JSON.stringify(vector), updated_at: new Date().toISOString() })
-      .eq('id', dictionaryId)
+    const updated = await repositories.dictionaries.updateVector(dictionaryId, vector)
 
-    if (updateError) {
-      console.error('Failed to update dictionary vector:', updateError)
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    if (!updated) {
+      console.error('Failed to update dictionary vector')
+      return NextResponse.json({ error: 'Failed to update dictionary vector' }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })
