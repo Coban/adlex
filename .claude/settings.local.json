@@ -49,13 +49,16 @@
       "mcp__serena__read_memory",
       "Bash(npx supabase:*)",
       "Bash(/dev/null)",
+      "mcp__serena__think_about_task_adherence",
+      "Bash(npm install:*)",
       "Bash(for file in src/app/admin/settings/page.tsx src/app/dictionaries/page.tsx src/components/CheckHistoryList.tsx src/components/CheckHistoryDetail.tsx src/components/TextChecker.tsx src/components/ImageChecker.tsx)",
       "Bash(do echo \"=== $file ===\")",
       "Bash(done)",
       "Bash(npm test:*)",
       "Bash(gh pr view:*)",
       "Bash(gh api:*)",
-      "Bash(gh pr review:*)"
+      "Bash(gh pr review:*)",
+      "Bash(gh pr comment:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

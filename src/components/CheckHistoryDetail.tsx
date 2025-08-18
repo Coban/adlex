@@ -2,7 +2,8 @@
 
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { ArrowLeft, Copy, Download, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Copy, Download, Eye, EyeOff, Image as ImageIcon, FileText, RefreshCw, Trash2 } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
@@ -26,6 +27,11 @@ interface CheckDetail {
   originalText: string
   modifiedText: string | null
   status: 'pending' | 'processing' | 'completed' | 'failed'
+  inputType: 'text' | 'image'
+  imageUrl?: string | null
+  extractedText?: string | null
+  ocrStatus?: string | null
+  ocrMetadata?: Record<string, unknown>
   createdAt: string
   completedAt: string | null
   userEmail?: string
@@ -92,6 +98,36 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
         variant: 'destructive'
       })
     }
+  }
+
+  // diff フォーマットのヘッダー生成
+  const getDiffHeader = (originalLineCount: number, modifiedLineCount: number) => {
+    return `--- 原文
++++ 修正文
+@@ -1,${originalLineCount} +1,${modifiedLineCount} @@`
+  }
+
+  // diff フォーマットの本文生成
+  const getDiffBody = (originalText: string, modifiedText: string) => {
+    const originalLines = originalText.split('\n').map(line => `-${line}`).join('\n')
+    const modifiedLines = modifiedText.split('\n').map(line => `+${line}`).join('\n')
+    return `${originalLines}\n${modifiedLines}`
+  }
+
+  const copyDiffFormat = async () => {
+    if (!check) return
+
+    const originalText = check.inputType === 'image' && check.extractedText 
+      ? check.extractedText 
+      : check.originalText
+    
+    const modifiedText = check.modifiedText ?? ''
+    
+    const diffHeader = getDiffHeader(originalText.split('\n').length, modifiedText.split('\n').length)
+    const diffBody = getDiffBody(originalText, modifiedText)
+    const diffText = `${diffHeader}\n${diffBody}`
+
+    await copyToClipboard(diffText, 'diff形式')
   }
 
   const highlightViolations = (text: string, violations: Violation[]) => {
@@ -264,6 +300,10 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               <Badge className={statusLabels[check.status].className}>
                 {statusLabels[check.status].label}
               </Badge>
+              <Badge variant="outline" className="flex items-center gap-1">
+                {check.inputType === 'image' ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                {check.inputType === 'image' ? '画像' : 'テキスト'}
+              </Badge>
               {check.userEmail && (
                 <span className="text-sm text-gray-500">{check.userEmail}</span>
               )}
@@ -293,6 +333,44 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
             variant="outline"
             size="sm"
             onClick={async () => {
+              if (confirm('このチェックを再実行しますか？')) {
+                try {
+                  const response = await fetch('/api/checks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      inputType: check.inputType,
+                      text: check.inputType === 'image' ? check.extractedText ?? check.originalText : check.originalText,
+                      imageUrl: check.inputType === 'image' ? check.imageUrl : undefined
+                    })
+                  })
+                  if (response.ok) {
+                    const data = await response.json()
+                    window.location.href = `/history/${data.check.id}`
+                  }
+                } catch {
+                  toast({ title: '再実行エラー', description: '再実行に失敗しました', variant: 'destructive' })
+                }
+              }
+            }}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            再実行
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyDiffFormat}
+            disabled={!check.modifiedText}
+            data-testid="diff-copy"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            diff形式コピー
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
               try {
                 const res = await fetch(`/api/checks/${check?.id}/pdf`)
                 if (!res.ok) {
@@ -316,6 +394,30 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
             <Download className="h-4 w-4 mr-2" />
             PDF出力
           </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              if (confirm('このチェック履歴を削除しますか？この操作は取り消せません。')) {
+                try {
+                  const response = await fetch(`/api/checks/${check.id}`, {
+                    method: 'DELETE'
+                  })
+                  if (response.ok) {
+                    toast({ title: '削除完了', description: 'チェック履歴を削除しました' })
+                    window.location.href = '/history'
+                  } else {
+                    throw new Error('削除に失敗しました')
+                  }
+                } catch (e) {
+                  toast({ title: '削除エラー', description: e instanceof Error ? e.message : '削除に失敗しました', variant: 'destructive' })
+                }
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            削除
+          </Button>
         </div>
       </div>
 
@@ -334,14 +436,43 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
               </div>
             )}
             <div>
+              <span className="font-medium text-gray-700">入力タイプ:</span>
+              <div>{check.inputType === 'image' ? '画像' : 'テキスト'}</div>
+            </div>
+            <div>
               <span className="font-medium text-gray-700">違反数:</span>
               <div>{check.violations.length}件</div>
             </div>
             <div>
               <span className="font-medium text-gray-700">文字数:</span>
-              <div>{check.originalText.length}文字</div>
+              <div>
+                {check.inputType === 'image' && check.extractedText 
+                  ? check.extractedText.length 
+                  : check.originalText.length
+                }文字
+              </div>
             </div>
+            {check.inputType === 'image' && check.ocrStatus && (
+              <div>
+                <span className="font-medium text-gray-700">OCRステータス:</span>
+                <div>{check.ocrStatus}</div>
+              </div>
+            )}
           </div>
+          
+          {/* 画像表示 */}
+          {check.inputType === 'image' && check.imageUrl && (
+            <div className="mt-4 pt-4 border-t">
+              <span className="font-medium text-gray-700 block mb-2">アップロード画像:</span>
+              <Image
+                src={check.imageUrl}
+                alt="チェック対象画像"
+                width={400}
+                height={300}
+                className="rounded border object-contain bg-gray-50"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

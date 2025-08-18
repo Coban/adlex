@@ -224,6 +224,7 @@ Use `npm run seed` to create test accounts:
 - Implement proper error handling and loading states
 - Use Supabase client for database operations
 - Follow the established ESLint configuration
+- **コード内のコメントは日本語で記述すること**
 
 ### Authentication
 - Use `createClient()` from `@/lib/supabase/server` for API routes
@@ -256,3 +257,8 @@ Use `npm run seed` to create test accounts:
 - AI provider can be switched without code changes using environment variables
 - Background processing uses queue system to handle concurrent checks efficiently
 - Real-time progress updates are delivered via Server-Sent Events
+
+## Task Management
+
+- After completing an implementation, update `TODO.md` to reflect the changes  
+- Keep tasks up to date to maintain accurate project tracking
