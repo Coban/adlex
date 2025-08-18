@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { authFetch } from '@/lib/api-client'
 import { supabase } from '@/lib/supabase'
 import { Database } from '@/types/database.types'
 
@@ -132,7 +133,7 @@ export default function DictionariesPage() {
     if (!currentOrg || !userProfile || userProfile.role !== 'admin') return
     
     try {
-      const response = await fetch('/api/dictionaries/embeddings/refresh', {
+      const response = await authFetch('/api/dictionaries/embeddings/refresh', {
         method: 'GET',
       })
       
@@ -150,7 +151,7 @@ export default function DictionariesPage() {
     const currentOrg = organization ?? fallbackOrganization
     if (!currentOrg || !userProfile || userProfile.role !== 'admin') return
     try {
-      const res = await fetch('/api/dictionaries/stats', { method: 'GET' })
+      const res = await authFetch('/api/dictionaries/stats', { method: 'GET' })
       if (res.ok) {
         const data = await res.json()
         setDictionaryStats(data)
@@ -190,7 +191,7 @@ export default function DictionariesPage() {
     if (!currentOrg) return
 
     try {
-      const response = await fetch('/api/dictionaries', {
+      const response = await authFetch('/api/dictionaries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -229,7 +230,7 @@ export default function DictionariesPage() {
     if (!editingDictionary) return
 
     try {
-      const response = await fetch(`/api/dictionaries/${editingDictionary.id}`, {
+      const response = await authFetch(`/api/dictionaries/${editingDictionary.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -300,7 +301,7 @@ export default function DictionariesPage() {
     setMessage('埋め込みを再生成中...')
     
     try {
-      const response = await fetch('/api/dictionaries/embeddings/refresh', {
+      const response = await authFetch('/api/dictionaries/embeddings/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -338,7 +339,7 @@ export default function DictionariesPage() {
     let finished = false
     try {
       while (!finished) {
-        const res = await fetch(`/api/dictionaries/embeddings/refresh?jobId=${encodeURIComponent(jobId)}`, {
+        const res = await authFetch(`/api/dictionaries/embeddings/refresh?jobId=${encodeURIComponent(jobId)}`, {
           method: 'GET'
         })
         const status = await res.json()
@@ -571,7 +572,7 @@ export default function DictionariesPage() {
                 onClick={async () => {
                   setShowDuplicatesDialog(true)
                   try {
-                    const res = await fetch('/api/dictionaries/duplicates', { method: 'GET' })
+                    const res = await authFetch('/api/dictionaries/duplicates', { method: 'GET' })
                     const json = await res.json()
                     if (!res.ok) throw new Error(json.error ?? '重複検出に失敗しました')
                     setDuplicates(json.duplicates ?? [])
@@ -594,7 +595,7 @@ export default function DictionariesPage() {
                   if (upper !== 'NG' && upper !== 'ALLOW') return alert('NG/ALLOW のいずれかを指定してください')
                   try {
                     const updates = Array.from(selectedIds).map(id => ({ id, patch: { category: upper as 'NG' | 'ALLOW' } }))
-                    const res = await fetch('/api/dictionaries/bulk-update', {
+                    const res = await authFetch('/api/dictionaries/bulk-update', {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ updates })
@@ -622,7 +623,7 @@ export default function DictionariesPage() {
                     const value = notes.trim()
                     const patch = value === '' ? { notes: null } : { notes: value }
                     const updates = Array.from(selectedIds).map(id => ({ id, patch }))
-                    const res = await fetch('/api/dictionaries/bulk-update', {
+                    const res = await authFetch('/api/dictionaries/bulk-update', {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ updates })
@@ -643,7 +644,7 @@ export default function DictionariesPage() {
               <Button 
                 onClick={async () => {
                   try {
-                    const res = await fetch('/api/dictionaries/export', { method: 'GET' })
+                    const res = await authFetch('/api/dictionaries/export', { method: 'GET' })
                     if (!res.ok) {
                       const j = await res.json().catch(() => ({}))
                       throw new Error(j.error ?? 'エクスポートに失敗しました')
@@ -677,7 +678,7 @@ export default function DictionariesPage() {
                     setImporting(true)
                     try {
                       const text = await file.text()
-                      const res = await fetch('/api/dictionaries/import', {
+                      const res = await authFetch('/api/dictionaries/import', {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'text/csv; charset=utf-8',

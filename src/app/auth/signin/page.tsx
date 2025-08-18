@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
 import { signIn } from '@/lib/auth'
+import { getRedirectUrl } from '@/lib/auth-redirect'
 
 export default function SignInPage() {
   const router = useRouter()
@@ -22,7 +23,8 @@ export default function SignInPage() {
   // 既にサインイン済み、またはサインイン直後の状態変化を検知して遷移
   useEffect(() => {
     if (!loading && user) {
-      router.replace('/')
+      const redirectUrl = getRedirectUrl()
+      router.replace(redirectUrl)
     }
   }, [user, loading, router])
 
@@ -39,9 +41,8 @@ export default function SignInPage() {
       
       // Verify sign in was successful
       if (result?.user) {
-        router.replace('/')
-        
-        
+        const redirectUrl = getRedirectUrl()
+        router.replace(redirectUrl)
       } else {
         throw new Error('サインインに失敗しました')
       }

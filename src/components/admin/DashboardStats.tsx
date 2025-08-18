@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { authFetch } from '@/lib/api-client'
 
 interface DashboardData {
   stats: {
@@ -71,8 +72,8 @@ export function DashboardStats() {
     const fetchData = async () => {
       try {
         const [statsRes, perfRes] = await Promise.all([
-          fetch('/api/admin/stats'),
-          fetch('/api/admin/performance')
+          authFetch('/api/admin/stats'),
+          authFetch('/api/admin/performance')
         ])
 
         if (!statsRes.ok || !perfRes.ok) {
