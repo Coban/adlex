@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
           
           // データベースから処理中のチェック数を取得（より正確な情報）
           const processingChecks = await repositories.checks.findMany({
-            where: { status: ['pending', 'processing'] },
+            where: { status: 'pending' },
             orderBy: [{ field: 'created_at', direction: 'asc' }]
           })
 

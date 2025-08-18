@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
+
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import {
   UserInvitation,
@@ -123,7 +125,7 @@ export class SupabaseUserInvitationsRepository
         throw this.createRepositoryError('Failed to count pending invitations', error)
       }
 
-      return count || 0
+      return count ?? 0
     } catch (error) {
       if (error instanceof Error && 'code' in error) throw error
       throw this.createRepositoryError('Unexpected error counting pending invitations', error as Error)
@@ -143,7 +145,7 @@ export class SupabaseUserInvitationsRepository
         throw this.createRepositoryError('Failed to delete expired invitations', error)
       }
 
-      return count || 0
+      return count ?? 0
     } catch (error) {
       if (error instanceof Error && 'code' in error) throw error
       throw this.createRepositoryError('Unexpected error deleting expired invitations', error as Error)

@@ -12,6 +12,7 @@ import {
   CheckSearchOptions,
   CheckSearchResult,
   CheckWithViolations,
+  CheckWithDetailedViolations,
   ChecksRepository,
 } from '@/lib/repositories/interfaces/checks'
 
@@ -100,7 +101,7 @@ export class MockChecksRepository implements ChecksRepository {
 
   // Spy on methods for testing
   findById = vi.fn(async (id: number): Promise<Check | null> => {
-    return this.checks.find(check => check.id === id) || null
+    return this.checks.find(check => check.id === id) ?? null
   })
 
   findMany = vi.fn(async (options?: FindManyOptions<Check>): Promise<Check[]> => {
@@ -145,11 +146,11 @@ export class MockChecksRepository implements ChecksRepository {
       user_id: data.user_id,
       organization_id: data.organization_id,
       original_text: data.original_text,
-      modified_text: data.modified_text || null,
-      status: (data.status as any) || 'pending',
-      input_type: data.input_type || 'text',
+      modified_text: data.modified_text ?? null,
+      status: (data.status as CheckStatus) ?? 'pending',
+      input_type: data.input_type ?? 'text',
       created_at: new Date().toISOString(),
-      completed_at: data.completed_at || null,
+      completed_at: data.completed_at ?? null,
       deleted_at: null,
       error_message: null,
       extracted_text: null,
@@ -212,7 +213,7 @@ export class MockChecksRepository implements ChecksRepository {
       limit = 20,
     } = searchOptions
 
-    let filteredChecks = this.checks.filter(check => {
+    const filteredChecks = this.checks.filter(check => {
       // Organization filter
       if (check.organization_id !== organizationId) return false
 
@@ -386,6 +387,40 @@ export class MockChecksRepository implements ChecksRepository {
         .map(check => check.user_id)
     )
     return uniqueUsers.size
+  })
+
+  findByIdWithDetailedViolations = vi.fn(async (id: number, organizationId: number): Promise<CheckWithDetailedViolations | null> => {
+    const check = this.checks.find(c => c.id === id && c.organization_id === organizationId)
+    if (!check) return null
+
+    return {
+      ...check,
+      users: { email: 'user@test.com' },
+      violations: [
+        {
+          id: 1,
+          start_pos: 0,
+          end_pos: 10,
+          reason: 'Test violation',
+          dictionary_id: 1,
+          dictionaries: {
+            phrase: 'test phrase',
+            category: 'NG'
+          }
+        }
+      ]
+    }
+  })
+
+  logicalDelete = vi.fn(async (id: number): Promise<Check | null> => {
+    const checkIndex = this.checks.findIndex(check => check.id === id)
+    if (checkIndex === -1) return null
+
+    this.checks[checkIndex] = {
+      ...this.checks[checkIndex],
+      deleted_at: new Date().toISOString(),
+    }
+    return this.checks[checkIndex]
   })
 
   // Helper methods for test setup

@@ -41,7 +41,7 @@ export class MockDictionariesRepository implements DictionariesRepository {
 
   // Spy on methods for testing
   findById = vi.fn(async (id: number): Promise<Dictionary | null> => {
-    return this.dictionaries.find(dict => dict.id === id) || null
+    return this.dictionaries.find(dict => dict.id === id) ?? null
   })
 
   findMany = vi.fn(async (options?: FindManyOptions<Dictionary>): Promise<Dictionary[]> => {
@@ -85,9 +85,9 @@ export class MockDictionariesRepository implements DictionariesRepository {
       id: Date.now(),
       organization_id: data.organization_id,
       phrase: data.phrase,
-      category: data.category,
-      notes: data.notes || null,
-      vector: data.vector || null,
+      category: data.category as DictionaryCategory,
+      notes: data.notes ?? null,
+      vector: data.vector ?? null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -141,20 +141,20 @@ export class MockDictionariesRepository implements DictionariesRepository {
 
   searchByPhrase = vi.fn(async (phrase: string, organizationId?: number, options?: FindManyOptions<Dictionary>): Promise<Dictionary[]> => {
     let filtered = this.dictionaries.filter(dict => 
-      dict.phrase.includes(phrase) || (dict.notes && dict.notes.includes(phrase))
+      dict.phrase?.includes(phrase) || dict.notes?.includes(phrase)
     )
 
     if (organizationId) {
       filtered = filtered.filter(dict => dict.organization_id === organizationId)
     }
 
-    return filtered.slice(0, options?.limit || filtered.length)
+    return filtered.slice(0, options?.limit ?? filtered.length)
   })
 
   searchDictionaries = vi.fn(async (searchOptions: DictionarySearchOptions): Promise<Dictionary[]> => {
     const { organizationId, search, category } = searchOptions
 
-    let filtered = this.dictionaries.filter(dict => {
+    const filtered = this.dictionaries.filter(dict => {
       // Organization filter
       if (dict.organization_id !== organizationId) return false
 
@@ -162,7 +162,7 @@ export class MockDictionariesRepository implements DictionariesRepository {
       if (category !== 'ALL' && dict.category !== category) return false
 
       // Search filter
-      if (search && !dict.phrase.includes(search) && !(dict.notes && dict.notes.includes(search))) {
+      if (search && !dict.phrase?.includes(search) && !dict.notes?.includes(search)) {
         return false
       }
 
@@ -170,14 +170,18 @@ export class MockDictionariesRepository implements DictionariesRepository {
     })
 
     // Sort by created_at desc
-    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    filtered.sort((a, b) => {
+      const aDate = a.created_at ? new Date(a.created_at).getTime() : 0
+      const bDate = b.created_at ? new Date(b.created_at).getTime() : 0
+      return bDate - aDate
+    })
 
     return filtered
   })
 
   findSimilarPhrases = vi.fn(async (
-    vector: number[],
-    threshold = 0.75,
+    _vector: number[],
+    _threshold = 0.75,
     organizationId?: number,
     options?: FindManyOptions<Dictionary>
   ): Promise<Dictionary[]> => {
@@ -188,7 +192,7 @@ export class MockDictionariesRepository implements DictionariesRepository {
       filtered = filtered.filter(dict => dict.organization_id === organizationId)
     }
 
-    return filtered.slice(0, options?.limit || 5)
+    return filtered.slice(0, options?.limit ?? 5)
   })
 
   countByOrganizationId = vi.fn(async (organizationId: number): Promise<number> => {
@@ -204,9 +208,9 @@ export class MockDictionariesRepository implements DictionariesRepository {
       id: Date.now() + index,
       organization_id: item.organization_id,
       phrase: item.phrase,
-      category: item.category,
-      notes: item.notes || null,
-      vector: item.vector || null,
+      category: (item.category ?? 'NG') as DictionaryCategory,
+      notes: item.notes ?? null,
+      vector: item.vector ?? null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }))
@@ -225,6 +229,25 @@ export class MockDictionariesRepository implements DictionariesRepository {
       dictionary,
       warning: undefined, // No warning in mock
     }
+  })
+
+  updateWithEmbedding = vi.fn(async (id: number, organizationId: number, data: {
+    phrase: string
+    category: DictionaryCategory
+    notes?: string | null
+  }): Promise<DictionaryCreateResponse> => {
+    const dictionary = await this.update(id, { ...data, vector: '[]' })
+    if (!dictionary) {
+      throw new Error('Dictionary not found')
+    }
+    return {
+      dictionary,
+      warning: undefined
+    }
+  })
+
+  findByIdAndOrganization = vi.fn(async (id: number, organizationId: number): Promise<Dictionary | null> => {
+    return this.dictionaries.find(dict => dict.id === id && dict.organization_id === organizationId) ?? null
   })
 
   // Helper methods for test setup

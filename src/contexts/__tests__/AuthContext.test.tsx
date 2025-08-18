@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 import { AuthProvider, useAuth } from '../AuthContext'
 
 // Get the mocked client from the global setup
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockSupabaseClient = createClient() as any
 
 // Test component that uses the AuthContext
@@ -60,7 +59,6 @@ describe.skip('AuthContext', () => {
       })
     })
     
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabaseClient.auth.onAuthStateChange.mockImplementation((_callback: any) => {
       // Return a mock subscription
       return {
@@ -249,10 +247,8 @@ describe.skip('AuthContext', () => {
       email: 'test@example.com'
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let authStateCallback: (event: string, session: any) => void
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabaseClient.auth.onAuthStateChange.mockImplementation((callback: any) => {
       authStateCallback = callback
       return {

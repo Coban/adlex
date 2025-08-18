@@ -1,61 +1,58 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-import { GET } from '../route'
 
-// モック用の変数をvi.mock外で定義
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn()
-    },
-    from: vi.fn()
-  }))
+// Mock repositories first since this route uses repository pattern
+const mockRepositories = {
+  users: {
+    isAdmin: vi.fn(),
+    count: vi.fn()
+  },
+  dictionaries: {
+    count: vi.fn()
+  },
+  organizations: {
+    count: vi.fn()
+  },
+  violations: {
+    countTotal: vi.fn()
+  },
+  checks: {
+    getStats: vi.fn(),
+    countActiveUsers: vi.fn(),
+    countByDateRange: vi.fn()
+  }
+};
+
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => mockRepositories)
 }))
 
-vi.mock('next/server', async (importOriginal) => {
-  const actual = await importOriginal()
-  return {
-    ...actual,
-    NextResponse: {
-      json: vi.fn((data, init) => ({
-        json: () => Promise.resolve(data),
-        status: init?.status || 200,
-        ok: (init?.status || 200) < 400
-      }))
-    }
-  }
-})
-
-// テスト内で使用するモックインスタンス
+// Mock Supabase client
 const mockSupabaseClient = {
-  auth: {
-    getUser: vi.fn()
-  },
-  from: vi.fn()
+  auth: { getUser: vi.fn() }
 }
 
-const mockNextResponse = {
-  json: vi.fn((data, init) => ({
-    json: () => Promise.resolve(data),
-    status: init?.status || 200,
-    ok: (init?.status || 200) < 400
-  }))
-}
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(async () => mockSupabaseClient),
+}))
+
+// Static mock for NextResponse to avoid hoisting issues
+vi.mock('next/server', () => ({
+  NextResponse: {
+    json: vi.fn((data, init) => ({
+      json: () => Promise.resolve(data),
+      status: init?.status || 200,
+      ok: (init?.status || 200) < 400
+    }))
+  }
+}))
+
+import { GET } from '../route'
+import { NextResponse } from 'next/server'
 
 describe('/api/admin/stats', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    
-    // モックSupabaseクライアントをリセット
-    mockSupabaseClient.auth.getUser.mockReset()
-    mockSupabaseClient.from.mockReset()
-    
-    // 動的インポートでモックを設定
-    const supabaseModule = await import('@/lib/supabase/server')
-    const nextServerModule = await import('next/server')
-    
-    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as unknown as ReturnType<typeof supabaseModule.createClient>)
-    vi.mocked(nextServerModule.NextResponse.json).mockImplementation(mockNextResponse.json)
   })
 
   it('未認証ユーザーには401エラーを返す', async () => {
@@ -66,7 +63,7 @@ describe('/api/admin/stats', () => {
 
     await GET()
 
-    expect(mockNextResponse.json).toHaveBeenCalledWith(
+    expect(NextResponse.json).toHaveBeenCalledWith(
       { error: 'Unauthorized' },
       { status: 401 }
     )
@@ -78,29 +75,11 @@ describe('/api/admin/stats', () => {
       error: null
     })
 
-    const mockSelect = vi.fn().mockReturnThis()
-    const mockEq = vi.fn().mockReturnThis()
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: { role: 'user' },
-      error: null
-    })
-
-    mockSupabaseClient.from.mockReturnValue({
-      select: mockSelect,
-      eq: mockEq,
-      single: mockSingle
-    })
-
-    mockSelect.mockImplementation((fields) => {
-      if (fields === 'role') {
-        return { eq: mockEq, single: mockSingle }
-      }
-      return { eq: mockEq, single: mockSingle }
-    })
+    mockRepositories.users.isAdmin.mockResolvedValue(false)
 
     await GET()
 
-    expect(mockNextResponse.json).toHaveBeenCalledWith(
+    expect(NextResponse.json).toHaveBeenCalledWith(
       { error: 'Forbidden' },
       { status: 403 }
     )
@@ -113,38 +92,32 @@ describe('/api/admin/stats', () => {
       error: null
     })
 
-    // 詳細なモック設定（Promise.allが正しく動作するように）
-    mockSupabaseClient.from.mockImplementation((table) => {
-      if (table === 'users') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
-            data: { role: 'admin' },
-            error: null
-          })
+    // Repository pattern mocks
+    mockRepositories.users.isAdmin.mockResolvedValue(true)
+    mockRepositories.users.count.mockResolvedValue(10)
+    mockRepositories.dictionaries.count.mockResolvedValue(5)
+    mockRepositories.organizations.count.mockResolvedValue(2)
+    mockRepositories.violations.countTotal.mockResolvedValue(15)
+    mockRepositories.checks.getStats.mockResolvedValue({
+      totalChecks: 100,
+      checksThisMonth: 25,
+      errorRate: 0.05,
+      recentChecks: [
+        {
+          id: 'check1',
+          original_text: 'Sample text for testing purposes',
+          status: 'completed',
+          created_at: '2024-01-01T00:00:00Z',
+          users: { email: 'user@test.com' }
         }
-      }
-      
-      // その他のテーブル用の統一されたモック
-      return {
-        select: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        count: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: [],
-          count: 10,
-          error: null
-        })
-      }
+      ]
     })
+    mockRepositories.checks.countActiveUsers.mockResolvedValue(8)
+    mockRepositories.checks.countByDateRange.mockResolvedValue(35)
 
     await GET()
 
-    expect(mockNextResponse.json).toHaveBeenCalledWith(
+    expect(NextResponse.json).toHaveBeenCalledWith(
       expect.objectContaining({
         stats: expect.any(Object),
         recentActivity: expect.any(Array),
@@ -159,18 +132,15 @@ describe('/api/admin/stats', () => {
       error: null
     })
 
-    mockSupabaseClient.from.mockImplementation(() => {
-      throw new Error('Database connection error')
-    })
+    // Mock repository to pass admin check but fail during stats collection
+    mockRepositories.users.isAdmin.mockResolvedValue(true)
+    mockRepositories.users.count.mockRejectedValue(new Error('Database connection error'))
 
-    // エラーがthrowされることを期待してテストを実行
-    try {
-      await GET()
-    } catch (error) {
-      // エラーがthrowされることを確認
-      expect(error).toBeInstanceOf(Error)
-      expect((error as Error).message).toBe('Database connection error')
-    }
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.error).toBe('Internal server error') // Match the actual catch block error message
   })
 
   it('空のデータベースでも適切にレスポンスを返す', async () => {
@@ -179,37 +149,24 @@ describe('/api/admin/stats', () => {
       error: null
     })
 
-    // 空のデータベースの状態をモック
-    mockSupabaseClient.from.mockImplementation((table) => {
-      if (table === 'users' && mockSupabaseClient.from.mock.calls.length === 1) {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
-            data: { role: 'admin' },
-            error: null
-          })
-        }
-      }
-      
-      return {
-        select: vi.fn().mockImplementation(() => ({
-          gte: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          count: 0,
-          data: [],
-          error: null
-        })),
-        count: 0,
-        data: [],
-        error: null
-      }
+    // Repository pattern mocks for empty database
+    mockRepositories.users.isAdmin.mockResolvedValue(true)
+    mockRepositories.users.count.mockResolvedValue(0)
+    mockRepositories.dictionaries.count.mockResolvedValue(0)
+    mockRepositories.organizations.count.mockResolvedValue(0)
+    mockRepositories.violations.countTotal.mockResolvedValue(0)
+    mockRepositories.checks.getStats.mockResolvedValue({
+      totalChecks: 0,
+      checksThisMonth: 0,
+      errorRate: 0,
+      recentChecks: []
     })
+    mockRepositories.checks.countActiveUsers.mockResolvedValue(0)
+    mockRepositories.checks.countByDateRange.mockResolvedValue(0)
 
     await GET()
 
-    const responseCall = mockNextResponse.json.mock.calls[0]
+    const responseCall = NextResponse.json.mock.calls[0]
     expect(responseCall[0]).toMatchObject({
       stats: expect.objectContaining({
         totalUsers: 0,
@@ -232,67 +189,33 @@ describe('/api/admin/stats', () => {
       error: null
     })
 
-    // 管理者ロールのモック
-    const mockUserQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { role: 'admin' },
-        error: null
-      })
-    }
-
-    // 統計データのモック
-    mockSupabaseClient.from.mockImplementation((table) => {
-      if (table === 'users' && mockSupabaseClient.from.mock.calls.length === 1) {
-        return mockUserQuery
-      }
-      
-      // 日別チェックデータ用のモック
-      if (table === 'checks') {
-        return {
-          select: vi.fn().mockImplementation((fields) => {
-            if (fields === 'created_at') {
-              return {
-                gte: vi.fn().mockReturnThis(),
-                order: vi.fn(() => ({
-                  data: [
-                    { created_at: '2024-01-20T10:00:00Z' },
-                    { created_at: '2024-01-20T14:00:00Z' },
-                    { created_at: '2024-01-19T09:00:00Z' }
-                  ],
-                  error: null
-                }))
-              }
-            }
-            // その他のクエリ用のデフォルトレスポンス
-            return {
-              gte: vi.fn().mockReturnThis(),
-              order: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
-              count: 0,
-              data: [],
-              error: null
-            }
-          }),
-          count: 0
+    // Repository pattern mocks
+    mockRepositories.users.isAdmin.mockResolvedValue(true)
+    mockRepositories.users.count.mockResolvedValue(10)
+    mockRepositories.dictionaries.count.mockResolvedValue(5)
+    mockRepositories.organizations.count.mockResolvedValue(2)
+    mockRepositories.violations.countTotal.mockResolvedValue(15)
+    mockRepositories.checks.getStats.mockResolvedValue({
+      totalChecks: 100,
+      checksThisMonth: 25,
+      errorRate: 0.05,
+      recentChecks: [
+        {
+          id: 'check1',
+          original_text: 'Sample text for testing',
+          status: 'completed',
+          created_at: '2024-01-20T10:00:00Z',
+          users: { email: 'user@test.com' }
         }
-      }
-      
-      // その他のテーブル用のデフォルトレスポンス
-      return {
-        select: vi.fn(() => ({
-          count: 0,
-          data: [],
-          error: null
-        })),
-        count: 0
-      }
+      ]
     })
+    mockRepositories.checks.countActiveUsers.mockResolvedValue(8)
+    // Mock daily checks count for the last 7 days
+    mockRepositories.checks.countByDateRange.mockResolvedValue(21)
 
     await GET()
 
-    const responseData = await mockNextResponse.json.mock.results[0].value.json()
+    const responseData = await NextResponse.json.mock.results[0].value.json()
     expect(responseData.dailyChecks).toHaveLength(7) // 過去7日間
     expect(responseData.dailyChecks[0]).toHaveProperty('date')
     expect(responseData.dailyChecks[0]).toHaveProperty('count')

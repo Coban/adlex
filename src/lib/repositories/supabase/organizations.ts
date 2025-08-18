@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
+
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import {
   Organization,
@@ -40,7 +42,7 @@ export class SupabaseOrganizationsRepository
       const organization = await this.findById(id)
       if (!organization) return null
 
-      const currentUsage = organization.used_checks || 0
+      const currentUsage = organization.used_checks ?? 0
       const newUsage = currentUsage + increment
 
       return this.update(id, { used_checks: newUsage })
@@ -54,8 +56,8 @@ export class SupabaseOrganizationsRepository
       const organization = await this.findById(id)
       if (!organization) return false
 
-      const usedChecks = organization.used_checks || 0
-      const maxChecks = organization.max_checks || 0
+      const usedChecks = organization.used_checks ?? 0
+      const maxChecks = organization.max_checks ?? 0
 
       return usedChecks < maxChecks
     } catch (error) {
@@ -73,8 +75,8 @@ export class SupabaseOrganizationsRepository
       const organization = await this.findById(id)
       if (!organization) return null
 
-      const usedChecks = organization.used_checks || 0
-      const maxChecks = organization.max_checks || 0
+      const usedChecks = organization.used_checks ?? 0
+      const maxChecks = organization.max_checks ?? 0
       const remainingChecks = Math.max(0, maxChecks - usedChecks)
       const usagePercentage = maxChecks > 0 ? (usedChecks / maxChecks) * 100 : 0
 

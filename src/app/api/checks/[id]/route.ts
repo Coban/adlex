@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get user data with role and organization
     const userData = await repositories.users.findById(user.id)
-    if (!userData || !userData.organization_id) {
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         reason: violation.reason,
         dictionaryPhrase: violation.dictionaries?.phrase,
         dictionaryCategory: violation.dictionaries?.category
-      })) || []
+      })) ?? []
     }
 
     return NextResponse.json({ check: formattedCheck })
@@ -98,7 +98,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Get user data with role and organization
     const userData = await repositories.users.findById(user.id)
-    if (!userData || !userData.organization_id) {
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 

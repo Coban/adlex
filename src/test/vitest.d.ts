@@ -5,8 +5,7 @@ import { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers";
 
 declare global {
   namespace Vi {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    interface JestAssertion<T = any>
+    interface JestAssertion<T = unknown>
       extends jest.Matchers<void, T>, TestingLibraryMatchers<T, void> {}
   }
 }

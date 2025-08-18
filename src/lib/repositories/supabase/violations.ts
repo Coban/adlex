@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
+
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import { Violation, ViolationInsert, ViolationUpdate, ViolationsRepository } from '../interfaces/violations'
 
@@ -48,7 +50,7 @@ export class SupabaseViolationsRepository
 
       const { data, error } = await this.supabase
         .from('violations')
-        .insert(violationsWithCheckId as any[])
+        .insert(violationsWithCheckId)
         .select()
 
       if (error) {

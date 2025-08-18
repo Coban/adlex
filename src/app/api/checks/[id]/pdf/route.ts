@@ -49,7 +49,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
 
     // PDF生成（Buffer）
-    const pdfBuffer = await generatePdfBuffer(check)
+    const pdfBuffer = await generatePdfBuffer(check as CheckRow)
 
     const filename = `check_${check.id}.pdf`
     return new NextResponse(new Uint8Array(pdfBuffer), {

@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import {
   Check,
@@ -339,7 +340,7 @@ export class SupabaseChecksRepository
       const errorRate = statusBreakdown.error ? (statusBreakdown.error / totalChecks) * 100 : 0
 
       // Hourly activity - cast the minimal data to Check type for the helper method
-      const hourlyActivity = this.calculateHourlyActivity((checks || []) as unknown as Check[])
+      const hourlyActivity = this.calculateHourlyActivity((checks ?? []) as unknown as Check[])
 
       return {
         avgProcessingTime,
@@ -368,7 +369,7 @@ export class SupabaseChecksRepository
         throw this.createRepositoryError('Failed to count checks by date range', error)
       }
 
-      return count || 0
+      return count ?? 0
     } catch (error) {
       if (error instanceof Error && 'code' in error) throw error
       throw this.createRepositoryError('Unexpected error counting checks by date range', error as Error)
@@ -445,8 +446,7 @@ export class SupabaseChecksRepository
 
   async logicalDelete(id: number): Promise<Check | null> {
     return this.update(id, {
-      deleted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      deleted_at: new Date().toISOString()
     })
   }
 

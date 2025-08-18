@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
+
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import { User, UserInsert, UserUpdate, UserRole, UserWithOrganization, UsersRepository } from '../interfaces/users'
 

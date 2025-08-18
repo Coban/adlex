@@ -85,7 +85,6 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('inviteUserToOrganization: メール形式チェック', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(inviteUserToOrganization('bad', 1, 'user' as any)).rejects.toThrow('Invalid email format')
   })
 })

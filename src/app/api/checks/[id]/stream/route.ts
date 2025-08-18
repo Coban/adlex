@@ -256,7 +256,7 @@ async function sendFinalData(
 ) {
   try {
     // Get repositories for the sendFinalData function
-    const repositories = await getRepositories(supabase)
+    // const _repositories = await getRepositories(supabase)
 
     // 違反情報を含む完全なチェックデータを取得
     // Use a temporary direct query since detailed violations method isn't available in this scope

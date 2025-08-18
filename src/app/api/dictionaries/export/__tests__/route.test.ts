@@ -1,40 +1,54 @@
 import { NextRequest } from "next/server"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-import { GET } from "../route"
+// Mock repositories
+const mockRepositories = {
+  users: {
+    findById: vi.fn()
+  },
+  dictionaries: {
+    findByOrganizationId: vi.fn(),
+  }
+};
 
-// @ts-nocheck
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => mockRepositories)
+}))
 
+// Mock Supabase client
 const mockSupabase = {
   auth: { getUser: vi.fn() },
-  from: vi.fn(),
-}
+};
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }))
 
+import { GET } from "../route"
+
 describe("/api/dictionaries/export", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null })
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "users") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({ single: vi.fn(() => ({ data: { organization_id: 1, role: "admin" }, error: null })) })),
-          })),
-        }
-      }
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({ order: vi.fn(() => ({ data: [{ phrase: "A", category: "NG", notes: "n" }], error: null })) })),
-        })),
-      }
+    
+    // Default successful auth
+    mockSupabase.auth.getUser.mockResolvedValue({ 
+      data: { user: { id: 'u1' } }, 
+      error: null 
+    })
+    
+    // Default admin user
+    mockRepositories.users.findById.mockResolvedValue({
+      organization_id: 1,
+      role: 'admin'
     })
   })
 
   it("returns CSV for admin", async () => {
+    // Setup mock data
+    mockRepositories.dictionaries.findByOrganizationId.mockResolvedValue([
+      { phrase: "A", category: "NG", notes: "n" }
+    ])
+    
     const req = new NextRequest("http://localhost/api/dictionaries/export")
     const res = await GET(req)
     const text = await res.text()
@@ -45,7 +59,11 @@ describe("/api/dictionaries/export", () => {
   })
 
   it("returns 401 when unauthenticated", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error("x") })
+    mockSupabase.auth.getUser.mockResolvedValue({ 
+      data: { user: null }, 
+      error: new Error("x") 
+    })
+    
     const req = new NextRequest("http://localhost/api/dictionaries/export")
     const res = await GET(req)
     expect(res.status).toBe(401)

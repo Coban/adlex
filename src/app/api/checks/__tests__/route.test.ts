@@ -1,22 +1,17 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { POST } from '../route'
-
-// Create a complete mock for Supabase client
-const createMockSupabaseClient = () => ({
-  auth: {
-    getUser: vi.fn()
-  },
+// Mock Supabase client first to avoid hoisting issues
+const mockSupabaseClient = {
+  auth: { getUser: vi.fn() },
   from: vi.fn(),
-  rpc: vi.fn(() => Promise.resolve({ data: [], error: null }))
-})
-
-const mockSupabaseClient = createMockSupabaseClient()
+}
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
+  createClient: vi.fn(async () => mockSupabaseClient),
 }))
+
+import { POST } from '../route'
 
 // Mock AI client
 vi.mock('@/lib/ai-client', () => ({

@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 import { Database } from '@/types/database.types'
+
 import { BaseRepository, FindManyOptions, RepositoryError } from '../interfaces/base'
 
 /**
@@ -60,7 +61,7 @@ export abstract class SupabaseBaseRepository<
         query = query.limit(options.limit)
       }
       if (options?.offset) {
-        query = query.range(options.offset, (options.offset + (options.limit || 1000)) - 1)
+        query = query.range(options.offset, (options.offset + (options.limit ?? 1000)) - 1)
       }
 
       const { data, error } = await query
@@ -80,7 +81,7 @@ export abstract class SupabaseBaseRepository<
     try {
       const { data: result, error } = await this.supabase
         .from(this.tableName)
-        .insert(data as any)
+        .insert(data as never)
         .select()
         .single()
 
@@ -99,7 +100,7 @@ export abstract class SupabaseBaseRepository<
     try {
       const { data: result, error } = await this.supabase
         .from(this.tableName)
-        .update(data as any)
+        .update(data as never)
         .eq('id', id)
         .select()
         .maybeSingle()
@@ -154,7 +155,7 @@ export abstract class SupabaseBaseRepository<
         throw this.createRepositoryError('Failed to count records', error)
       }
 
-      return count || 0
+      return count ?? 0
     } catch (error) {
       if (error instanceof RepositoryError) throw error
       throw this.createRepositoryError('Unexpected error counting records', error as Error)
@@ -164,26 +165,26 @@ export abstract class SupabaseBaseRepository<
   /**
    * Helper method to create repository errors with context
    */
-  protected createRepositoryError(message: string, originalError: any): RepositoryError {
+  protected createRepositoryError(message: string, originalError: unknown): RepositoryError {
     return new RepositoryError(
-      `${message}: ${originalError.message || originalError}`,
-      originalError.code,
-      originalError.details,
-      originalError.hint
+      `${message}: ${(originalError as Error)?.message ?? originalError}`,
+      (originalError as { code?: string })?.code,
+      (originalError as { details?: string })?.details,
+      (originalError as { hint?: string })?.hint
     )
   }
 
   /**
    * Helper method to execute raw SQL queries when needed
    */
-  protected async executeRPC(functionName: string, params?: Record<string, any>) {
+  protected async executeRPC(_functionName: string, _params?: Record<string, unknown>) {
     try {
       // For now, this is a placeholder - actual RPC calls would need to be type-safe
       // const { data, error } = await this.supabase.rpc(functionName, params)
       throw new Error('RPC calls not implemented in base repository')
     } catch (error) {
       if (error instanceof RepositoryError) throw error
-      throw this.createRepositoryError(`Unexpected error in RPC ${functionName}`, error as Error)
+      throw this.createRepositoryError(`Unexpected error in RPC`, error as Error)
     }
   }
 }

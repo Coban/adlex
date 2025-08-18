@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // ユーザープロファイルと組織情報を取得
     const userData = await repositories.users.findById(user.id);
-    if (!userData || !userData.organization_id) {
+    if (!userData?.organization_id) {
       return NextResponse.json({
         error: "ユーザープロファイルが見つかりません",
       }, { status: 404 });
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const dictionaries = await repositories.dictionaries.searchDictionaries({
       organizationId: userData.organization_id,
       search: searchTerm || undefined,
-      category: category as any,
+      category: category as 'NG' | 'ALLOW' | 'ALL',
     });
 
     return NextResponse.json({ dictionaries });
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     // ユーザープロファイルと組織情報を取得
     const userData = await repositories.users.findById(user.id);
-    if (!userData || !userData.organization_id) {
+    if (!userData?.organization_id) {
       return NextResponse.json({
         error: "ユーザープロファイルが見つかりません",
       }, { status: 404 });

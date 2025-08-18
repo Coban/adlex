@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Get user data with role and organization
     const userData = await repositories.users.findById(user.id)
-    if (!userData || !userData.organization_id) {
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
     const inputType = searchParams.get('inputType') ?? ''
     const dateFilter = searchParams.get('dateFilter') ?? ''
     const userId = searchParams.get('userId') ?? ''
-    const startDate = searchParams.get('startDate') ?? ''
-    const endDate = searchParams.get('endDate') ?? ''
+    // const _startDate = searchParams.get('startDate') ?? ''
+    // const _endDate = searchParams.get('endDate') ?? ''
 
     // Validate format
     if (!['csv', 'json', 'excel'].includes(format)) {

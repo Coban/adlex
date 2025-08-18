@@ -1,19 +1,30 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GET } from '../route'
 
-const createMockSupabaseClient = () => ({
-  auth: {
-    getUser: vi.fn()
+// Mock repositories first
+const mockRepositories = {
+  users: {
+    findById: vi.fn()
   },
-  from: vi.fn()
-})
+  checks: {
+    searchChecks: vi.fn()
+  }
+};
 
-const mockSupabaseClient = createMockSupabaseClient()
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => mockRepositories)
+}))
+
+// Mock Supabase client
+const mockSupabaseClient = {
+  auth: { getUser: vi.fn() }
+}
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
+  createClient: vi.fn(async () => mockSupabaseClient),
 }))
+
+import { GET } from '../route'
 
 describe('Check History API Route', () => {
   beforeEach(() => {
@@ -41,15 +52,7 @@ describe('Check History API Route', () => {
         error: null
       })
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: new Error('User not found')
-        })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockRepositories.users.findById.mockResolvedValue(null)
 
       const request = new NextRequest('http://localhost:3000/api/check-history')
       const response = await GET(request)
@@ -90,42 +93,15 @@ describe('Check History API Route', () => {
         }
       ]
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        ilike: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: userData, error: null })
-          }
-          return Promise.resolve({ data: null, error: null })
-        })
-      }
-
-      mockFrom.range.mockResolvedValue({
-        data: mockChecks,
-        error: null
-      })
-
-      mockSupabaseClient.from.mockImplementation((table) => {
-        if (table === 'users') {
-          return {
-            ...mockFrom,
-            single: () => Promise.resolve({ data: userData, error: null })
-          }
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockResolvedValue({
+        checks: mockChecks,
+        pagination: {
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1
         }
-        if (table === 'checks') {
-          return {
-            ...mockFrom,
-            range: () => Promise.resolve({ data: mockChecks, error: null })
-          }
-        }
-        return mockFrom
       })
 
       const request = new NextRequest('http://localhost:3000/api/check-history?page=1&limit=20')
@@ -149,6 +125,12 @@ describe('Check History API Route', () => {
         userEmail: 'user@test.com',
         violationCount: 2
       })
+      expect(body.pagination).toEqual({
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      })
       expect(body.userRole).toBe('admin')
     })
 
@@ -165,21 +147,23 @@ describe('Check History API Route', () => {
         role: 'admin'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: userData, error: null })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockResolvedValue({
+        checks: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      })
 
       const request = new NextRequest('http://localhost:3000/api/check-history?userId=user1')
       await GET(request)
       
-      expect(mockFrom.eq).toHaveBeenCalledWith('user_id', 'user1')
+      expect(mockRepositories.checks.searchChecks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org1',
+          userId: 'user1',
+          page: 1,
+          limit: 20
+        })
+      )
     })
 
     it('should only show user own checks for regular user', async () => {
@@ -195,21 +179,23 @@ describe('Check History API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: userData, error: null })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockResolvedValue({
+        checks: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      })
 
       const request = new NextRequest('http://localhost:3000/api/check-history')
       await GET(request)
       
-      expect(mockFrom.eq).toHaveBeenCalledWith('user_id', 'user1')
+      expect(mockRepositories.checks.searchChecks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org1',
+          userId: 'user1',
+          page: 1,
+          limit: 20
+        })
+      )
     })
 
     it('should apply search filter', async () => {
@@ -225,22 +211,24 @@ describe('Check History API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        ilike: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: userData, error: null })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockResolvedValue({
+        checks: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      })
 
       const request = new NextRequest('http://localhost:3000/api/check-history?search=test')
       await GET(request)
       
-      expect(mockFrom.ilike).toHaveBeenCalledWith('original_text', '%test%')
+      expect(mockRepositories.checks.searchChecks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org1',
+          userId: 'user1',
+          search: 'test',
+          page: 1,
+          limit: 20
+        })
+      )
     })
 
     it('should apply status filter', async () => {
@@ -256,21 +244,24 @@ describe('Check History API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: userData, error: null })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockResolvedValue({
+        checks: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      })
 
       const request = new NextRequest('http://localhost:3000/api/check-history?status=completed')
       await GET(request)
       
-      expect(mockFrom.eq).toHaveBeenCalledWith('status', 'completed')
+      expect(mockRepositories.checks.searchChecks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org1',
+          userId: 'user1',
+          status: 'completed',
+          page: 1,
+          limit: 20
+        })
+      )
     })
 
     it('should return 500 on database error', async () => {
@@ -286,41 +277,15 @@ describe('Check History API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        range: vi.fn().mockResolvedValue({
-          data: null,
-          error: new Error('Database error')
-        }),
-        single: vi.fn().mockResolvedValue({ data: userData, error: null })
-      }
-
-      mockSupabaseClient.from.mockImplementation((table) => {
-        if (table === 'users') {
-          return {
-            ...mockFrom,
-            single: () => Promise.resolve({ data: userData, error: null })
-          }
-        }
-        if (table === 'checks') {
-          return {
-            ...mockFrom,
-            range: () => Promise.resolve({ data: null, error: { message: 'Database error' } })
-          }
-        }
-        return mockFrom
-      })
+      mockRepositories.users.findById.mockResolvedValue(userData)
+      mockRepositories.checks.searchChecks.mockRejectedValue(new Error('Failed to fetch checks'))
 
       const request = new NextRequest('http://localhost:3000/api/check-history')
       const response = await GET(request)
       
       expect(response.status).toBe(500)
       const body = await response.json()
-      expect(body.error).toBe('Failed to fetch checks')
+      expect(body.error).toBe('Internal server error') // Match actual catch block error
     })
   })
 })

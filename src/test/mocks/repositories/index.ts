@@ -1,6 +1,9 @@
 import { vi } from 'vitest'
 
 import { RepositoryContainer } from '@/lib/repositories/interfaces'
+import { OrganizationsRepository } from '@/lib/repositories/interfaces/organizations'
+import { UserInvitationsRepository } from '@/lib/repositories/interfaces/user-invitations'
+import { ViolationsRepository } from '@/lib/repositories/interfaces/violations'
 
 import { MockChecksRepository } from './checks'
 import { MockDictionariesRepository } from './dictionaries'
@@ -46,9 +49,10 @@ export function createMockRepositories(): RepositoryContainer {
   return {
     users: new MockUsersRepository(),
     checks: new MockChecksRepository(),
-    organizations: mockOrganizationsRepository as any,
+    organizations: mockOrganizationsRepository as OrganizationsRepository,
     dictionaries: new MockDictionariesRepository(),
-    violations: mockViolationsRepository as any,
+    violations: mockViolationsRepository as ViolationsRepository,
+    userInvitations: {} as UserInvitationsRepository,
   }
 }
 

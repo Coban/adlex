@@ -90,7 +90,6 @@ describe('TextChecker (stream + polling)', () => {
   })
 
   it('未認証時はエラーを表示する（セッションなし）', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null } as any)
     render(<TextChecker />)
     const textarea = screen.getByTestId('text-input') as HTMLTextAreaElement

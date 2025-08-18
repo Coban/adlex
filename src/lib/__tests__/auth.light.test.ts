@@ -3,13 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/supabase/client', () => ({
   createClient: vi.fn(() => ({
     auth: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signUp: vi.fn(async ({ email, password }: any) => {
         if (!email.includes('@')) return { data: null, error: { message: 'Invalid email' } }
         if (password.length < 6) return { data: null, error: { message: 'Password should be' } }
         return { data: { user: { id: 'u' } }, error: null }
       }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signInWithPassword: vi.fn(async ({ email }: any) => {
         if (email === 'bad@example.com') return { data: null, error: { message: 'Invalid login credentials' } }
         return { data: { user: { id: 'u' } }, error: null }

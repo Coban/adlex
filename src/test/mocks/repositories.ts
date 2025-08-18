@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+
 import type { 
   UsersRepository,
   OrganizationsRepository,
@@ -25,21 +26,24 @@ export function createMockRepositories() {
     findMany: vi.fn().mockResolvedValue([]),
     updateRole: vi.fn().mockResolvedValue(null),
     isAdmin: vi.fn().mockResolvedValue(false),
-    findOne: vi.fn().mockResolvedValue(null),
+    findByIdWithOrganization: vi.fn().mockResolvedValue(null),
+    findByRole: vi.fn().mockResolvedValue([]),
+    findAdmins: vi.fn().mockResolvedValue([]),
   }
 
   // Organizations Repository Mock
   const organizationsRepository: OrganizationsRepository = {
     findById: vi.fn().mockResolvedValue(null),
-    findByUserId: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(true),
     count: vi.fn().mockResolvedValue(0),
     findMany: vi.fn().mockResolvedValue([]),
-    incrementUsedChecks: vi.fn().mockResolvedValue(null),
-    resetUsedChecks: vi.fn().mockResolvedValue(null),
-    findOne: vi.fn().mockResolvedValue(null),
+    findByPlan: vi.fn().mockResolvedValue([]),
+    updateUsageCount: vi.fn().mockResolvedValue(null),
+    incrementUsage: vi.fn().mockResolvedValue(null),
+    hasAvailableChecks: vi.fn().mockResolvedValue(true),
+    getUsageStats: vi.fn().mockResolvedValue({}),
   }
 
   // Checks Repository Mock
@@ -73,7 +77,9 @@ export function createMockRepositories() {
       statusBreakdown: {},
       hourlyActivity: []
     }),
-    findOne: vi.fn().mockResolvedValue(null),
+    findByStatus: vi.fn().mockResolvedValue([]),
+    findRecentWithUsers: vi.fn().mockResolvedValue([]),
+    countByStatus: vi.fn().mockResolvedValue({}),
   }
 
   // Dictionaries Repository Mock
@@ -90,11 +96,11 @@ export function createMockRepositories() {
     bulkCreate: vi.fn().mockResolvedValue([]),
     updateVector: vi.fn().mockResolvedValue(null),
     createWithEmbedding: vi.fn().mockResolvedValue({ 
-      dictionary: null as any,
+      dictionary: null as never,
       warning: undefined 
     }),
     updateWithEmbedding: vi.fn().mockResolvedValue({ 
-      dictionary: null as any,
+      dictionary: null as never,
       warning: undefined 
     }),
     findByIdAndOrganization: vi.fn().mockResolvedValue(null),
@@ -103,7 +109,6 @@ export function createMockRepositories() {
     delete: vi.fn().mockResolvedValue(true),
     count: vi.fn().mockResolvedValue(0),
     findMany: vi.fn().mockResolvedValue([]),
-    findOne: vi.fn().mockResolvedValue(null),
   }
 
   // Violations Repository Mock
@@ -111,7 +116,6 @@ export function createMockRepositories() {
     findById: vi.fn().mockResolvedValue(null),
     findByCheckId: vi.fn().mockResolvedValue([]),
     findByDictionaryId: vi.fn().mockResolvedValue([]),
-    bulkCreate: vi.fn().mockResolvedValue([]),
     countByCheckId: vi.fn().mockResolvedValue(0),
     countTotal: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(null),
@@ -119,7 +123,8 @@ export function createMockRepositories() {
     delete: vi.fn().mockResolvedValue(true),
     count: vi.fn().mockResolvedValue(0),
     findMany: vi.fn().mockResolvedValue([]),
-    findOne: vi.fn().mockResolvedValue(null),
+    bulkCreateForCheck: vi.fn().mockResolvedValue([]),
+    deleteByCheckId: vi.fn().mockResolvedValue(0),
   }
 
   // User Invitations Repository Mock
@@ -138,7 +143,6 @@ export function createMockRepositories() {
     delete: vi.fn().mockResolvedValue(true),
     count: vi.fn().mockResolvedValue(0),
     findMany: vi.fn().mockResolvedValue([]),
-    findOne: vi.fn().mockResolvedValue(null),
   }
 
   return {
@@ -155,7 +159,7 @@ export function createMockRepositories() {
  * リポジトリプロバイダーをモック化する
  * これにより、getRepositories() 呼び出しがモックされたリポジトリを返す
  */
-export function mockRepositories(customMocks?: Partial<ReturnType<typeof createMockRepositories>>) {
+export function createMockRepositoriesWithCustom(customMocks?: Partial<ReturnType<typeof createMockRepositories>>) {
   const defaultMocks = createMockRepositories()
   const repositories = {
     ...defaultMocks,
@@ -172,7 +176,7 @@ export function setupRepositoryMock<T extends keyof ReturnType<typeof createMock
   repositories: ReturnType<typeof createMockRepositories>,
   repositoryName: T,
   methodName: keyof ReturnType<typeof createMockRepositories>[T],
-  implementation: any
+  implementation: unknown
 ) {
   const repository = repositories[repositoryName] as any
   if (repository[methodName]) {
@@ -249,3 +253,32 @@ export const repositoryPresets = {
     }
   })
 }
+
+// Create a singleton mock instance with reset methods for backward compatibility
+const mockRepositoriesInstance = (() => {
+  const repositories = createMockRepositories();
+  
+  // Add reset methods to each repository
+  const addResetMethods = (repo: any) => {
+    repo.reset = () => {
+      Object.values(repo).forEach((method: unknown) => {
+        if (vi.isMockFunction(method)) {
+          method.mockClear();
+        }
+      });
+    };
+    return repo;
+  };
+
+  return {
+    users: addResetMethods(repositories.users),
+    organizations: addResetMethods(repositories.organizations),
+    checks: addResetMethods(repositories.checks),
+    dictionaries: addResetMethods(repositories.dictionaries),
+    violations: addResetMethods(repositories.violations),
+    userInvitations: addResetMethods(repositories.userInvitations),
+  };
+})();
+
+// Export the singleton instance for backward compatibility
+export { mockRepositoriesInstance as mockRepositories };

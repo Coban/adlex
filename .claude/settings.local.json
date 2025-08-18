@@ -62,7 +62,10 @@
       "Bash(npx:*)",
       "Bash(cp:*)",
       "WebSearch",
-      "WebFetch(domain:supalaunch.com)"
+      "WebFetch(domain:supalaunch.com)",
+      "Bash(for file in organizations users violations user-invitations)",
+      "Bash(do)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

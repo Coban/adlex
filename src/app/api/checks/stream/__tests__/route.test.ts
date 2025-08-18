@@ -4,6 +4,46 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Target under test
 import { GET } from '../route'
 
+// Comprehensive mock query builder with all methods
+const createMockQueryBuilder = () => ({
+  select: vi.fn().mockReturnThis(),
+  from: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  neq: vi.fn().mockReturnThis(),
+  gt: vi.fn().mockReturnThis(),
+  gte: vi.fn().mockReturnThis(),
+  lt: vi.fn().mockReturnThis(),
+  lte: vi.fn().mockReturnThis(),
+  like: vi.fn().mockReturnThis(),
+  ilike: vi.fn().mockReturnThis(),
+  is: vi.fn().mockReturnThis(),
+  in: vi.fn().mockReturnThis(),
+  contains: vi.fn().mockReturnThis(),
+  containedBy: vi.fn().mockReturnThis(),
+  rangeGt: vi.fn().mockReturnThis(),
+  rangeGte: vi.fn().mockReturnThis(),
+  rangeLt: vi.fn().mockReturnThis(),
+  rangeLte: vi.fn().mockReturnThis(),
+  rangeAdjacent: vi.fn().mockReturnThis(),
+  overlaps: vi.fn().mockReturnThis(),
+  textSearch: vi.fn().mockReturnThis(),
+  match: vi.fn().mockReturnThis(),
+  not: vi.fn().mockReturnThis(),
+  or: vi.fn().mockReturnThis(),
+  filter: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockReturnThis(),
+  range: vi.fn().mockReturnThis(),
+  offset: vi.fn().mockReturnThis(),
+  single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  upsert: vi.fn().mockReturnThis(),
+  delete: vi.fn().mockReturnThis(),
+  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+});
+
 // Mocks
 type SupabaseClientMock = {
   auth: { getUser: ReturnType<typeof vi.fn> }
@@ -17,8 +57,25 @@ const mockSupabase: SupabaseClientMock = {
   channel: vi.fn(),
 }
 
+// Mock repositories
+const mockRepositories = {
+  users: {
+    findById: vi.fn()
+  },
+  organizations: {
+    findById: vi.fn()
+  },
+  checks: {
+    findMany: vi.fn()
+  }
+}
+
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => mockSupabase)
+  createClient: vi.fn(async () => mockSupabase),
+}))
+
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => Promise.resolve(mockRepositories))
 }))
 
 vi.mock('@/lib/queue-manager', () => ({
@@ -28,27 +85,28 @@ vi.mock('@/lib/queue-manager', () => ({
 }))
 
 function setupSupabaseStreams() {
-  // users profile
-  const usersSelect = { eq: vi.fn(() => ({ single: vi.fn(async () => ({ data: { id: 'u1', organization_id: 1, role: 'admin' }, error: null })) })) }
+  // users profile - need proper maybeSingle method
+  const usersQuery = createMockQueryBuilder()
+  usersQuery.eq.mockReturnValue({ maybeSingle: vi.fn(async () => ({ data: { id: 'u1', organization_id: 1, role: 'admin' }, error: null })) })
+  
   // checks in pending/processing
-  const checksSelect = {
-    in: vi.fn(() => ({ order: vi.fn(async () => ({ data: [], error: null })) })),
-    select: vi.fn(),
-  }
+  const checksQuery = createMockQueryBuilder() 
+  checksQuery.in.mockReturnValue({ order: vi.fn(async () => ({ data: [], error: null })) })
+  
   // organizations
-  const orgsSelect = { eq: vi.fn(() => ({ single: vi.fn(async () => ({ data: { max_checks: 100, used_checks: 10 }, error: null })) })) }
+  const orgsQuery = createMockQueryBuilder()
+  orgsQuery.eq.mockReturnValue({ single: vi.fn(async () => ({ data: { max_checks: 100, used_checks: 10 }, error: null })) })
 
   mockSupabase.from.mockImplementation((table: string) => {
-    if (table === 'users') return { select: vi.fn(() => usersSelect) }
-    if (table === 'checks') return { select: vi.fn(() => checksSelect), in: checksSelect.in, order: vi.fn() }
-    if (table === 'organizations') return { select: vi.fn(() => orgsSelect) }
-    return {}
+    if (table === 'users') return usersQuery
+    if (table === 'checks') return checksQuery
+    if (table === 'organizations') return orgsQuery
+    return createMockQueryBuilder()
   })
 
   mockSupabase.channel.mockReturnValue({
     on: vi.fn().mockReturnThis(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subscribe: vi.fn((cb: any) => { if (typeof cb === 'function') { cb('SUBSCRIBED') } return { unsubscribe: vi.fn() } }),
+    subscribe: vi.fn((cb: (status: string) => void) => { if (typeof cb === 'function') { cb('SUBSCRIBED') } return { unsubscribe: vi.fn() } }),
     unsubscribe: vi.fn()
   })
 }
@@ -56,6 +114,9 @@ function setupSupabaseStreams() {
 describe('GET /api/checks/stream (SSE)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset the mock query builder
+    const newMockQuery = createMockQueryBuilder();
+    mockSupabase.from.mockReturnValue(newMockQuery);
   })
 
   it('認証エラー時は401を返す', async () => {
@@ -67,6 +128,19 @@ describe('GET /api/checks/stream (SSE)', () => {
 
   it('SSEを開始し、最初のキュー状態を返す', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    
+    // Setup repository mocks
+    mockRepositories.users.findById.mockResolvedValue({
+      id: 'u1',
+      organization_id: 1,
+      role: 'admin'
+    })
+    mockRepositories.organizations.findById.mockResolvedValue({
+      max_checks: 100,
+      used_checks: 10
+    })
+    mockRepositories.checks.findMany.mockResolvedValue([])
+    
     setupSupabaseStreams()
 
     const req = new NextRequest('http://localhost:3000/api/checks/stream')

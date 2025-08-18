@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
-import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database.types'
 
 import { RepositoryContainer } from './interfaces'
 import { createRepositories } from './supabase'
@@ -14,7 +14,7 @@ export * from './supabase'
  * Get repository container with Supabase client
  */
 export async function getRepositories(supabaseClient?: SupabaseClient<Database>): Promise<RepositoryContainer> {
-  const supabase = supabaseClient || await createClient()
+  const supabase = supabaseClient ?? await createClient()
   return createRepositories(supabase)
 }
 
@@ -35,9 +35,7 @@ class RepositoryServiceProvider {
   }
 
   async getRepositories(supabaseClient?: SupabaseClient<Database>): Promise<RepositoryContainer> {
-    if (!this.repositories) {
-      this.repositories = await getRepositories(supabaseClient)
-    }
+    this.repositories ??= await getRepositories(supabaseClient)
     return this.repositories
   }
 

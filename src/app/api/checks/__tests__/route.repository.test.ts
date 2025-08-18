@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { POST } from '../route'
-import { createMockRepositories, setupRepositoryMock, repositoryPresets } from '@/test/mocks/repositories'
+import { createMockRepositories, repositoryPresets } from '@/test/mocks/repositories'
 
 // Mock the repository provider
 vi.mock('@/lib/repositories', () => ({
@@ -137,7 +137,7 @@ describe('Checks API Route with Repository Pattern', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: ''
+          text: '   '  // whitespace-only string that becomes empty after trim
         })
       })
 
@@ -149,6 +149,11 @@ describe('Checks API Route with Repository Pattern', () => {
     })
 
     it('should handle text exceeding character limit', async () => {
+      // Setup basic authenticated user
+      const userPreset = repositoryPresets.authenticatedUser()
+      mockRepositories.users.findById = userPreset.users.findById
+      mockRepositories.organizations.findById = userPreset.organizations.findById
+      
       const longText = 'a'.repeat(10001)
       
       const request = new NextRequest('http://localhost:3000/api/checks', {
@@ -297,7 +302,7 @@ describe('Checks API Route with Repository Pattern', () => {
     it('should handle image input type', async () => {
       // Setup repository mocks
       const userPreset = repositoryPresets.authenticatedUser()
-      const checkPreset = repositoryPresets.successfulCheckCreation(2)
+      // const _checkPreset = repositoryPresets.successfulCheckCreation(2)
       
       mockRepositories.users.findById = userPreset.users.findById
       mockRepositories.organizations.findById = userPreset.organizations.findById

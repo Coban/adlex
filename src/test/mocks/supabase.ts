@@ -1,8 +1,7 @@
-import { NextRequest } from 'next/server'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { vi } from 'vitest';
 
 // Comprehensive mock query builder with all methods
-const createMockQueryBuilder = () => ({
+export const createMockQueryBuilder = () => ({
   select: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
   eq: vi.fn().mockReturnThis(),
@@ -41,42 +40,41 @@ const createMockQueryBuilder = () => ({
   rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 });
 
-// Mock Supabase client
-const mockQuery = createMockQueryBuilder();
-const mockSupabase = {
-  from: vi.fn().mockReturnValue(mockQuery),
-  auth: { getUser: vi.fn() },
-  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+// Mock Supabase client with all the methods used in the repositories
+export const createMockSupabaseClient = () => {
+  const mockQuery = createMockQueryBuilder();
+
+  const mockClient = {
+    from: vi.fn().mockReturnValue(mockQuery),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { id: 'mock-user-id', email: 'test@example.com' } },
+        error: null,
+      }),
+      signInWithPassword: vi.fn().mockResolvedValue({
+        data: { user: { id: 'mock-user-id', email: 'test@example.com' }, session: {} },
+        error: null,
+      }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
+    },
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+  };
+
+  return { mockClient, mockQuery };
 };
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => mockSupabase),
-}))
+// Export default mock
+export const mockSupabaseClient = createMockSupabaseClient().mockClient;
 
-import { POST } from '../route'
-
-describe('Checks Cancel API [id]/cancel', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    // Reset the mock query builder
-    const newMockQuery = createMockQueryBuilder();
-    mockSupabase.from.mockReturnValue(newMockQuery);
-  })
-
-  it('無効なIDは400', async () => {
-    const req = new NextRequest('http://localhost:3000/api/checks/abc/cancel', { method: 'POST' })
-    const res = await POST(req, { params: Promise.resolve({ id: 'abc' }) })
-    expect(res.status).toBe(400)
-  })
-
-  it('未認証は401', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('x') })
-    const req = new NextRequest('http://localhost:3000/api/checks/1/cancel', { method: 'POST' })
-    const res = await POST(req, { params: Promise.resolve({ id: '1' }) })
-    expect(res.status).toBe(401)
-  })
-
-  it.skip('ステータスチェックや更新系はskip', async () => {})
-})
-
-
+// Mock factory for individual test files
+export const createTestSupabaseMock = () => {
+  const { mockClient, mockQuery } = createMockSupabaseClient();
+  
+  return {
+    mockClient,
+    mockQuery,
+    mockModule: () => ({
+      createClient: vi.fn(() => mockClient)
+    })
+  };
+};

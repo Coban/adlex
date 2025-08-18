@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // ユーザープロファイルと組織情報を取得
     const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile || !userProfile.organization_id) {
+    if (!userProfile?.organization_id) {
       return NextResponse.json({
         error: "ユーザープロファイルが見つかりません",
       }, { status: 404 });
@@ -68,7 +68,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // ユーザープロファイルと組織情報を取得
     const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile || !userProfile.organization_id) {
+    if (!userProfile?.organization_id) {
       return NextResponse.json({
         error: "ユーザープロファイルが見つかりません",
       }, { status: 404 });
@@ -140,7 +140,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // ユーザープロファイルと組織情報を取得
     const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile || !userProfile.organization_id) {
+    if (!userProfile?.organization_id) {
       return NextResponse.json({
         error: "ユーザープロファイルが見つかりません",
       }, { status: 404 });

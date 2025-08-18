@@ -168,11 +168,7 @@ describe('AdminDashboard', () => {
 
   it('開発環境ではデバッグ情報を表示する', () => {
     // NODE_ENVを開発環境に設定
-    const originalEnv = process.env.NODE_ENV
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: 'development',
-      writable: true
-    })
+    vi.stubEnv('NODE_ENV', 'development')
 
     mockUseAuth.mockReturnValue({
       user: { 
@@ -204,19 +200,12 @@ describe('AdminDashboard', () => {
     expect(debugElement).toBeInTheDocument()
 
     // 環境変数を元に戻す
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: originalEnv,
-      writable: true
-    })
+    vi.unstubAllEnvs()
   })
 
   it('本番環境ではデバッグ情報を表示しない', () => {
     // NODE_ENVを本番環境に設定
-    const originalEnv = process.env.NODE_ENV
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: 'production',
-      writable: true
-    })
+    vi.stubEnv('NODE_ENV', 'production')
 
     mockUseAuth.mockReturnValue({
       user: { 
@@ -247,9 +236,6 @@ describe('AdminDashboard', () => {
     expect(screen.queryByText(/Debug:/)).not.toBeInTheDocument()
 
     // 環境変数を元に戻す
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: originalEnv,
-      writable: true
-    })
+    vi.unstubAllEnvs()
   })
 })

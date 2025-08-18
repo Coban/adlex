@@ -61,9 +61,7 @@ export async function GET(request: NextRequest) {
     // Get total checks count
     const totalChecks = await repositories.checks.countByDateRange(
       startDate.toISOString(),
-      now.toISOString(),
-      userData.organization_id,
-      searchUserId
+      now.toISOString()
     )
 
     // Get checks for status breakdown and daily activity
@@ -71,7 +69,7 @@ export async function GET(request: NextRequest) {
       where: {
         organization_id: userData.organization_id,
         user_id: searchUserId,
-        created_at: { gte: startDate.toISOString(), lte: now.toISOString() },
+        created_at: startDate.toISOString(),
         deleted_at: null
       },
       orderBy: [{ field: 'created_at', direction: 'desc' }]

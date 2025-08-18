@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 import { createEmbedding } from '@/lib/ai-client'
 import { Database } from '@/types/database.types'
+
 import { FindManyOptions } from '../interfaces/base'
 import {
   Dictionary,
@@ -88,13 +89,14 @@ export class SupabaseDictionariesRepository
 
   async findSimilarPhrases(
     vector: number[],
-    threshold = 0.75,
+    _threshold = 0.75,
     organizationId?: number,
     options?: FindManyOptions<Dictionary>
   ): Promise<Dictionary[]> {
     try {
       // Convert vector to string format expected by pgvector
-      const vectorString = `[${vector.join(',')}]`
+      // Note: Currently not used but keeping for future pgvector implementation
+      // const vectorString = `[${vector.join(',')}]`
       
       let query = this.supabase
         .from('dictionaries')
@@ -137,7 +139,7 @@ export class SupabaseDictionariesRepository
     try {
       const { data: result, error } = await this.supabase
         .from('dictionaries')
-        .insert(data as any[])
+        .insert(data)
         .select()
 
       if (error) {
@@ -262,7 +264,7 @@ export class SupabaseDictionariesRepository
 
       // フレーズが変更された場合のみvectorを更新
       if (phraseChanged && vector !== null) {
-        (updates as any).vector = vector
+        (updates as DictionaryUpdate & { vector: string }).vector = vector
       }
 
       const dictionary = await this.update(id, updates)

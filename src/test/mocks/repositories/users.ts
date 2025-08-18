@@ -52,7 +52,7 @@ export class MockUsersRepository implements UsersRepository {
 
   // Spy on methods for testing
   findById = vi.fn(async (id: string): Promise<User | null> => {
-    return this.users.find(user => user.id === id) || null
+    return this.users.find(user => user.id === id) ?? null
   })
 
   findMany = vi.fn(async (options?: FindManyOptions<User>): Promise<User[]> => {
@@ -76,9 +76,9 @@ export class MockUsersRepository implements UsersRepository {
   create = vi.fn(async (data: UserInsert): Promise<User> => {
     const newUser: User = {
       id: data.id,
-      email: data.email || null,
-      role: data.role || 'user',
-      organization_id: data.organization_id || null,
+      email: data.email ?? null,
+      role: data.role ?? 'user',
+      organization_id: data.organization_id ?? null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -115,7 +115,7 @@ export class MockUsersRepository implements UsersRepository {
   })
 
   findByIdWithOrganization = vi.fn(async (id: string): Promise<UserWithOrganization | null> => {
-    return this.usersWithOrg.find(user => user.id === id) || null
+    return this.usersWithOrg.find(user => user.id === id) ?? null
   })
 
   findByOrganizationId = vi.fn(async (organizationId: number, options?: FindManyOptions<User>): Promise<User[]> => {
@@ -137,6 +137,10 @@ export class MockUsersRepository implements UsersRepository {
   isAdmin = vi.fn(async (id: string): Promise<boolean> => {
     const user = await this.findById(id)
     return user?.role === 'admin'
+  })
+
+  findByEmail = vi.fn(async (email: string): Promise<User | null> => {
+    return this.users.find(user => user.email === email) ?? null
   })
 
   // Helper methods for test setup

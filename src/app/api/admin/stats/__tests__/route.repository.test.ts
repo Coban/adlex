@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { GET } from '../route'
-import { getRepositoryProvider } from '@/lib/repositories'
 import { mockRepositories } from '@/test/mocks/repositories'
 
 // Mock the repository provider

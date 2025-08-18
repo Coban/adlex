@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     // Get check data with violations for each check ID
     const checksWithViolations = await Promise.all(
       checkIds.map(async (checkId: number) => {
-        const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id)
+        const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id!)
         return check
       })
     )
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     
     switch (format) {
       case 'pdf':
-        const pdfBuffer = await generateCustomPDFReport(checks, {
+        const pdfBuffer = await generateCustomPDFReport(checks as Check[], {
           title: reportTitle,
           includeStats,
           includeSummary,
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         })
 
       case 'excel':
-        const excelBuffer = await generateCustomExcelReport(checks, {
+        const excelBuffer = await generateCustomExcelReport(checks as Check[], {
           title: reportTitle,
           includeStats,
           includeSummary,

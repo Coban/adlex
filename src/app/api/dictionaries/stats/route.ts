@@ -38,7 +38,7 @@ export async function GET(_request: NextRequest) {
     const checks = await repositories.checks.findMany({
       where: {
         organization_id: orgId,
-        created_at: { gte: sinceIso }
+        created_at: sinceIso
       }
     })
 

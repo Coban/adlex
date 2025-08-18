@@ -36,8 +36,52 @@ const mockAuth = {
   getUser: vi.fn()
 }
 
+// Comprehensive mock query builder with all methods
+const createMockQueryBuilder = () => ({
+  select: vi.fn().mockReturnThis(),
+  from: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  neq: vi.fn().mockReturnThis(),
+  gt: vi.fn().mockReturnThis(),
+  gte: vi.fn().mockReturnThis(),
+  lt: vi.fn().mockReturnThis(),
+  lte: vi.fn().mockReturnThis(),
+  like: vi.fn().mockReturnThis(),
+  ilike: vi.fn().mockReturnThis(),
+  is: vi.fn().mockReturnThis(),
+  in: vi.fn().mockReturnThis(),
+  contains: vi.fn().mockReturnThis(),
+  containedBy: vi.fn().mockReturnThis(),
+  rangeGt: vi.fn().mockReturnThis(),
+  rangeGte: vi.fn().mockReturnThis(),
+  rangeLt: vi.fn().mockReturnThis(),
+  rangeLte: vi.fn().mockReturnThis(),
+  rangeAdjacent: vi.fn().mockReturnThis(),
+  overlaps: vi.fn().mockReturnThis(),
+  textSearch: vi.fn().mockReturnThis(),
+  match: vi.fn().mockReturnThis(),
+  not: vi.fn().mockReturnThis(),
+  or: vi.fn().mockReturnThis(),
+  filter: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockReturnThis(),
+  range: vi.fn().mockReturnThis(),
+  offset: vi.fn().mockReturnThis(),
+  single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  upsert: vi.fn().mockReturnThis(),
+  delete: vi.fn().mockReturnThis(),
+  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+});
+
+// Mock Supabase client
+const mockQuery = createMockQueryBuilder();
 const mockSupabaseClient = {
-  auth: mockAuth
+  from: vi.fn().mockReturnValue(mockQuery),
+  auth: mockAuth,
+  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 }
 
 const mockNextResponse = {
@@ -84,7 +128,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
 
   describe('GET /api/dictionaries', () => {
     it('未認証ユーザーには401エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: null },
         error: new Error('Unauthorized')
       })
@@ -99,7 +143,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('ユーザーが見つからない場合は404エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-not-found' } },
         error: null
       })
@@ -116,7 +160,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('組織に所属していないユーザーには404エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-no-org' } },
         error: null
       })
@@ -140,7 +184,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('認証済みユーザーには辞書一覧を返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'valid-user' } },
         error: null
       })
@@ -184,7 +228,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('検索パラメータが正しく処理される', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'valid-user' } },
         error: null
       })
@@ -216,7 +260,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
 
   describe('POST /api/dictionaries', () => {
     it('未認証ユーザーには401エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: null },
         error: new Error('Unauthorized')
       })
@@ -235,7 +279,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('管理者以外には403エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'regular-user' } },
         error: null
       })
@@ -263,7 +307,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('フレーズが空の場合は400エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin-user' } },
         error: null
       })
@@ -291,7 +335,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('無効なカテゴリの場合は400エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin-user' } },
         error: null
       })
@@ -319,7 +363,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('管理者ユーザーは辞書項目を作成できる', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin-user' } },
         error: null
       })
@@ -367,7 +411,7 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('リポジトリエラー時には500エラーを返す', async () => {
-      mockAuth.getUser.mockResolvedValue({
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin-user' } },
         error: null
       })
