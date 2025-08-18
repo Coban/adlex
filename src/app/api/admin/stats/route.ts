@@ -16,9 +16,9 @@ export async function GET() {
     .from('users')
     .select('role')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (userData?.role !== 'admin') {
+  if (!userData || userData?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

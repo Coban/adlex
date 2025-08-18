@@ -59,7 +59,8 @@
       "Bash(gh api:*)",
       "Bash(gh pr review:*)",
       "Bash(gh pr comment:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(cp:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

@@ -1,6 +1,6 @@
 'use client'
 
-import { Settings, Users, HelpCircle, BarChart3 } from 'lucide-react'
+import { Settings, Users, HelpCircle, BarChart3, Book } from 'lucide-react'
 import Link from 'next/link'
 
 import { DashboardStats } from '@/components/admin/DashboardStats'
@@ -38,6 +38,12 @@ export default function AdminDashboard() {
           <p className="text-muted-foreground">システム全体の統計情報と管理機能</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/admin/dictionaries">
+            <Button variant="outline" size="sm">
+              <Book className="h-4 w-4 mr-2" />
+              辞書管理
+            </Button>
+          </Link>
           <Link href="/admin/users">
             <Button variant="outline" size="sm">
               <Users className="h-4 w-4 mr-2" />
