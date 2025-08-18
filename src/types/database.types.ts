@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       checks: {
@@ -147,7 +122,9 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          icon_url: string | null
           id: number
+          logo_url: string | null
           max_checks: number | null
           name: string
           plan: Database["public"]["Enums"]["organization_plan"] | null
@@ -157,7 +134,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          icon_url?: string | null
           id?: number
+          logo_url?: string | null
           max_checks?: number | null
           name: string
           plan?: Database["public"]["Enums"]["organization_plan"] | null
@@ -167,7 +146,9 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          icon_url?: string | null
           id?: number
+          logo_url?: string | null
           max_checks?: number | null
           name?: string
           plan?: Database["public"]["Enums"]["organization_plan"] | null
@@ -332,10 +313,10 @@ export type Database = {
       analyze_slow_queries: {
         Args: Record<PropertyKey, never>
         Returns: {
-          query_text: string
-          calls: number
-          total_time: number
           avg_time: number
+          calls: number
+          query_text: string
+          total_time: number
         }[]
       }
       binary_quantize: {
@@ -356,15 +337,15 @@ export type Database = {
           p_user_id?: string
         }
         Returns: {
-          id: number
-          user_id: string
-          input_type: string
-          original_text: string
-          modified_text: string
-          status: Database["public"]["Enums"]["check_status"]
-          created_at: string
           completed_at: string
+          created_at: string
+          id: number
+          input_type: string
+          modified_text: string
+          original_text: string
+          status: Database["public"]["Enums"]["check_status"]
           total_count: number
+          user_id: string
           violation_count: number
         }[]
       }
@@ -378,22 +359,22 @@ export type Database = {
           vector_threshold?: number
         }
         Returns: {
+          category: Database["public"]["Enums"]["dictionary_category"]
+          combined_score: number
           id: number
           phrase: string
-          category: Database["public"]["Enums"]["dictionary_category"]
           trgm_similarity: number
           vector_similarity: number
-          combined_score: number
         }[]
       }
       get_organization_performance_stats: {
         Args: { days_back?: number; org_id: number }
         Returns: {
-          total_checks: number
           avg_processing_time_seconds: number
-          success_rate: number
           most_common_violations: string[]
           peak_usage_hour: number
+          success_rate: number
+          total_checks: number
         }[]
       }
       get_similar_phrases: {
@@ -403,9 +384,9 @@ export type Database = {
           similarity_threshold?: number
         }
         Returns: {
+          category: Database["public"]["Enums"]["dictionary_category"]
           id: number
           phrase: string
-          category: Database["public"]["Enums"]["dictionary_category"]
           similarity: number
         }[]
       }
@@ -416,9 +397,9 @@ export type Database = {
           similarity_threshold?: number
         }
         Returns: {
+          category: Database["public"]["Enums"]["dictionary_category"]
           id: number
           phrase: string
-          category: Database["public"]["Enums"]["dictionary_category"]
           similarity: number
         }[]
       }
@@ -683,9 +664,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       check_input_type: ["text", "image"],

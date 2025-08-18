@@ -50,8 +50,8 @@ export default function AdminDashboard() {
           { id: 2, action: 'チェック実行', user: 'admin@test.com', timestamp: new Date() },
           { id: 3, action: '辞書更新', user: 'manager@test.com', timestamp: new Date() }
         ])
-      } catch (error) {
-        console.error('Failed to load stats:', error)
+      } catch {
+        // Error loading stats - fallback to empty state
       } finally {
         setLoading(false)
       }
@@ -66,17 +66,6 @@ export default function AdminDashboard() {
 
   if (loading || authLoading) {
     return <div className="p-6">読み込み中...</div>
-  }
-
-  // Debug logging for tests
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('Admin Dashboard - Auth State:', {
-      userProfile,
-      userProfileRole: userProfile?.role,
-      organization,
-      authLoading,
-      loading
-    })
   }
 
   if (!userProfile || userProfile.role !== 'admin') {

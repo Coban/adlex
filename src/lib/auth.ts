@@ -1,10 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
-import { Database } from '@/types/database.types'
-
-type UserProfileInsert = Database['public']['Tables']['users']['Insert']
-type UserProfileUpdate = Database['public']['Tables']['users']['Update']
-type OrganizationPlan = Database['public']['Enums']['organization_plan']
-type UserRole = Database['public']['Enums']['user_role']
+import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
 
 export interface AuthError {
   message: string;
@@ -33,6 +28,16 @@ export interface InviteUserData {
   role: "admin" | "user";
 }
 
+/**
+ * ユーザーをメール・パスワードで新規登録する。
+ *
+ * - パスワード一致と最小長のバリデーションを行う
+ * - Supabase の `auth.signUp` を呼び出し、認証メールのリダイレクト先を設定する
+ *
+ * @param params サインアップ情報（メール・パスワード・確認用パスワード）
+ * @returns Supabaseのサインアップ結果データ
+ * @throws Error 入力不正、既登録、無効メール、その他サインアップエラー時
+ */
 export async function signUp({ email, password, confirmPassword }: SignUpData) {
   if (password !== confirmPassword) {
     throw new Error("パスワードが一致しません");
@@ -78,6 +83,16 @@ export async function signUp({ email, password, confirmPassword }: SignUpData) {
   }
 }
 
+/**
+ * 管理者ロールでユーザーを作成し、同時に組織作成フローを付加して登録する。
+ *
+ * - パスワード一致・最小長、組織名のバリデーションを行う
+ * - Supabase の `auth.signUp` にカスタムデータ（`organizationName`, `role`）を渡す
+ *
+ * @param params サインアップ情報（メール・パスワード・確認、組織名）
+ * @returns Supabaseのサインアップ結果データ
+ * @throws Error 入力不正、既登録、無効メール、その他サインアップエラー時
+ */
 export async function signUpWithOrganization({
   email,
   password,
@@ -137,12 +152,25 @@ export async function signUpWithOrganization({
   }
 }
 
+/**
+ * 組織にユーザーを招待するAPIを呼び出す。
+ *
+ * - E2E/スキップモードでは成功レスポンスを即時返す
+ * - `/api/users/invite` に POST して結果を返す
+ *
+ * @param params 招待先メールとロール
+ * @returns APIのJSONレスポンス
+ * @throws Error 入力不正またはAPI側のエラー内容
+ */
 export async function inviteUser({ email, role }: InviteUserData) {
   if (!email.trim()) {
     throw new Error("メールアドレスを入力してください");
   }
 
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return { ok: true, message: '招待メールを送信しました' }
+    }
     const response = await fetch("/api/users/invite", {
       method: "POST",
       headers: {
@@ -166,8 +194,25 @@ export async function inviteUser({ email, role }: InviteUserData) {
   }
 }
 
+/**
+ * 現在の組織に属するユーザー一覧を取得する。
+ *
+ * - E2E/スキップモードではモックデータを返す
+ * - `/api/users` に GET し、403時は権限エラーを投げる
+ *
+ * @returns 組織ユーザーの配列を含むJSON
+ * @throws Error 取得エラー、権限エラー時
+ */
 export async function fetchOrganizationUsers() {
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return {
+        users: [
+          { id: '00000000-0000-0000-0000-000000000001', email: 'admin@test.com', role: 'admin', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+          { id: '00000000-0000-0000-0000-000000000002', email: 'user@test.com', role: 'user', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        ]
+      }
+    }
     const response = await fetch("/api/users", {
       method: "GET",
       headers: {
@@ -176,7 +221,12 @@ export async function fetchOrganizationUsers() {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      if (response.status === 403) {
+        throw new Error('権限がありません')
+      }
+      const errorData = (await response
+        .json()
+        .catch(() => ({}))) as { error?: string };
       throw new Error(errorData.error ?? "ユーザー一覧の取得に失敗しました");
     }
 
@@ -190,8 +240,22 @@ export async function fetchOrganizationUsers() {
   }
 }
 
+/**
+ * 対象ユーザーのロールを更新する。
+ *
+ * - E2E/スキップモードでは成功を返す
+ * - `/api/users/:id/role` に PATCH して結果を返す
+ *
+ * @param userId 対象ユーザーID
+ * @param role 設定するロール（admin|user）
+ * @returns APIのJSONレスポンス
+ * @throws Error API側のエラー内容
+ */
 export async function updateUserRole(userId: string, role: "admin" | "user") {
   try {
+    if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return { ok: true }
+    }
     const response = await fetch(`/api/users/${userId}/role`, {
       method: "PATCH",
       headers: {
@@ -215,6 +279,18 @@ export async function updateUserRole(userId: string, role: "admin" | "user") {
   }
 }
 
+/**
+ * 招待トークンでユーザーを登録する。
+ *
+ * - パスワード一致・最小長のバリデーション
+ * - `/api/users/accept-invitation` に POST して登録
+ *
+ * @param token 招待トークン
+ * @param password パスワード
+ * @param confirmPassword 確認用パスワード
+ * @returns APIのJSONレスポンス
+ * @throws Error 入力不正またはAPI側エラー
+ */
 export async function signUpWithInvitation(
   token: string,
   password: string,
@@ -252,6 +328,16 @@ export async function signUpWithInvitation(
   }
 }
 
+/**
+ * メール・パスワードでサインインする。
+ *
+ * - Supabase の `auth.signInWithPassword` を呼び出す
+ * - よくある失敗（資格情報不一致・未確認メール）をユーザー向け文言に変換
+ *
+ * @param params サインイン情報
+ * @returns Supabaseのサインイン結果データ
+ * @throws Error 認証失敗やその他例外
+ */
 export async function signIn({ email, password }: SignInData) {
   const supabase = createClient();
 
@@ -286,6 +372,14 @@ export async function signIn({ email, password }: SignInData) {
   }
 }
 
+/**
+ * 現在のセッションをサインアウトする。
+ *
+ * - Supabase の `auth.signOut` を呼び出す
+ * - 画面遷移は呼び出し側で行う
+ *
+ * @throws Error サインアウトに失敗した場合
+ */
 export async function signOut() {
   const supabase = createClient();
 
@@ -301,6 +395,7 @@ export async function signOut() {
       });
       throw new Error(`サインアウトエラー: ${error.message}`);
     }
+    // Navigation after sign out should be handled by the caller (e.g., components using useRouter)
     
   } catch (err) {
     console.error('lib/auth: SignOut exception:', err);
@@ -312,6 +407,14 @@ export async function signOut() {
 }
 
 // Additional auth functions expected by the tests
+/**
+ * 入力バリデーションを含むテスト用のサインインヘルパー。
+ *
+ * @param email メールアドレス
+ * @param password パスワード（8文字以上）
+ * @returns Supabaseのサインイン結果データ
+ * @throws Error 入力不正または認証エラー
+ */
 export async function signInWithEmailAndPassword(email: string, password: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Invalid email format');
@@ -331,6 +434,14 @@ export async function signInWithEmailAndPassword(email: string, password: string
   return data;
 }
 
+/**
+ * 入力バリデーションを含むテスト用のサインアップヘルパー。
+ *
+ * @param email メールアドレス
+ * @param password パスワード（8文字以上）
+ * @returns Supabaseのサインアップ結果データ
+ * @throws Error 入力不正またはサインアップエラー
+ */
 export async function signUpWithEmailAndPassword(email: string, password: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Invalid email format');
@@ -350,6 +461,12 @@ export async function signUpWithEmailAndPassword(email: string, password: string
   return data;
 }
 
+/**
+ * 現在のユーザー情報を取得する。
+ *
+ * @returns Supabaseユーザーまたはnull
+ * @throws Error 取得時のエラー
+ */
 export async function getCurrentUser() {
   const supabase = createClient();
   const { data, error } = await supabase.auth.getUser();
@@ -361,6 +478,15 @@ export async function getCurrentUser() {
   return data.user;
 }
 
+/**
+ * 指定ユーザーのプロフィールを取得する。
+ *
+ * - レコードが存在しない場合は `null` を返す
+ *
+ * @param userId ユーザーID
+ * @returns プロフィール行または null
+ * @throws Error DBエラー
+ */
 export async function getUserProfile(userId: string) {
   const supabase = createClient();
   const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
@@ -375,6 +501,13 @@ export async function getUserProfile(userId: string) {
   return data;
 }
 
+/**
+ * ユーザープロフィールを作成（存在すれば upsert）。
+ *
+ * @param profile 作成するプロフィール
+ * @returns 作成（更新）されたプロフィール
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function createUserProfile(profile: UserProfileInsert) {
   if (!profile.id) {
     throw new Error('User ID is required');
@@ -394,6 +527,14 @@ export async function createUserProfile(profile: UserProfileInsert) {
   return data;
 }
 
+/**
+ * ユーザープロフィールを更新する。
+ *
+ * @param userId ユーザーID
+ * @param updates 更新内容
+ * @returns 更新後のプロフィール
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function updateUserProfile(userId: string, updates: UserProfileUpdate) {
   if (!userId) {
     throw new Error('User ID is required');
@@ -409,6 +550,13 @@ export async function updateUserProfile(userId: string, updates: UserProfileUpda
   return data;
 }
 
+/**
+ * 指定メールのユーザーが存在するかを確認する。
+ *
+ * @param email メールアドレス
+ * @returns 存在すれば true、なければ false
+ * @throws Error DBエラー
+ */
 export async function checkUserExists(email: string) {
   const supabase = createClient();
   const { data, error } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
@@ -420,6 +568,14 @@ export async function checkUserExists(email: string) {
   return data !== null;
 }
 
+/**
+ * 新しい組織を作成する。
+ *
+ * @param name 組織名
+ * @param plan 契約プラン
+ * @returns 作成された組織
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function createOrganization(name: string, plan: OrganizationPlan) {
   if (!name) {
     throw new Error('Organization name is required');
@@ -435,6 +591,15 @@ export async function createOrganization(name: string, plan: OrganizationPlan) {
   return data;
 }
 
+/**
+ * 組織へのユーザー招待レコードを作成する（テスト向け）。
+ *
+ * @param email 招待メール
+ * @param organizationId 組織ID
+ * @param role ロール
+ * @returns 追加された招待レコード
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function inviteUserToOrganization(email: string, organizationId: number, role: UserRole) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Invalid email format');
@@ -456,6 +621,13 @@ export async function inviteUserToOrganization(email: string, organizationId: nu
   return data;
 }
 
+/**
+ * 招待トークンに一致する招待レコードを取得する（テスト向け）。
+ *
+ * @param token 招待トークン
+ * @returns 取得した招待レコード
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function acceptInvitation(token: string) {
   if (!token) {
     throw new Error('Token is required');
@@ -471,6 +643,14 @@ export async function acceptInvitation(token: string) {
   return data;
 }
 
+/**
+ * 指定ユーザーのロールを直接更新する（テスト向け）。
+ *
+ * @param userId 対象ユーザーID
+ * @param role 設定するロール
+ * @returns 更新後のユーザーレコード
+ * @throws Error 入力不正またはDBエラー
+ */
 export async function changeUserRole(userId: string, role: UserRole) {
   if (!['admin', 'user'].includes(role)) {
     throw new Error('Invalid role');

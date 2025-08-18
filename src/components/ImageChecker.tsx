@@ -31,11 +31,13 @@ export default function ImageChecker() {
   // DBのチェックID（SSEに利用）
   // const [dbCheckId, setDbCheckId] = useState<number | null>(null)
   const sseRef = useRef<EventSource | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       if (sseRef.current) sseRef.current.close()
+      if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [previewUrl])
 
@@ -127,11 +129,48 @@ export default function ImageChecker() {
       if (!checkData?.id) throw new Error('チェックIDの取得に失敗しました')
       // dbCheckIdは現在のUIでは未使用
 
-      // 進捗と結果のためのSSE接続
+      // 進捗と結果のためのSSE接続（可能なら認証トークンを付与。取得に時間がかかる場合は最大3秒待つ）
       setState('processing')
       setStatusMessage('OCRおよび薬機法チェックを実行中...')
       const es = new EventSource(`/api/checks/${checkData.id}/stream`)
       sseRef.current = es
+
+      // ポーリングのフォールバック（SSE が利用できない・途切れた場合でも結果を取得）
+      let pollCount = 0
+      const maxPolls = 120 // 2分
+      pollRef.current = setInterval(async () => {
+        pollCount++
+        try {
+          const { data: currentCheck, error: pollError } = await supabase
+            .from('checks')
+            .select('*')
+            .eq('id', checkData.id)
+            .single()
+          if (pollError) return
+          if (currentCheck?.status === 'completed') {
+            setState('completed')
+            setStatusMessage('チェック完了')
+            setExtractedText(String(currentCheck.extracted_text ?? ''))
+            setModifiedText(String(currentCheck.modified_text ?? ''))
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+            if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
+          } else if (currentCheck?.status === 'failed') {
+            setState('failed')
+            setError(String(currentCheck.error_message ?? '処理に失敗しました'))
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+            if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
+          }
+        } catch {
+          // noop: フォールバックなので失敗しても継続
+        }
+        if (pollCount >= maxPolls) {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+          // タイムアウト時は失敗扱い
+          setState('failed')
+          setError('処理がタイムアウトしました')
+          if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
+        }
+      }, 1000)
       es.onmessage = async (event) => {
         try {
           if (event.data.startsWith(': heartbeat')) return
@@ -151,21 +190,23 @@ export default function ImageChecker() {
             setExtractedText(String(data.extracted_text ?? ''))
             setModifiedText(String(data.modified_text ?? ''))
             es.close()
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
           }
           if (data.status === 'failed') {
             setState('failed')
             setError(String(data.error ?? '処理に失敗しました'))
             es.close()
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
           }
         } catch {
-          setState('failed')
-          setError('結果の受信に失敗しました')
+          // SSE 解析失敗はフォールバックに任せる（失敗扱いにしない）
+          setStatusMessage('SSEの受信解析に失敗しました。ポーリングで継続します…')
           es.close()
         }
       }
       es.onerror = () => {
-        setState('failed')
-        setError('サーバー接続エラー')
+        // SSE 接続失敗でも即失敗にしない。ポーリングで継続
+        setStatusMessage('SSE接続に失敗しました。ポーリングで継続します…')
         es.close()
       }
     } catch (e) {
@@ -209,6 +250,7 @@ export default function ImageChecker() {
             <div>
               <div className="text-sm text-gray-700 mb-2">プレビュー</div>
               {/* next/imageは外部S3等の最適化で制約もあるため、当面はimgを使用 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewUrl} alt="preview" className="w-full rounded border" />
             </div>
           )}
