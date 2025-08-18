@@ -76,8 +76,24 @@ export default function CustomReportGenerator({ selectedCheckIds, onClose }: Cus
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error ?? 'レポート生成に失敗しました')
+        let errorMessage = 'レポート生成に失敗しました'
+        try {
+          const errorData = await response.json()
+          if (errorData && typeof errorData.error === 'string') {
+            errorMessage = errorData.error
+          }
+        } catch {
+          // JSON でない場合はテキストを取得
+          try {
+            const text = await response.text()
+            if (text && text.trim().length > 0) {
+              errorMessage = text
+            }
+          } catch {
+            // エラーを無視してデフォルトメッセージを使用
+          }
+        }
+        throw new Error(errorMessage)
       }
 
       // Download the file

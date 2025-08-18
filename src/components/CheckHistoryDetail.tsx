@@ -100,6 +100,20 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
     }
   }
 
+  // diff フォーマットのヘッダー生成
+  const getDiffHeader = (originalLineCount: number, modifiedLineCount: number) => {
+    return `--- 原文
++++ 修正文
+@@ -1,${originalLineCount} +1,${modifiedLineCount} @@`
+  }
+
+  // diff フォーマットの本文生成
+  const getDiffBody = (originalText: string, modifiedText: string) => {
+    const originalLines = originalText.split('\n').map(line => `-${line}`).join('\n')
+    const modifiedLines = modifiedText.split('\n').map(line => `+${line}`).join('\n')
+    return `${originalLines}\n${modifiedLines}`
+  }
+
   const copyDiffFormat = async () => {
     if (!check) return
 
@@ -109,11 +123,9 @@ export default function CheckHistoryDetail({ checkId }: CheckHistoryDetailProps)
     
     const modifiedText = check.modifiedText ?? ''
     
-    const diffText = `--- 原文
-+++ 修正文
-@@ -1,${originalText.split('\n').length} +1,${modifiedText.split('\n').length} @@
-${originalText.split('\n').map(line => `-${line}`).join('\n')}
-${modifiedText.split('\n').map(line => `+${line}`).join('\n')}`
+    const diffHeader = getDiffHeader(originalText.split('\n').length, modifiedText.split('\n').length)
+    const diffBody = getDiffBody(originalText, modifiedText)
+    const diffText = `${diffHeader}\n${diffBody}`
 
     await copyToClipboard(diffText, 'diff形式')
   }

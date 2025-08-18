@@ -42,6 +42,11 @@ const statusLabels = {
   failed: 'エラー'
 }
 
+// Pie チャートのラベルフォーマッター
+const pieLabelFormatter = ({name = '', value = 0, percent = 0}: {name?: string, value?: number, percent?: number}) => {
+  return `${name}: ${value} (${percent.toFixed(0)}%)`
+}
+
 export default function CheckHistoryStats() {
   const [stats, setStats] = useState<HistoryStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -211,7 +216,7 @@ export default function CheckHistoryStats() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({name = '', value = 0, percent = 0}) => `${name}: ${value} (${percent.toFixed(0)}%)`}
+                  label={pieLabelFormatter}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
