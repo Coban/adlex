@@ -263,14 +263,14 @@ function renderTextWithHighlights(doc: PDFKit.PDFDocument, text: string, violati
     // 前の通常テキストを描画
     if (currentPos < start) {
       const beforeText = text.substring(currentPos, start)
-      doc.fillColor('#000').text(beforeText, { continued: true })
+      doc.font('Helvetica').fontSize(10).fillColor('#000').text(beforeText, { continued: true })
     }
 
     // 違反箇所を赤色でハイライト
     const violationText = text.substring(start, end)
     if (violationText) {
-      doc.fillColor('#dc2626')
-         .rect(doc.x, doc.y - 2, doc.widthOfString(violationText), doc.currentLineHeight())
+      doc.font('Helvetica').fontSize(10).fillColor('#dc2626')
+      doc.rect(doc.x, doc.y - 2, doc.widthOfString(violationText), doc.currentLineHeight())
          .fillOpacity(0.2)
          .fill()
          .fillOpacity(1)

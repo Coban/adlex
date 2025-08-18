@@ -80,19 +80,25 @@ export default function CheckHistoryList() {
       if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
         // Provide mock history in E2E to make UI functional
         const now = new Date()
-        const mock: CheckHistory[] = Array.from({ length: 2 }).map((_, i) => ({
-          id: i + 1,
-          originalText: `テストデータ ${i + 1} の原文` ,
-          modifiedText: `テストデータ ${i + 1} の修正文`,
-          status: i === 0 ? 'completed' : 'processing',
-          inputType: i === 0 ? 'text' : 'image',
-          imageUrl: i === 1 ? 'https://example.com/sample-image.jpg' : null,
-          extractedText: i === 1 ? 'OCRで抽出されたテキスト' : null,
-          createdAt: new Date(now.getTime() - (i+1) * 60000).toISOString(),
-          completedAt: i === 0 ? now.toISOString() : null,
-          userEmail: 'admin@test.com',
-          violationCount: i === 0 ? 2 : undefined
-        }))
+        const mock: CheckHistory[] = Array.from({ length: 2 }).map((_, i) => {
+          // 最初のアイテムは完了済みのテキストチェック、2番目は画像チェックのサンプル
+          const isCompletedTextCheck = i === 0
+          const isImageType = i === 1
+          
+          return {
+            id: i + 1,
+            originalText: `テストデータ ${i + 1} の原文` ,
+            modifiedText: `テストデータ ${i + 1} の修正文`,
+            status: isCompletedTextCheck ? 'completed' : 'processing',
+            inputType: isCompletedTextCheck ? 'text' : 'image',
+            imageUrl: isImageType ? 'https://example.com/sample-image.jpg' : null,
+            extractedText: isImageType ? 'OCRで抽出されたテキスト' : null,
+            createdAt: new Date(now.getTime() - (i+1) * 60000).toISOString(),
+            completedAt: isCompletedTextCheck ? now.toISOString() : null,
+            userEmail: 'admin@test.com',
+            violationCount: isCompletedTextCheck ? 2 : undefined
+          }
+        })
         setHistory(mock)
         setPagination({ page: 1, limit: 20, total: mock.length, totalPages: 1, hasNext: false, hasPrev: false })
         setUserRole('admin')
