@@ -12,6 +12,7 @@ interface AuthContextType {
   organization: Organization | null
   loading: boolean
   signOut: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 const AUTH_STATE_DELAY = 200
@@ -199,6 +200,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase.auth, fetchUserProfile, mounted])
 
+  const refresh = useCallback(async () => {
+    if (user) {
+      await fetchUserProfile(user.id)
+    }
+  }, [user, fetchUserProfile])
+
   const signOut = async () => {
     if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
       setUser(null)
@@ -270,14 +277,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Show loading state during SSR and initial mount to prevent hydration mismatch
   if (!mounted) {
     return (
-      <AuthContext.Provider value={{ user: null, userProfile: null, organization: null, loading: true, signOut }}>
+      <AuthContext.Provider value={{ user: null, userProfile: null, organization: null, loading: true, signOut, refresh: async () => {} }}>
         {children}
       </AuthContext.Provider>
     )
   }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, organization, loading, signOut }}>
+    <AuthContext.Provider value={{ user, userProfile, organization, loading, signOut, refresh }}>
       {children}
     </AuthContext.Provider>
   )

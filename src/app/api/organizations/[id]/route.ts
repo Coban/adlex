@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { createClient } from '@/lib/supabase/server'
 
+// Validation helpers
+const isValidName = (name: unknown): name is string => {
+  return typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 100
+}
+
+const isValidUrl = (url: unknown): url is string | null => {
+  return url === null || typeof url === 'string'
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -39,17 +48,23 @@ export async function PATCH(
     const body = await request.json()
     const { name, icon_url, logo_url } = body
 
-    // Validate input
-    if (name !== undefined && (!name || typeof name !== 'string' || name.trim().length === 0)) {
-      return NextResponse.json({ error: 'Name is required and must be a non-empty string' }, { status: 400 })
+    // Validate input using helper functions
+    if (name !== undefined && !isValidName(name)) {
+      return NextResponse.json({ 
+        error: 'Name must be a non-empty string (1-100 characters)' 
+      }, { status: 400 })
     }
 
-    if (icon_url !== undefined && icon_url !== null && typeof icon_url !== 'string') {
-      return NextResponse.json({ error: 'icon_url must be a string or null' }, { status: 400 })
+    if (icon_url !== undefined && !isValidUrl(icon_url)) {
+      return NextResponse.json({ 
+        error: 'icon_url must be a string or null' 
+      }, { status: 400 })
     }
 
-    if (logo_url !== undefined && logo_url !== null && typeof logo_url !== 'string') {
-      return NextResponse.json({ error: 'logo_url must be a string or null' }, { status: 400 })
+    if (logo_url !== undefined && !isValidUrl(logo_url)) {
+      return NextResponse.json({ 
+        error: 'logo_url must be a string or null' 
+      }, { status: 400 })
     }
 
     // Update organization
