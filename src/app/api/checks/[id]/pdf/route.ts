@@ -263,19 +263,13 @@ function renderTextWithHighlights(doc: PDFKit.PDFDocument, text: string, violati
     // 前の通常テキストを描画
     if (currentPos < start) {
       const beforeText = text.substring(currentPos, start)
-      doc.font('Helvetica').fontSize(10).fillColor('#000').text(beforeText, { continued: true })
+      drawNormalText(doc, beforeText, true)
     }
 
     // 違反箇所を赤色でハイライト
     const violationText = text.substring(start, end)
     if (violationText) {
-      doc.font('Helvetica').fontSize(10).fillColor('#dc2626')
-      doc.rect(doc.x, doc.y - 2, doc.widthOfString(violationText), doc.currentLineHeight())
-         .fillOpacity(0.2)
-         .fill()
-         .fillOpacity(1)
-         .fillColor('#dc2626')
-         .text(violationText, { continued: true })
+      drawHighlightedText(doc, violationText)
     }
 
     currentPos = end
@@ -288,6 +282,30 @@ function renderTextWithHighlights(doc: PDFKit.PDFDocument, text: string, violati
   } else {
     doc.text('') // 改行を確保
   }
+}
+
+/**
+ * 通常のテキストを描画
+ */
+function drawNormalText(doc: PDFKit.PDFDocument, text: string, continued = false) {
+  doc.font('Helvetica').fontSize(10).fillColor('#000').text(text, { continued })
+}
+
+/**
+ * ハイライトされたテキストを描画
+ */
+function drawHighlightedText(doc: PDFKit.PDFDocument, text: string) {
+  // フォント設定を先に行い、文字幅を正確に計算
+  doc.font('Helvetica').fontSize(10).fillColor('#dc2626')
+  
+  // 背景の赤い矩形を描画
+  doc.rect(doc.x, doc.y - 2, doc.widthOfString(text), doc.currentLineHeight())
+     .fillOpacity(0.2)
+     .fill()
+     .fillOpacity(1)
+  
+  // テキストを描画
+  doc.fillColor('#dc2626').text(text, { continued: true })
 }
 
 function statusLabel(status: string | null | undefined): string {
