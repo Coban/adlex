@@ -32,6 +32,9 @@ describe('Accept Invitation API Route', () => {
   it('無効なJSONは400', async () => {
     const req = new NextRequest('http://localhost:3000/api/users/accept-invitation', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: 'invalid json',
     })
     const res = await POST(req)

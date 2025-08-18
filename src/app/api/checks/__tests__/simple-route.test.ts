@@ -57,7 +57,7 @@ describe('Checks API POST (simple validations)', () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === 'users') {
-        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: new Error('no') }) }
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: { message: 'no' } }) }
       }
       return { select: vi.fn(), in: vi.fn(), order: vi.fn(), single: vi.fn() }
     })

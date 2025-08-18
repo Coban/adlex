@@ -64,7 +64,11 @@ describe('Dictionaries [id] API', () => {
       }
       return { select: vi.fn(), eq: vi.fn(), single: vi.fn() }
     })
-    const req = new NextRequest('http://localhost:3000/api/dictionaries/1', { method: 'PUT', body: 'invalid json' })
+    const req = new NextRequest('http://localhost:3000/api/dictionaries/1', { 
+      method: 'PUT', 
+      headers: { 'Content-Type': 'application/json' },
+      body: 'invalid json' 
+    })
     const res = await PUT(req, { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(400)
   })

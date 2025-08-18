@@ -309,7 +309,7 @@ describe('Check History API Route', () => {
         if (table === 'checks') {
           return {
             ...mockFrom,
-            range: () => Promise.resolve({ data: null, error: new Error('Database error') })
+            range: () => Promise.resolve({ data: null, error: { message: 'Database error' } })
           }
         }
         return mockFrom

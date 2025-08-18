@@ -31,6 +31,9 @@ describe('Users Invite API Route', () => {
     it('should return 400 for invalid JSON', async () => {
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: 'invalid json'
       })
 
@@ -433,7 +436,7 @@ describe('Users Invite API Route', () => {
             callCount++
             return Promise.resolve({ data: null, error: null })
           }
-          return Promise.resolve({ data: null, error: new Error('Insert failed') })
+          return Promise.resolve({ data: null, error: { message: 'Insert failed' } })
         })
       }
 

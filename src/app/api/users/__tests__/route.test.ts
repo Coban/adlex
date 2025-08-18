@@ -175,7 +175,7 @@ describe('Users API Route', () => {
         single: vi.fn().mockResolvedValue({ data: userData, error: null })
       }
 
-      mockFrom.order.mockResolvedValue({ data: null, error: new Error('Database error') })
+      mockFrom.order.mockResolvedValue({ data: null, error: { message: 'Database error' } })
 
       mockSupabaseClient.from.mockReturnValue(mockFrom)
 
