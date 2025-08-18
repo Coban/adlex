@@ -44,8 +44,20 @@
       "mcp__serena__insert_after_symbol",
       "mcp__serena__check_onboarding_performed",
       "WebFetch(domain:openrouter.ai)",
-      "WebFetch(domain:platform.openai.com)"
+      "WebFetch(domain:platform.openai.com)",
+      "mcp__serena__think_about_whether_you_are_done",
+      "mcp__serena__read_memory",
+      "Bash(npx supabase:*)",
+      "Bash(/dev/null)",
+      "Bash(for file in src/app/admin/settings/page.tsx src/app/dictionaries/page.tsx src/components/CheckHistoryList.tsx src/components/CheckHistoryDetail.tsx src/components/TextChecker.tsx src/components/ImageChecker.tsx)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)",
+      "Bash(npm test:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)",
+      "Bash(gh pr review:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }

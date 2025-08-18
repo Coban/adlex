@@ -10,8 +10,10 @@ import {
   Clock,
   LogOut,
   Menu,
-  X
+  X,
+  Settings
 } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -65,6 +67,14 @@ const navigationItems: NavigationItem[] = [
     requireRole: 'admin',
     showInMobile: true
   },
+  {
+    name: '組織設定',
+    href: '/admin/settings',
+    icon: Settings,
+    requireAuth: true,
+    requireRole: 'admin',
+    showInMobile: true
+  },
 
 ]
 
@@ -108,10 +118,32 @@ export default function GlobalNavigation() {
           <div className="flex items-center space-x-8">
             {/* ロゴ */}
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">AdLex</span>
+              {organization?.icon_url ? (
+                <Image
+                  src={organization.icon_url}
+                  alt={`${organization.name}のアイコン`}
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+              )}
+              {organization?.logo_url ? (
+                <Image
+                  src={organization.logo_url}
+                  alt={`${organization.name}のロゴ`}
+                  width={128}
+                  height={32}
+                  className="h-8 max-w-32 object-contain"
+                />
+              ) : (
+                <span className="text-xl font-bold text-gray-900">
+                  {organization?.name ?? 'AdLex'}
+                </span>
+              )}
             </Link>
 
             {/* デスクトップナビゲーション */}
@@ -133,6 +165,7 @@ export default function GlobalNavigation() {
                       item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
                       item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      item.href === '/admin/settings' ? 'nav-settings' :
                       undefined
                     }
                   >
@@ -242,6 +275,7 @@ export default function GlobalNavigation() {
                       item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
                       item.href === '/dictionaries' ? 'nav-dictionaries' : 
+                      item.href === '/admin/settings' ? 'nav-settings' :
                       undefined
                     }
                   >

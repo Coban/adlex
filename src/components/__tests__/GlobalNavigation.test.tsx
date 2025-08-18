@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: null, userProfile: null, organization: null, loading: false, signOut: vi.fn() }),
+  useAuth: () => ({ user: null, userProfile: null, organization: null, loading: false, signOut: vi.fn(), refresh: vi.fn() }),
 }))
 
 import GlobalNavigation from '../GlobalNavigation'
