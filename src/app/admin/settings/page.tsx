@@ -11,6 +11,21 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 
+// Constants
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_ICON_LOGO_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+
+// Utility functions
+const cleanupBlobUrl = (url: string | null) => {
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url)
+  }
+}
+
+const isValidName = (name: string): boolean => {
+  return name.trim().length > 0 && name.trim().length <= 100
+}
+
 interface OrganizationSettings {
   name: string
   icon_url: string | null
@@ -54,12 +69,8 @@ export default function OrganizationSettingsPage() {
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
-      if (iconPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(iconPreview)
-      }
-      if (logoPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(logoPreview)
-      }
+      cleanupBlobUrl(iconPreview)
+      cleanupBlobUrl(logoPreview)
     }
   }, [iconPreview, logoPreview])
 
@@ -67,8 +78,7 @@ export default function OrganizationSettingsPage() {
     if (!file) return
 
     // Validate file type
-    const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!acceptedTypes.includes(file.type)) {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       toast({
         title: 'エラー',
         description: 'JPEG、PNG、WebP形式のファイルのみ対応しています。',
@@ -77,8 +87,8 @@ export default function OrganizationSettingsPage() {
       return
     }
 
-    // Validate file size (2MB limit for icons/logos)
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate file size
+    if (file.size > MAX_ICON_LOGO_FILE_SIZE) {
       toast({
         title: 'エラー',
         description: 'ファイルサイズは2MB以下にしてください。',
@@ -89,16 +99,12 @@ export default function OrganizationSettingsPage() {
 
     if (type === 'icon') {
       // Clean up previous preview URL
-      if (iconPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(iconPreview)
-      }
+      cleanupBlobUrl(iconPreview)
       setIconFile(file)
       setIconPreview(URL.createObjectURL(file))
     } else {
       // Clean up previous preview URL
-      if (logoPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(logoPreview)
-      }
+      cleanupBlobUrl(logoPreview)
       setLogoFile(file)
       setLogoPreview(URL.createObjectURL(file))
     }
@@ -107,17 +113,13 @@ export default function OrganizationSettingsPage() {
   const removeImage = (type: 'icon' | 'logo') => {
     if (type === 'icon') {
       // Clean up preview URL if it's a blob URL
-      if (iconPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(iconPreview)
-      }
+      cleanupBlobUrl(iconPreview)
       setIconFile(null)
       setIconPreview(null)
       setSettings(prev => ({ ...prev, icon_url: null }))
     } else {
       // Clean up preview URL if it's a blob URL
-      if (logoPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(logoPreview)
-      }
+      cleanupBlobUrl(logoPreview)
       setLogoFile(null)
       setLogoPreview(null)
       setSettings(prev => ({ ...prev, logo_url: null }))
@@ -151,6 +153,16 @@ export default function OrganizationSettingsPage() {
       toast({
         title: 'エラー',
         description: '管理者権限が必要です。',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate name
+    if (!isValidName(settings.name)) {
+      toast({
+        title: 'エラー',
+        description: '組織名は1文字以上100文字以下で入力してください。',
         variant: 'destructive'
       })
       return
@@ -199,6 +211,18 @@ export default function OrganizationSettingsPage() {
         throw new Error('設定の保存に失敗しました')
       }
 
+      // Update preview URLs to reflect uploaded images before clearing files
+      if (iconUrl && iconFile) {
+        // Clean up the previous blob URL first
+        cleanupBlobUrl(iconPreview)
+        setIconPreview(iconUrl)
+      }
+      if (logoUrl && logoFile) {
+        // Clean up the previous blob URL first
+        cleanupBlobUrl(logoPreview)
+        setLogoPreview(logoUrl)
+      }
+      
       // Clear file selections
       setIconFile(null)
       setLogoFile(null)
@@ -209,14 +233,6 @@ export default function OrganizationSettingsPage() {
         icon_url: iconUrl,
         logo_url: logoUrl
       }))
-      
-      // Update preview URLs to reflect uploaded images
-      if (iconUrl && iconFile) {
-        setIconPreview(iconUrl)
-      }
-      if (logoUrl && logoFile) {
-        setLogoPreview(logoUrl)
-      }
 
       // Refresh auth context to get updated organization data
       await refresh()
@@ -338,7 +354,7 @@ export default function OrganizationSettingsPage() {
                 <Input
                   id="icon-upload"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept={ACCEPTED_IMAGE_TYPES.join(',')}
                   className="hidden"
                   onChange={(e) => handleFileSelect('icon', e.target.files?.[0] ?? null)}
                 />
@@ -392,7 +408,7 @@ export default function OrganizationSettingsPage() {
                 <Input
                   id="logo-upload"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept={ACCEPTED_IMAGE_TYPES.join(',')}
                   className="hidden"
                   onChange={(e) => handleFileSelect('logo', e.target.files?.[0] ?? null)}
                 />
