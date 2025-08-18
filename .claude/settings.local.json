@@ -57,7 +57,8 @@
       "Bash(npm test:*)",
       "Bash(gh pr view:*)",
       "Bash(gh api:*)",
-      "Bash(gh pr review:*)"
+      "Bash(gh pr review:*)",
+      "Bash(gh pr comment:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

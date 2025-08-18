@@ -76,7 +76,7 @@ export default function CustomReportGenerator({ selectedCheckIds, onClose }: Cus
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error ?? 'レポート生成に失敗しました')
       }
 

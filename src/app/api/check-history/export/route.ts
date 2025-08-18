@@ -153,7 +153,15 @@ export async function GET(request: NextRequest) {
       case 'json':
         return generateJSONExport(formattedData)
       case 'excel':
-        return generateExcelExport(formattedData, userData.role ?? 'user')
+        try {
+          return generateExcelExport(formattedData, userData.role ?? 'user')
+        } catch (excelError) {
+          // Excel生成で制限エラーが発生した場合
+          if (excelError instanceof Error && excelError.message.includes('エクスポート件数が多すぎます')) {
+            return NextResponse.json({ error: excelError.message }, { status: 413 })
+          }
+          throw excelError
+        }
       default:
         return NextResponse.json({ error: 'Unsupported format' }, { status: 400 })
     }
@@ -241,7 +249,14 @@ function generateJSONExport(data: ExportData[]) {
 }
 
 
+const MAX_EXPORT_SIZE = 1000
+
 function generateExcelExport(data: ExportData[], userRole: string) {
+  // データサイズ制限のチェック
+  if (data.length > MAX_EXPORT_SIZE) {
+    throw new Error(`エクスポート件数が多すぎます（最大${MAX_EXPORT_SIZE}件まで）。条件を絞り込んでください。`)
+  }
+  
   // Create a new workbook
   const workbook = XLSX.utils.book_new()
   

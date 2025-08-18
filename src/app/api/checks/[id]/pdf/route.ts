@@ -298,8 +298,8 @@ function drawHighlightedText(doc: PDFKit.PDFDocument, text: string) {
   // フォント設定を先に行い、文字幅を正確に計算
   doc.font('Helvetica').fontSize(10).fillColor('#dc2626')
   
-  // 背景の赤い矩形を描画
-  doc.rect(doc.x, doc.y - 2, doc.widthOfString(text), doc.currentLineHeight())
+  // 背景の赤い矩形を描画（座標の範囲チェック付き）
+  doc.rect(Math.max(0, doc.x), Math.max(0, doc.y - 2), doc.widthOfString(text), doc.currentLineHeight())
      .fillOpacity(0.2)
      .fill()
      .fillOpacity(1)

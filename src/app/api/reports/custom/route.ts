@@ -287,7 +287,8 @@ async function generateCustomPDFReport(checks: Check[], options: ReportOptions):
 
       doc.end()
     } catch (error) {
-      reject(error)
+      console.error('PDF generation error:', error)
+      reject(new Error('PDF生成に失敗しました: ' + (error instanceof Error ? error.message : String(error))))
     }
   })
 }
