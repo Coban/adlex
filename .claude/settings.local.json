@@ -53,7 +53,9 @@
       "Bash(do echo \"=== $file ===\")",
       "Bash(done)",
       "Bash(npm test:*)",
-      "Bash(gh pr view:*)"
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)",
+      "Bash(gh pr review:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
