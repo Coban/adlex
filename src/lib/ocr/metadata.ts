@@ -357,7 +357,12 @@ export class OcrMetadataManager {
   }
 
   private generateId(): string {
-    return `ocr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    // Node.js環境ではcrypto.randomUUID()を使用、ブラウザ環境ではフォールバック
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return `ocr_${crypto.randomUUID()}`
+    }
+    // フォールバック: より強力な疑似乱数を生成
+    return `ocr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${performance.now().toString(36)}`
   }
 }
 

@@ -50,9 +50,10 @@ export interface ProcessedImage {
  * Base64文字列から画像サイズを計算する
  */
 function calculateBase64Size(base64: string): number {
-  // Base64文字列のサイズを概算（padding考慮）
-  const base64Data = base64.split(',')[1] || base64
-  return Math.ceil(base64Data.length * 0.75)
+  // Base64文字列のサイズを正確に計算（パディング文字を考慮）
+  const base64Data = base64.includes(',') ? base64.split(',')[1] : base64
+  const padding = base64Data.match(/=*$/)?.[0].length || 0
+  return Math.floor((base64Data.length * 3) / 4) - padding
 }
 
 /**
@@ -62,10 +63,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     // Node.js環境での対応
     if (typeof window === 'undefined') {
-      // テスト環境などでのモック
+      // テスト環境などでのモック - より柔軟な寸法設定
+      const getDimensionsFromDataUrl = (dataUrl: string): { width: number; height: number } => {
+        // 環境変数から設定可能にする（テスト時の制御のため）
+        const mockWidth = process.env.MOCK_IMAGE_WIDTH ? parseInt(process.env.MOCK_IMAGE_WIDTH) : 1024
+        const mockHeight = process.env.MOCK_IMAGE_HEIGHT ? parseInt(process.env.MOCK_IMAGE_HEIGHT) : 768
+        
+        // データURLから画像サイズを推測する簡易ロジック（実際の実装では更に精緻化可能）
+        const base64Size = calculateBase64Size(dataUrl)
+        if (base64Size < 50000) return { width: 640, height: 480 }  // 小さい画像
+        if (base64Size < 200000) return { width: mockWidth, height: mockHeight }  // 中程度
+        return { width: 1920, height: 1080 }  // 大きい画像
+      }
+      
+      const dimensions = getDimensionsFromDataUrl(src)
       const mockImg = {
-        naturalWidth: 1024,
-        naturalHeight: 768,
+        naturalWidth: dimensions.width,
+        naturalHeight: dimensions.height,
         onload: null as ((this: HTMLImageElement, ev: Event) => any) | null,
         onerror: null as ((this: HTMLImageElement, ev: string | Event) => any) | null,
         src: ''

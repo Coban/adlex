@@ -17,7 +17,8 @@ describe('OCRメタデータ管理', () => {
         wasPreprocessed: true
       })
       
-      expect(id).toMatch(/^ocr_\d+_[a-z0-9]+$/)
+      // 新しいUUID形式または従来の形式のいずれかを受け入れる
+      expect(id).toMatch(/^ocr_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+_[a-z0-9_]+)$/)
     })
 
     it('成功を記録できること', async () => {
@@ -212,7 +213,8 @@ describe('OCRメタデータ管理', () => {
         wasPreprocessed: false
       })
 
-      expect(id).toMatch(/^ocr_\d+_[a-z0-9]+$/)
+      // 新しいUUID形式または従来の形式のいずれかを受け入れる
+      expect(id).toMatch(/^ocr_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+_[a-z0-9_]+)$/)
     })
   })
 })
