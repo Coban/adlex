@@ -1,5 +1,153 @@
 import OpenAI from 'openai'
 
+/**
+ * テキストからネストしたJSONオブジェクトを抽出する堅牢な関数
+ * 複数のレベルでネストしたオブジェクトと配列に対応
+ */
+function extractCompleteJSON(text: string): string | null {
+  // 様々なJSON開始パターンを試す
+  const patterns = [
+    // 一般的なJSON開始位置
+    /\{[\s\S]*?\}/g,
+    // 「response」や「result」などのラベル後
+    /(?:response|result|answer|json)[:=]\s*(\{[\s\S]*?\})/gi,
+    // 行の開始から
+    /^\s*(\{[\s\S]*?\})\s*$/gm,
+    // 文中の任意の位置
+    /(\{[\s\S]*?\})/g
+  ]
+
+  for (const pattern of patterns) {
+    const matches = Array.from(text.matchAll(pattern))
+    
+    for (const match of matches) {
+      const candidate = match[1] || match[0]
+      if (!candidate) continue
+
+      // カンディデートからJSONを抽出を試行
+      try {
+        // JSONを括弧の対応をチェックしながら抽出
+        const completeJson = findBalancedBraces(candidate)
+        if (completeJson) {
+          JSON.parse(completeJson) // パースチェック
+          return completeJson
+        }
+      } catch {
+        // このカンディデートは無効、次を試す
+        continue
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * バランスの取れた括弧を見つけてJSONオブジェクトを抽出
+ */
+function findBalancedBraces(text: string): string | null {
+  const startIndex = text.indexOf('{')
+  if (startIndex === -1) return null
+
+  let braceCount = 0
+  let inString = false
+  let escapeNext = false
+
+  for (let i = startIndex; i < text.length; i++) {
+    const char = text[i]
+
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          return text.substring(startIndex, i + 1)
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * プレーンテキスト応答からJSONレスポンスを生成するフォールバック機能
+ * LM Studio がJSON形式で応答しない場合に使用
+ */
+function generateJSONFromPlainText(originalText: string, plainTextResponse: string): string {
+  console.log('[AI] Generating JSON from plain text response:', plainTextResponse)
+  
+  // プレーンテキスト応答を解析して意味のあるJSON構造を生成
+  let modified = originalText
+  const violations: Array<{start_pos: number, end_pos: number, reason: string, dictionary_id: null}> = []
+  
+  // パターン1: 「〜に変更してください」「〜に修正してください」のような指示文
+  const instructionPatterns = [
+    /(.+)(?:に変更|を修正|に置き換え|を|へ)(?:してください|すべき|する)/g,
+    /(.+)などの表現に変更/g,
+    /(.+)という表現/g
+  ]
+  
+  for (const pattern of instructionPatterns) {
+    const matches = Array.from(plainTextResponse.matchAll(pattern))
+    if (matches.length > 0) {
+      // 最初のマッチから修正案を取得
+      const suggestion = matches[0][1]?.trim()
+      if (suggestion) {
+        modified = suggestion
+        violations.push({
+          start_pos: 0,
+          end_pos: originalText.length,
+          reason: `薬機法に抵触する表現のため修正が必要です: ${plainTextResponse}`,
+          dictionary_id: null
+        })
+        break
+      }
+    }
+  }
+  
+  // パターン2: 単純な置換提案（元テキストが短い場合）
+  if (violations.length === 0 && originalText !== plainTextResponse && plainTextResponse.length < 100) {
+    modified = plainTextResponse
+    violations.push({
+      start_pos: 0,
+      end_pos: originalText.length,
+      reason: '薬機法に適合する表現への修正提案',
+      dictionary_id: null
+    })
+  }
+  
+  // パターン3: 元のテキストに問題がない場合（レスポンスが元テキストと同じ）
+  if (originalText === plainTextResponse) {
+    // 違反なしとして処理
+    modified = originalText
+  }
+  
+  const result = JSON.stringify({
+    modified,
+    violations
+  })
+  
+  console.log('[AI] Generated JSON structure:', result)
+  return result
+}
+
 // 環境検出
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
@@ -887,13 +1035,26 @@ export async function createChatCompletionForCheck(text: string, relevantEntries
 
 ${dictionaryReference}
 
-違反パターン: 効能効果標榜、医療効果、身体機能言及、疾病治療予防、医師推奨装い
+修正方針:
+- 違反表現は薬機法に準拠した適切な表現に置き換える
+- 元の文章の意味と構造を可能な限り保持する  
+- 断定的な表現は推定や可能性を示す表現に変更
+- 医療的・治療的効果の主張は一般的な健康支援表現に変更
+- 過度な効果を暗示する表現は控えめな表現に修正
 
-JSON形式:
+【重要】必ずJSON形式で回答してください。JSON以外のテキストは含めないでください。
+
+出力形式（必須）:
 {
-  "modified": "修正テキスト",
-  "violations": [{"start_pos": 0, "end_pos": 3, "reason": "理由", "dictionary_id": null}]
-}`
+  "modified": "修正されたテキスト",
+  "violations": [{"start_pos": 0, "end_pos": 3, "reason": "違反理由の詳細", "dictionary_id": null}]
+}
+
+注意：
+- 応答はJSON形式のみで行う
+- 説明文や追加のテキストは一切含めない
+- violations配列が空の場合でも配列として出力する
+- 必ず有効なJSON構造を保つ`
     },
     {
       role: 'user' as const,
@@ -913,7 +1074,7 @@ JSON形式:
           properties: {
             modified: {
               type: 'string',
-              description: '薬機法に準拠するよう修正されたテキスト'
+              description: '元のテキストの意味と構造を保持しつつ、違反表現を薬機法準拠の適切な表現に置き換えた修正版テキスト'
             },
             violations: {
               type: 'array',
@@ -963,51 +1124,79 @@ JSON形式:
     }
 
     // 改善された解析でレスポンスからJSONを抽出
+    console.log('[AI] LM Studio raw response:', content)
     
     // 複数のJSON抽出パターンを試行
     let jsonStr = null
     
     // パターン1: Markdownコードブロック内のJSON
-    let jsonMatch = content.match(/```json([^`]+)```/)
+    let jsonMatch = content.match(/```json\s*([^`]+)\s*```/i)
     if (jsonMatch) {
       jsonStr = jsonMatch[1].trim()
+      console.log('[AI] Found JSON in markdown code block:', jsonStr)
     } else {
-      // パターン2: 末尾の完全なJSONオブジェクトを検索
-      jsonMatch = content.match(/\{[^}]*\}$/m)
+      // パターン2: JSONコードブロック（言語指定なし）
+      jsonMatch = content.match(/```\s*(\{[\s\S]*?\})\s*```/)
       if (jsonMatch) {
-        jsonStr = jsonMatch[0]
+        jsonStr = jsonMatch[1].trim()
+        console.log('[AI] Found JSON in generic code block:', jsonStr)
       } else {
-        // パターン3: 任意のJSON様構造を検索
-        jsonMatch = content.match(/\{[^}]*\}/m)
-        if (jsonMatch) {
-          jsonStr = jsonMatch[0]
+        // パターン3: 堅牢なJSON抽出（ネストしたオブジェクトに対応）
+        jsonStr = extractCompleteJSON(content)
+        if (jsonStr) {
+          console.log('[AI] Found JSON using robust extraction:', jsonStr)
         }
       }
     }
     
     if (!jsonStr) {
-      throw new Error('LM Studio応答にJSON形式が見つかりませんでした')
+      console.warn('[AI] No JSON found in LM Studio response. Attempting fallback generation...')
+      // フォールバック: プレーンテキストからJSONを生成
+      try {
+        jsonStr = generateJSONFromPlainText(text, content)
+        console.log('[AI] Successfully generated JSON from plain text using fallback')
+      } catch (fallbackError) {
+        console.error('[AI] Fallback JSON generation failed:', fallbackError)
+        console.error('[AI] Original LM Studio response:', content)
+        throw new Error('LM Studio応答にJSON形式が見つからず、フォールバック処理も失敗しました')
+      }
     }
     
     // JSON文字列を抽出完了
 
     try {
+      console.log('[AI] Attempting to parse JSON:', jsonStr)
       const parsed = JSON.parse(jsonStr)
+      console.log('[AI] Successfully parsed JSON:', parsed)
       
-      if (!parsed.modified || typeof parsed.modified !== 'string') {
+      // より柔軟な構造チェック
+      const modified = parsed.modified ?? parsed.modifiedText ?? parsed.modified_text ?? ''
+      const violations = parsed.violations ?? parsed.violationList ?? parsed.violation_list ?? []
+      
+      if (!modified || typeof modified !== 'string') {
+        console.error('[AI] Invalid modified field:', { modified, type: typeof modified })
         throw new Error('応答の修正フィールドが無効です')
       }
       
-      if (!Array.isArray(parsed.violations)) {
+      if (!Array.isArray(violations)) {
+        console.error('[AI] Invalid violations field:', { violations, type: typeof violations, isArray: Array.isArray(violations) })
         throw new Error('応答の違反フィールドが無効です')
       }
 
+      console.log('[AI] LM Studio response successfully processed:', { 
+        modified: modified.substring(0, 100) + (modified.length > 100 ? '...' : ''),
+        violationsCount: violations.length 
+      })
+
       return {
         type: 'lmstudio',
-        violations: parsed.violations,
-        modified: parsed.modified
+        violations,
+        modified
       }
     } catch (error) {
+      console.error('[AI] JSON parsing error:', error)
+      console.error('[AI] Failed JSON string:', jsonStr)
+      console.error('[AI] Original content:', content)
       throw new Error(`LM Studio JSON応答の解析に失敗しました: ${error}`)
     }
   } else {
@@ -1022,7 +1211,7 @@ JSON形式:
           properties: {
             modified: {
               type: 'string',
-              description: '薬機法に準拠するよう修正されたテキスト'
+              description: '元のテキストの意味と構造を保持しつつ、違反表現を薬機法準拠の適切な表現に置き換えた修正版テキスト'
             },
             violations: {
               type: 'array',

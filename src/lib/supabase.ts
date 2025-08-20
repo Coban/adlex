@@ -1,6 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Legacy export for backward compatibility
+// 新しいコードではinfra/supabaseから直接インポートしてください
+export { createClientClient as createClient } from '@/infra/supabase'
+export { getClientClient as supabase } from '@/infra/supabase'

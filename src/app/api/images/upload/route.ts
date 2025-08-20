@@ -1,84 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createClient } from '@/lib/supabase/server'
+import {
+  createSuccessResponse,
+  createErrorResponse
+} from '@/core/dtos/images'
+import { getRepositories } from '@/core/ports'
+import { UploadImageUseCase } from '@/core/usecases/images/uploadImage'
+import { createClient } from '@/infra/supabase/serverClient'
 
-// Simple image upload API to Supabase Storage with signed URL response
+/**
+ * 画像アップロードAPI（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Auth
+    // 認証チェック
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
+      )
     }
 
-    const formData = await request.formData()
+    // フォームデータの取得とファイルの基本バリデーション
+    let formData
+    try {
+      formData = await request.formData()
+    } catch {
+      return NextResponse.json(
+        createErrorResponse('VALIDATION_ERROR', '無効なフォームデータです'),
+        { status: 400 }
+      )
+    }
+
     const file = formData.get('image')
     if (!file || !(file instanceof File)) {
-      return NextResponse.json({ error: 'image is required' }, { status: 400 })
+      return NextResponse.json(
+        createErrorResponse('VALIDATION_ERROR', '画像ファイルが必要です'),
+        { status: 400 }
+      )
     }
 
-    // Basic validation
-    const contentType = file.type
-    const size = file.size
-    const accept = ['image/jpeg', 'image/png', 'image/webp']
-    if (!accept.includes(contentType)) {
-      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
-    }
-    if (size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })
-    }
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
 
-    // Path: org/{orgId}/{yyyy}/{mm}/{dd}/{timestamp}-{random}.ext
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-    const orgId = userRow?.organization_id ?? 'unknown'
-
-    const now = new Date()
-    const yyyy = now.getFullYear()
-    const mm = String(now.getMonth() + 1).padStart(2, '0')
-    const dd = String(now.getDate()).padStart(2, '0')
-    const ts = now.getTime()
-    const rand = Math.random().toString(36).slice(2, 8)
-    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
-    const path = `org/${orgId}/${yyyy}/${mm}/${dd}/${ts}-${rand}.${ext}`
-
-    const arrayBuffer = await file.arrayBuffer()
-    const uint8 = new Uint8Array(arrayBuffer)
-
-    const { error: upErr } = await supabase.storage
-      .from('uploads')
-      .upload(path, uint8, { contentType, upsert: false })
-    if (upErr) {
-      console.error('Upload error:', upErr)
-      return NextResponse.json({ error: 'Failed to upload' }, { status: 500 })
-    }
-
-    // Signed URL for short time (1 hour)
-    const { data: signed, error: signErr } = await supabase.storage
-      .from('uploads')
-      .createSignedUrl(path, 60 * 60)
-    if (signErr || !signed?.signedUrl) {
-      console.error('Signed URL error:', signErr)
-      return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
-    }
-
-    // Public URL (permanent storage path)
-    const { data: publicUrl } = supabase.storage
-      .from('uploads')
-      .getPublicUrl(path)
-
-    return NextResponse.json({ 
-      url: publicUrl.publicUrl, 
-      signedUrl: signed.signedUrl 
+    // ユースケース実行
+    const uploadImageUseCase = new UploadImageUseCase(repositories)
+    const result = await uploadImageUseCase.execute({
+      currentUserId: user.id,
+      file: file
     })
-  } catch (e) {
-    console.error('Image upload API error:', e)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
+    }
+
+    // 成功レスポンス
+    return NextResponse.json(
+      createSuccessResponse(result.data)
+    )
+
+  } catch (error) {
+    console.error("画像アップロードAPI エラー:", error)
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }
 

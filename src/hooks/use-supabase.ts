@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/infra/supabase/clientClient'
 
 export function useSupabase() {
   const [supabase] = useState(() => createClient())

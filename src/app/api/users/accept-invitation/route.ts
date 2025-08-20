@@ -1,67 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getRepositories } from "@/core/ports";
+import { AcceptInvitationUseCase } from "@/core/usecases/users/acceptInvitation";
+import { createClient } from "@/infra/supabase/serverClient";
 
 export async function POST(request: NextRequest) {
   try {
-    let body
+    const supabase = await createClient();
+
+    // リクエストボディ解析
+    let body;
     try {
-      body = await request.json()
+      body = await request.json();
     } catch (error) {
-      console.error('Error parsing JSON:', error)
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+      console.error('Error parsing JSON:', error);
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     const { token, password } = body;
 
-    if (!token || !password) {
-      return NextResponse.json(
-        { error: "トークンとパスワードが必要です" },
-        { status: 400 },
-      );
+    // リポジトリコンテナとUseCase作成
+    const repositories = await getRepositories(supabase);
+    const useCase = new AcceptInvitationUseCase(repositories);
+
+    // UseCase実行（事前バリデーションのみ）
+    const validationResult = await useCase.execute({
+      token,
+      password
+    });
+
+    // バリデーション結果処理
+    if (!validationResult.success) {
+      const statusCode = validationResult.code === 'VALIDATION_ERROR' ? 400
+                        : validationResult.code === 'NOT_FOUND_ERROR' ? 404
+                        : validationResult.code === 'CONFLICT_ERROR' ? 409
+                        : 500;
+      return NextResponse.json({ error: validationResult.error }, { status: statusCode });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "パスワードは6文字以上である必要があります" },
-        { status: 400 },
-      );
-    }
-
-    const supabase = await createClient();
-
-    // 有効な招待を確認
-    const { data: invitation, error: invitationError } = await supabase
-      .from("user_invitations")
-      .select("*")
-      .eq("token", token)
-      .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .single();
-
-    if (invitationError || !invitation) {
-      return NextResponse.json(
-        { error: "無効または期限切れの招待リンクです" },
-        { status: 400 },
-      );
-    }
-
-    // 既にユーザーが存在するかチェック
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", invitation.email)
-      .single();
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "このメールアドレスは既に登録されています" },
-        { status: 400 },
-      );
-    }
+    // 招待情報取得（UseCase実行後は有効な招待が存在することが確認済み）
+    const invitation = await repositories.userInvitations.findByToken(token);
 
     // Supabase Authでユーザーを作成
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: invitation.email,
+      email: invitation!.email,
       password,
       options: {
         emailRedirectTo: `${
@@ -91,7 +72,6 @@ export async function POST(request: NextRequest) {
 
     if (acceptError) {
       console.error("Accept invitation error:", acceptError);
-      // ユーザー作成をロールバック（簡略化）
       return NextResponse.json(
         { error: "招待の承認に失敗しました" },
         { status: 500 },

@@ -58,9 +58,28 @@
       "Bash(gh pr view:*)",
       "Bash(gh api:*)",
       "Bash(gh pr review:*)",
-      "Bash(gh pr comment:*)"
+      "Bash(gh pr comment:*)",
+      "Bash(npx:*)",
+      "Bash(cp:*)",
+      "WebSearch",
+      "WebFetch(domain:supalaunch.com)",
+      "Bash(for file in organizations users violations user-invitations)",
+      "Bash(do)",
+      "Bash(sed:*)",
+      "Bash(npm run build:*)",
+      "Bash(tree:*)",
+      "Bash(touch:*)",
+      "Bash(for file in tests/unit/app/api/checks/__tests__/route.test.ts tests/unit/app/api/admin/stats/__tests__/route.test.ts tests/unit/app/api/users/__tests__/route.test.ts)",
+      "Bash(for file in tests/unit/app/auth/auth-code-error/page.test.tsx)",
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:localhost)",
+      "Bash(gh pr list:*)",
+      "Bash(gh issue create:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
-  }
+  },
+  "outputStyle": "Explanatory"
 }

@@ -3,7 +3,8 @@ import fs from 'node:fs'
 import { NextRequest, NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit'
 
-import { createClient } from '@/lib/supabase/server'
+import { getRepositories } from '@/core/ports'
+import { createClient } from '@/infra/supabase/serverClient'
 
 export const runtime = 'nodejs'
 
@@ -27,48 +28,18 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // ユーザー/組織情報
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // ユーザー/組織情報
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
     // チェック詳細取得（違反含む）
-    const { data: check, error: checkError } = await supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        created_at,
-        completed_at,
-        user_id,
-        organization_id,
-        input_type,
-        image_url,
-        extracted_text,
-        users!inner(email),
-        violations(
-          id,
-          start_pos,
-          end_pos,
-          reason,
-          dictionary_id,
-          dictionaries(phrase, category)
-        )
-      `)
-      .eq('id', checkId)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .single()
-
-    if (checkError || !check) {
+    const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id)
+    if (!check) {
       return NextResponse.json({ error: 'Check not found' }, { status: 404 })
     }
 
@@ -78,7 +49,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
 
     // PDF生成（Buffer）
-    const pdfBuffer = await generatePdfBuffer(check)
+    const pdfBuffer = await generatePdfBuffer(check as CheckRow)
 
     const filename = `check_${check.id}.pdf`
     return new NextResponse(new Uint8Array(pdfBuffer), {

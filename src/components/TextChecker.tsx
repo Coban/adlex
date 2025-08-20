@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/infra/supabase/clientClient'
 import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
 
 /**
@@ -337,7 +337,7 @@ export default function TextChecker() {
 
       const checkData = await response.json()
       
-      if (!checkData.id) {
+      if (!checkData.checkId) {
         throw new Error('チェックIDが取得できませんでした')
       }
       
@@ -354,7 +354,7 @@ export default function TextChecker() {
       
       // SSEで結果を待機（ヘッダ不可のため、トークンはクエリで渡す）
       // 個別SSEはできるだけ確実にトークンを付与したいので、タイムアウトを長めにする
-      const eventSource = new EventSource(`/api/checks/${checkData.id}/stream`)
+      const eventSource = new EventSource(`/api/checks/${checkData.checkId}/stream`)
       
       // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0
@@ -374,7 +374,7 @@ export default function TextChecker() {
           const { data: currentCheck, error: pollError } = await supabase
             .from('checks')
             .select('*')
-            .eq('id', checkData.id)
+            .eq('id', checkData.checkId)
             .single()
           
           if (pollError) {
@@ -405,7 +405,7 @@ export default function TextChecker() {
                     notes
                   )
                 `)
-                .eq('check_id', checkData.id)
+                .eq('check_id', checkData.checkId)
               
               // Map violations to component structure
               interface DBViolation {
@@ -534,94 +534,111 @@ export default function TextChecker() {
         timeout
       })
       
+      // デフォルトのメッセージハンドラー（heartbeat用）
       eventSource.onmessage = (event) => {
+        // Heartbeatメッセージの処理（コメント形式のため何もしない）
+        if (event.data.startsWith(': heartbeat')) {
+          console.log('SSE heartbeat received')
+        }
+      }
+      
+      // progressイベントリスナー
+      eventSource.addEventListener('progress', (event) => {
         try {
-          // Skip heartbeat messages
-          if (event.data.startsWith(': heartbeat')) {
-            return
-          }
-          
           const data: CheckStreamData = JSON.parse(event.data)
-          
-          if (data.status === 'completed') {
-            clearInterval(pollingIntervalId)
-            clearTimeout(timeout)
-            cancelControllers.current.delete(checkId)
-            
-            // Map database structure to component structure
-            const mappedViolations = data.violations?.map((v) => ({
-              id: v.id,
-              startPos: v.start_pos,
-              endPos: v.end_pos,
-              reason: v.reason,
-              dictionary_id: v.dictionary_id ?? undefined
-            })) ?? []
-            
-            const checkResult: CheckResult = {
-              id: data.id ?? 0,
-              original_text: data.original_text ?? '',
-              modified_text: data.modified_text ?? '',
-              status: data.status ?? 'completed',
-              violations: mappedViolations
-            }
-            
-            setChecks(prev => prev.map(check => 
-              check.id === checkId 
-                ? { 
-                    ...check, 
-                    result: checkResult,
-                    status: 'completed',
-                    statusMessage: 'チェック完了' 
-                  }
-                : check
-            ))
-            safeCloseEventSource(eventSource)
-          } else if (data.status === 'failed') {
-            clearInterval(pollingIntervalId)
-            clearTimeout(timeout)
-            cancelControllers.current.delete(checkId)
-            const errorMessage = data.error ?? 'チェック処理が失敗しました'
-            console.error('Check failed:', errorMessage)
-            setChecks(prev => prev.map(check => 
-              check.id === checkId 
-                ? { 
-                    ...check, 
-                    status: 'failed',
-                    statusMessage: `エラー: ${errorMessage}` 
-                  }
-                : check
-            ))
-            setErrorMessage(`エラー: ${errorMessage}`)
-            safeCloseEventSource(eventSource)
-          } else if (data.status === 'processing') {
-            setChecks(prev => prev.map(check => 
-              check.id === checkId 
-                ? { 
-                    ...check, 
-                    status: 'processing',
-                    statusMessage: '薬機法違反の検出と修正を実行中...' 
-                  }
-                : check
-            ))
-          }
-        } catch (parseError) {
-          // SSE メッセージの解析に失敗した場合は、SSE を閉じてポーリング継続にフォールバック
-          console.error('Failed to parse SSE data:', parseError, 'Raw data:', event.data)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
               ? { 
                   ...check, 
-                  statusMessage: 'SSEのデータ解析に失敗しました。ポーリングで結果の取得を継続します…' 
+                  status: 'processing',
+                  statusMessage: data.ocr_status === 'processing' 
+                    ? 'OCR処理中...' 
+                    : '薬機法違反の検出と修正を実行中...' 
+                }
+              : check
+          ))
+        } catch (error) {
+          console.error('Failed to parse progress event:', error, event.data)
+        }
+      })
+      
+      // completeイベントリスナー
+      eventSource.addEventListener('complete', (event) => {
+        try {
+          const data: CheckStreamData = JSON.parse(event.data)
+          
+          clearInterval(pollingIntervalId)
+          clearTimeout(timeout)
+          cancelControllers.current.delete(checkId)
+          
+          // Map database structure to component structure
+          const mappedViolations = data.violations?.map((v) => ({
+            id: v.id,
+            startPos: v.start_pos,
+            endPos: v.end_pos,
+            reason: v.reason,
+            dictionary_id: v.dictionary_id ?? undefined
+          })) ?? []
+          
+          const checkResult: CheckResult = {
+            id: data.id ?? 0,
+            original_text: data.original_text ?? '',
+            modified_text: data.modified_text ?? '',
+            status: data.status ?? 'completed',
+            violations: mappedViolations
+          }
+          
+          setChecks(prev => prev.map(check => 
+            check.id === checkId 
+              ? { 
+                  ...check, 
+                  result: checkResult,
+                  status: 'completed',
+                  statusMessage: 'チェック完了' 
                 }
               : check
           ))
           safeCloseEventSource(eventSource)
+        } catch (error) {
+          console.error('Failed to parse complete event:', error)
         }
-      }
+      })
+      
+      // errorイベントリスナー
+      eventSource.addEventListener('error', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data)
+          clearInterval(pollingIntervalId)
+          clearTimeout(timeout)
+          cancelControllers.current.delete(checkId)
+          const errorMessage = data.error ?? 'チェック処理が失敗しました'
+          console.error('Check failed via SSE error event:', errorMessage)
+          setChecks(prev => prev.map(check => 
+            check.id === checkId 
+              ? { 
+                  ...check, 
+                  status: 'failed',
+                  statusMessage: `エラー: ${errorMessage}` 
+                }
+              : check
+          ))
+          setErrorMessage(`エラー: ${errorMessage}`)
+          safeCloseEventSource(eventSource)
+        } catch (error) {
+          console.error('Failed to parse error event:', error)
+        }
+      })
 
       eventSource.onerror = (error) => {
         // SSE 接続に失敗した場合でも、ポーリングは継続しているため失敗扱いにしない
         console.error('SSE connection error:', error)
+        console.error('SSE readyState:', eventSource.readyState)
+        console.error('SSE url:', eventSource.url)
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.error('SSE connection was closed')
+        } else if (eventSource.readyState === EventSource.CONNECTING) {
+          console.error('SSE is still trying to connect')
+        }
         setChecks(prev => prev.map(check => 
           check.id === checkId 
             ? { 
@@ -630,9 +647,8 @@ export default function TextChecker() {
               }
             : check
         ))
-        safeCloseEventSource(eventSource)
       }
-
+      
     } catch (error) {
       console.error('Error during check:', error)
       
