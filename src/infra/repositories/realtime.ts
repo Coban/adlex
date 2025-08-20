@@ -42,6 +42,11 @@ export class SupabaseRealtimeRepository implements RealtimeRepository {
         filter: `id=eq.${params.checkId}`
       }, (payload: { new: unknown; old: unknown; eventType: string }) => {
         const updatedCheck = payload.new as Database['public']['Tables']['checks']['Row']
+        console.log(`[Realtime] Received update for check ${params.checkId}:`, {
+          status: updatedCheck.status,
+          completed_at: updatedCheck.completed_at,
+          error_message: updatedCheck.error_message
+        })
         
         // CheckUpdateData形式に変換
         const updateData: CheckUpdateData = {
@@ -53,6 +58,7 @@ export class SupabaseRealtimeRepository implements RealtimeRepository {
           error_message: updatedCheck.error_message
         }
 
+        console.log(`[Realtime] Calling onUpdate with status: ${updateData.status}`)
         params.onUpdate(updateData)
       })
       .subscribe(async (status, err) => {

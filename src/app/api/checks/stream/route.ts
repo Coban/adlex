@@ -9,14 +9,24 @@ import type { Database } from '@/types/database.types'
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
 
-  // 認証チェック
-  const authResult = await supabase.auth.getUser()
+  // クエリパラメータからトークンを取得（EventSourceはheaderを送れないため）
+  const url = new URL(request.url)
+  const token = url.searchParams.get('token')
+
+  // 認証チェック（トークンがある場合は明示的に設定）
+  let authResult
+  if (token) {
+    authResult = await supabase.auth.getUser(token)
+  } else {
+    authResult = await supabase.auth.getUser()
+  }
+  
   const user = authResult.data.user
   const authError = authResult.error
   
   const currentUser = user
   if (authError || !currentUser) {
-    // 同一オリジンではクッキー認証のみを許可
+    // 認証失敗
     return new Response('Unauthorized', { status: 401 })
   }
 

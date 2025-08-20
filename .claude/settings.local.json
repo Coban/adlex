@@ -71,7 +71,8 @@
       "Bash(touch:*)",
       "Bash(for file in tests/unit/app/api/checks/__tests__/route.test.ts tests/unit/app/api/admin/stats/__tests__/route.test.ts tests/unit/app/api/users/__tests__/route.test.ts)",
       "Bash(for file in tests/unit/app/auth/auth-code-error/page.test.tsx)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:localhost)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

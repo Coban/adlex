@@ -36,13 +36,44 @@ export async function GET(
     const checkId = parseInt(paramsValidation.data.id)
     const supabase = await createClient()
 
-    // 認証チェック
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    // クエリパラメータからトークンを取得（EventSourceはheaderを送れないため）
+    const url = new URL(request.url)
+    const token = url.searchParams.get('token')
+    
+    // 認証チェック（トークンがある場合は明示的に設定）
+    if (token) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+      if (authError || !user) {
+        return new Response(
+          formatSSEMessage(StreamEventType.Error, createErrorResponse(
+            'AUTHENTICATION_ERROR',
+            '認証が必要です（トークン無効）'
+          )),
+          { status: 401, headers: getSSEHeaders() }
+        )
+      }
+    } else {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        return new Response(
+          formatSSEMessage(StreamEventType.Error, createErrorResponse(
+            'AUTHENTICATION_ERROR',
+            '認証が必要です'
+          )),
+          { status: 401, headers: getSSEHeaders() }
+        )
+      }
+    }
+    
+    // ユーザー情報を再取得（上記のどちらのパスでも user が設定されている）
+    const { data: { user }, error: finalAuthError } = token 
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser()
+    if (finalAuthError || !user) {
       return new Response(
         formatSSEMessage(StreamEventType.Error, createErrorResponse(
           'AUTHENTICATION_ERROR',
-          '認証が必要です'
+          '最終認証チェックに失敗しました'
         )),
         { status: 401, headers: getSSEHeaders() }
       )

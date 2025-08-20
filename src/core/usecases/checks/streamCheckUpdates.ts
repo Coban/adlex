@@ -200,6 +200,7 @@ export class StreamCheckUpdatesUseCase {
         // 進捗更新時の処理
         if (data.status === 'completed' || data.status === 'failed') {
           // 処理完了時
+          console.log(`[SSE] Status changed to ${data.status}, calling handleCompletion for check ${input.checkId}`)
           this.handleCompletion(input)
         } else {
           // 進捗更新時
@@ -251,9 +252,12 @@ export class StreamCheckUpdatesUseCase {
    * 処理完了時の共通処理
    */
   private async handleCompletion(input: StreamCheckUpdatesInput): Promise<void> {
+    console.log(`[SSE] handleCompletion called for check ${input.checkId}`)
     this.clearTimeouts()
     const finalData = await this.repositories.realtime.getFinalCheckData(input.checkId)
+    console.log(`[SSE] Final data retrieved:`, finalData ? { id: finalData.id, status: finalData.status } : 'null')
     if (finalData && typeof input.onComplete === 'function') {
+      console.log(`[SSE] Calling onComplete for check ${input.checkId}`)
       // FinalCheckDataをStreamCompleteDataに変換
       input.onComplete({
         id: finalData.id,
