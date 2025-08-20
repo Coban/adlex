@@ -36,9 +36,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 結果処理
     if (!result.success) {
-      const statusCode = result.error === '無効なIDです' ? 400
-                        : result.error === 'ユーザープロファイルが見つかりません' ? 401
-                        : result.error === '辞書項目が見つかりません' ? 404
+      const statusCode = result.code === 'VALIDATION_ERROR' ? 400
+                        : result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
                         : 500;
       return NextResponse.json({ error: result.error }, { status: statusCode });
     }
