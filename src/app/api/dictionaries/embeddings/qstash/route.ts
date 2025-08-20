@@ -1,9 +1,9 @@
 import { Receiver } from '@upstash/qstash'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createEmbedding } from '@/lib/ai-client'
-import { getRepositories } from '@/lib/repositories'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getRepositories } from '@/core/ports'
+import { UpdateEmbeddingUseCase } from '@/core/usecases/dictionaries/updateEmbedding'
+import { createAdminClient } from '@/infra/supabase/adminClient'
 
 // Verify QStash signature
 const receiver = new Receiver({
@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text()
     const signature = request.headers.get('Upstash-Signature') ?? ''
 
+    // QStash署名検証
     const isValid = await receiver.verify({
       signature,
       body: rawBody,
@@ -26,29 +27,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
+    // リクエストボディ解析
     const { dictionaryId, organizationId, phrase } = JSON.parse(rawBody ?? '{}') as {
       dictionaryId: number
       organizationId: number
       phrase: string
     }
 
-    if (!dictionaryId || !organizationId || !phrase) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
-    }
-
+    // リポジトリコンテナとUseCase作成
     const supabase = createAdminClient()
     const repositories = await getRepositories(supabase)
+    const useCase = new UpdateEmbeddingUseCase(repositories)
 
-    // regenerate embedding
-    const vector = await createEmbedding(phrase)
-    const updated = await repositories.dictionaries.updateVector(dictionaryId, vector)
+    // UseCase実行
+    const result = await useCase.execute({
+      dictionaryId,
+      organizationId,
+      phrase
+    })
 
-    if (!updated) {
-      console.error('Failed to update dictionary vector')
-      return NextResponse.json({ error: 'Failed to update dictionary vector' }, { status: 500 })
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'VALIDATION_ERROR' ? 400 
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : 500
+      return NextResponse.json({ error: result.error }, { status: statusCode })
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json(result.data)
   } catch (error) {
     console.error('QStash worker error:', error)
     return NextResponse.json({ error: (error as Error).message }, { status: 500 })

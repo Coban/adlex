@@ -1,173 +1,102 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
+import {
+  validateGetCheckHistoryStatsQuery,
+  createSuccessResponse,
+  createErrorResponse
+} from '@/core/dtos/check-history'
+import { getRepositories } from '@/core/ports'
+import { GetCheckHistoryStatsUseCase } from '@/core/usecases/check-history/getCheckHistoryStats'
+import { createClient } from '@/infra/supabase/serverClient'
 
+/**
+ * チェック履歴統計取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const searchParams = request.nextUrl.searchParams
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
+      )
     }
 
-    // Get repositories
+    // クエリパラメータの取得とバリデーション
+    const url = new URL(request.url)
+    const queryData = {
+      period: url.searchParams.get("period") ?? 'month',
+      organizationId: url.searchParams.get("organizationId") ? parseInt(url.searchParams.get("organizationId")!) : undefined
+    }
+
+    const validationResult = validateGetCheckHistoryStatsQuery(queryData)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
+    }
+
+    // リポジトリコンテナの取得
     const repositories = await getRepositories(supabase)
 
-    // Get user data with role and organization
-    const userData = await repositories.users.findById(user.id)
-    if (!userData?.organization_id) {
-      return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
+    // ユースケース実行
+    const getCheckHistoryStatsUseCase = new GetCheckHistoryStatsUseCase(repositories)
+    const result = await getCheckHistoryStatsUseCase.execute({
+      currentUserId: user.id,
+      period: validationResult.data.period,
+      organizationId: validationResult.data.organizationId
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
     }
 
-    // Parse query parameters for date range
-    const period = searchParams.get('period') ?? 'month' // week, month, quarter, year
-    const userId = searchParams.get('userId') ?? ''
-
-    // Calculate date range based on period
-    const now = new Date()
-    let startDate: Date
-
-    switch (period) {
-      case 'week':
-        startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000))
-        break
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-        break
-      case 'quarter':
-        const quarter = Math.floor(now.getMonth() / 3)
-        startDate = new Date(now.getFullYear(), quarter * 3, 1)
-        break
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1)
-        break
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-    }
-
-
-    // Determine userId based on role
-    let searchUserId: string | undefined
-    if (userData.role === 'user') {
-      searchUserId = userData.id
-    } else if (userData.role === 'admin' && userId) {
-      searchUserId = userId
-    }
-
-    // Get total checks count
-    const totalChecks = await repositories.checks.countByDateRange(
-      startDate.toISOString(),
-      now.toISOString()
+    // 成功レスポンス
+    return NextResponse.json(
+      createSuccessResponse(result.data)
     )
-
-    // Get checks for status breakdown and daily activity
-    const checksForPeriod = await repositories.checks.findMany({
-      where: {
-        organization_id: userData.organization_id,
-        user_id: searchUserId,
-        created_at: startDate.toISOString(),
-        deleted_at: null
-      },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
-    })
-
-    // Process status and input type breakdown from the same data
-    const statusBreakdown = checksForPeriod.reduce((acc: Record<string, number>, item) => {
-      const status = item.status ?? 'unknown'
-      acc[status] = (acc[status] ?? 0) + 1
-      return acc
-    }, {})
-
-    const inputTypeBreakdown = checksForPeriod.reduce((acc: Record<string, number>, item) => {
-      const inputType = item.input_type ?? 'unknown'
-      acc[inputType] = (acc[inputType] ?? 0) + 1
-      return acc
-    }, {})
-
-    // Get violations statistics
-    // Since we need violation counts, we'll need to get detailed violations
-    const checksWithViolations = await Promise.all(
-      checksForPeriod.map(async (check) => {
-        const violations = await repositories.violations.findByCheckId(check.id)
-        return {
-          id: check.id,
-          violations
-        }
-      })
-    )
-
-    // Process violation statistics
-    const violationStats = checksWithViolations.reduce((acc, check) => {
-      const violationCount = check.violations?.length ?? 0
-      acc.totalViolations += violationCount
-      if (violationCount > 0) {
-        acc.checksWithViolations += 1
-      }
-      acc.maxViolationsInSingleCheck = Math.max(acc.maxViolationsInSingleCheck, violationCount)
-      return acc
-    }, {
-      totalViolations: 0,
-      checksWithViolations: 0,
-      maxViolationsInSingleCheck: 0
-    })
-
-    // Get daily activity for the period (last 30 days max)
-    const activityDays = Math.min(30, Math.ceil((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)))
-    const dailyActivity: Record<string, number> = {}
-    
-    for (let i = 0; i < activityDays; i++) {
-      const date = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000))
-      const dateKey = date.toISOString().split('T')[0]
-      dailyActivity[dateKey] = 0
-    }
-
-    checksForPeriod.forEach(check => {
-      if (check.created_at) {
-        const dateKey = new Date(check.created_at).toISOString().split('T')[0]
-        if (dailyActivity.hasOwnProperty(dateKey)) {
-          dailyActivity[dateKey] += 1
-        }
-      }
-    })
-
-    const stats = {
-      period,
-      startDate: startDate.toISOString(),
-      endDate: now.toISOString(),
-      totalChecks: totalChecks ?? 0,
-      statusBreakdown: {
-        pending: statusBreakdown.pending || 0,
-        processing: statusBreakdown.processing || 0,
-        completed: statusBreakdown.completed || 0,
-        failed: statusBreakdown.failed || 0
-      },
-      inputTypeBreakdown: {
-        text: inputTypeBreakdown.text || 0,
-        image: inputTypeBreakdown.image || 0
-      },
-      violationStats: {
-        totalViolations: violationStats.totalViolations,
-        checksWithViolations: violationStats.checksWithViolations,
-        averageViolationsPerCheck: totalChecks ? (violationStats.totalViolations / (totalChecks ?? 1)).toFixed(2) : '0',
-        maxViolationsInSingleCheck: violationStats.maxViolationsInSingleCheck,
-        violationRate: totalChecks ? ((violationStats.checksWithViolations / (totalChecks ?? 1)) * 100).toFixed(1) : '0'
-      },
-      dailyActivity: Object.entries(dailyActivity)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .reduce((acc, [date, count]) => {
-          acc[date] = count
-          return acc
-        }, {} as Record<string, number>)
-    }
-
-    return NextResponse.json({ stats })
 
   } catch (error) {
-    console.error('Statistics API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("チェック履歴統計取得API エラー:", error)
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

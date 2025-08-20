@@ -1,76 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
+import { getRepositories } from '@/core/ports'
+import { CancelCheckUseCase } from '@/core/usecases/checks/cancelCheck'
+import { createClient } from '@/infra/supabase/serverClient'
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const checkId = parseInt(id)
-
-  if (isNaN(checkId)) {
-    return NextResponse.json({ error: 'Invalid check ID' }, { status: 400 })
-  }
-
-  const supabase = await createClient()
-
-  // Verify user has access to this check
-  const authResult = await supabase.auth.getUser()
-  const user = authResult.data.user
-  const authError = authResult.error
-  
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Get repositories
-  const repositories = await getRepositories(supabase)
-
-  // Get check data to verify ownership
-  const checkData = await repositories.checks.findById(checkId)
-  if (!checkData) {
-    return NextResponse.json({ error: 'Check not found' }, { status: 404 })
-  }
-  
-  // Further validation to ensure user can access this check
-  const userProfile = await repositories.users.findById(user.id)
-  if (!userProfile || 
-      (userProfile.role === 'user' && checkData.user_id !== user.id) || 
-      (userProfile.organization_id !== checkData.organization_id)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  // Only allow cancellation of pending or processing checks
-  if (checkData.status !== 'pending' && checkData.status !== 'processing') {
-    return NextResponse.json({ 
-      error: 'Can only cancel pending or processing checks',
-      currentStatus: checkData.status 
-    }, { status: 400 })
-  }
-
   try {
-    // Update check status to cancelled
-    const updatedCheck = await repositories.checks.update(checkId, { 
-      status: 'failed',
-      error_message: 'ユーザーによってキャンセルされました',
-      completed_at: new Date().toISOString()
-    })
+    const { id } = await params
+    const checkId = parseInt(id)
 
-    if (!updatedCheck) {
-      console.error(`[CANCEL] Failed to update check ${checkId}: Update failed`)
-      return NextResponse.json({ error: 'Failed to cancel check' }, { status: 500 })
+    const supabase = await createClient()
+
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
-    return NextResponse.json({ 
+    // リポジトリコンテナとUseCase作成
+    const repositories = await getRepositories(supabase)
+    const useCase = new CancelCheckUseCase(repositories)
+
+    // UseCase実行
+    const result = await useCase.execute({
+      checkId,
+      currentUserId: user.id
+    })
+
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500
+      return NextResponse.json({ error: result.error }, { status: statusCode })
+    }
+
+    return NextResponse.json({
       success: true,
-      message: 'Check cancelled successfully',
-      checkId 
+      message: result.data.message,
+      checkId: result.data.checkId
     })
 
   } catch (error) {
-    console.error(`[CANCEL] Error cancelling check ${checkId}:`, error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[API] Cancel check error:', error)
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
 }

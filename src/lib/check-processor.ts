@@ -1,5 +1,5 @@
+import { createClient } from '@/infra/supabase/serverClient'
 import { cache, CacheUtils } from '@/lib/cache'
-import { createClient } from '@/lib/supabase/server'
 import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**

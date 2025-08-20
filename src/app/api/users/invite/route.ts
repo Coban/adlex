@@ -1,132 +1,78 @@
-import { randomBytes } from "crypto";
-
 import { NextRequest, NextResponse } from "next/server";
 
-import { getRepositories } from "@/lib/repositories";
-import { createClient } from "@/lib/supabase/server";
+import { createErrorResponse } from '@/core/dtos/users';
+import { getRepositories } from "@/core/ports";
+import { InviteUserUseCase } from "@/core/usecases/users/inviteUser";
+import { createClient } from "@/infra/supabase/serverClient";
 
 export async function POST(request: NextRequest) {
   try {
-    let body
-    try {
-      body = await request.json()
-    } catch (error) {
-      console.error('Error parsing JSON:', error)
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
-    const { email, role = "user" } = body;
-
-    if (!email) {
-      return NextResponse.json(
-        { error: "メールアドレスが必要です" },
-        { status: 400 },
-      );
-    }
-
-    if (!["admin", "user"].includes(role)) {
-      return NextResponse.json(
-        { error: "無効なロールです" },
-        { status: 400 },
-      );
-    }
-
     const supabase = await createClient();
 
-    // 現在のユーザーを取得
+    // 認証チェック
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: "認証が必要です" },
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
         { status: 401 },
       );
     }
 
-    // Get repositories
+    // リクエストボディ解析
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      console.error('Error parsing JSON:', error);
+      return NextResponse.json(
+        createErrorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
+        { status: 400 }
+      );
+    }
+    const { email, role = "user" } = body;
+
+    // リポジトリコンテナとUseCase作成
     const repositories = await getRepositories(supabase);
+    const useCase = new InviteUserUseCase(repositories);
 
-    // 現在のユーザー情報を取得
-    const currentUser = await repositories.users.findById(user.id);
-    if (!currentUser) {
-      return NextResponse.json(
-        { error: "ユーザー情報の取得に失敗しました" },
-        { status: 400 },
-      );
-    }
-
-    // 管理者権限をチェック
-    if (currentUser.role !== "admin") {
-      return NextResponse.json(
-        { error: "管理者権限が必要です" },
-        { status: 403 },
-      );
-    }
-
-    // 組織IDを確認
-    if (!currentUser.organization_id) {
-      return NextResponse.json(
-        { error: "組織に所属していません" },
-        { status: 400 },
-      );
-    }
-
-    // 既に同じメールアドレスのユーザーが存在するかチェック
-    const existingUser = await repositories.users.findByEmail(email);
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "このメールアドレスは既に登録されています" },
-        { status: 400 },
-      );
-    }
-
-    // 既存の未承認の招待があるかチェック
-    const existingInvitation = await repositories.userInvitations.findActiveInvitationByEmail(
-      email, 
-      currentUser.organization_id
-    );
-    if (existingInvitation) {
-      return NextResponse.json(
-        { error: "このメールアドレスには既に招待が送信されています" },
-        { status: 400 },
-      );
-    }
-
-    // 招待トークンを生成
-    const token = randomBytes(32).toString("hex");
-
-    // 招待レコードを作成
-    const invitation = await repositories.userInvitations.create({
-      organization_id: currentUser.organization_id,
+    // UseCase実行
+    const result = await useCase.execute({
+      currentUserId: user.id,
       email,
-      role,
-      token,
-      invited_by: user.id,
+      role
     });
 
-    // 招待メールを送信（実装は簡略化）
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.error.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.error.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.error.code === 'VALIDATION_ERROR' ? 400
+                        : result.error.code === 'CONFLICT_ERROR' ? 409
+                        : 500;
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      );
+    }
+
+    // 招待URL生成（暫定的にフロントエンド用）
     const invitationUrl = `${
       process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-    }/auth/invitation?token=${token}`;
-
-    // TODO: 実際のメール送信サービスを統合
-    // 招待メール送信予定:
-    // 宛先: ${email}
-    // 招待URL: ${invitationUrl}
-    // ロール: ${role}
+    }/auth/invitation?token=placeholder`;
 
     return NextResponse.json({
-      message: "招待を送信しました",
+      message: result.data.message,
       invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        expires_at: invitation.expires_at,
+        id: result.data.invitationId,
+        email: result.data.email,
+        role: result.data.role,
         invitation_url: invitationUrl,
       },
     });
   } catch (error) {
     console.error("Invite user error:", error);
     return NextResponse.json(
-      { error: "招待の送信に失敗しました" },
+      createErrorResponse('INTERNAL_ERROR', '招待の送信に失敗しました'),
       { status: 500 },
     );
   }

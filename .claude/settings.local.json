@@ -65,7 +65,13 @@
       "WebFetch(domain:supalaunch.com)",
       "Bash(for file in organizations users violations user-invitations)",
       "Bash(do)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(npm run build:*)",
+      "Bash(tree:*)",
+      "Bash(touch:*)",
+      "Bash(for file in tests/unit/app/api/checks/__tests__/route.test.ts tests/unit/app/api/admin/stats/__tests__/route.test.ts tests/unit/app/api/users/__tests__/route.test.ts)",
+      "Bash(for file in tests/unit/app/auth/auth-code-error/page.test.tsx)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

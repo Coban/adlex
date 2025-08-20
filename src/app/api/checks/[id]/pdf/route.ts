@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import { NextRequest, NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit'
 
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
+import { getRepositories } from '@/core/ports'
+import { createClient } from '@/infra/supabase/serverClient'
 
 export const runtime = 'nodejs'
 

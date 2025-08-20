@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 
+import { getRepositories } from '@/core/ports'
+import { createClient } from '@/infra/supabase/serverClient'
 import { queueManager } from '@/lib/queue-manager'
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database.types'
 
 // キュー状況とチェック進捗を統合配信するSSEエンドポイント

@@ -1,75 +1,107 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from 'next/server'
 
-import { getRepositories } from "@/lib/repositories"
-import { createClient } from "@/lib/supabase/server"
-import { Database } from "@/types/database.types"
+import {
+  validateBulkUpdateDictionariesRequest,
+  createSuccessResponse,
+  createErrorResponse
+} from '@/core/dtos/dictionaries'
+import { getRepositories } from '@/core/ports'
+import { BulkUpdateDictionariesUseCase } from '@/core/usecases/dictionaries/bulkUpdateDictionaries'
+import { createClient } from '@/infra/supabase/serverClient'
 
-type DictionaryUpdate = Database["public"]["Tables"]["dictionaries"]["Update"]
-
+/**
+ * 辞書一括更新API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 })
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
+      )
     }
 
-    // Get repositories
-    const repositories = await getRepositories(supabase)
-
-    const userProfile = await repositories.users.findById(user.id)
-    if (!userProfile?.organization_id) {
-      return NextResponse.json({ error: "ユーザープロファイルが見つかりません" }, { status: 404 })
-    }
-
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 })
-    }
-
-    let body: unknown
+    // リクエストボディの取得と基本バリデーション
+    let body
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+      return NextResponse.json(
+        createErrorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
+        { status: 400 }
+      )
     }
 
-    const payload = body as { updates: { id: number; patch: Pick<DictionaryUpdate, 'phrase' | 'category' | 'notes'> }[] }
-    if (!payload?.updates || !Array.isArray(payload.updates)) {
-      return NextResponse.json({ error: 'updates配列が必要です' }, { status: 400 })
+    // DTOバリデーション
+    const validationResult = validateBulkUpdateDictionariesRequest(body)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
     }
 
-    // 1件ずつ更新（組織チェックを含めた安全な更新）
-    let success = 0
-    let failure = 0
-    for (const u of payload.updates) {
-      if (!u?.id || !u.patch) { failure++; continue }
-      
-      try {
-        // 組織に属する辞書アイテムか検証
-        const existingItem = await repositories.dictionaries.findByIdAndOrganization(u.id, userProfile.organization_id)
-        if (!existingItem) {
-          failure++
-          continue
-        }
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
 
-        const updates: DictionaryUpdate = {
-          ...u.patch,
-          updated_at: new Date().toISOString(),
-        }
-        
-        const updated = await repositories.dictionaries.update(u.id, updates)
-        if (updated) { success++ } else { failure++ }
-      } catch (error) {
-        console.error(`Error updating dictionary item ${u.id}:`, error)
-        failure++
-      }
+    // ユースケース実行
+    const bulkUpdateDictionariesUseCase = new BulkUpdateDictionariesUseCase(repositories)
+    const result = await bulkUpdateDictionariesUseCase.execute({
+      currentUserId: user.id,
+      updates: validationResult.data.updates
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
     }
 
-    return NextResponse.json({ success, failure })
-  } catch (e) {
-    console.error('一括更新APIエラー:', e)
-    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
+    // 成功レスポンス
+    return NextResponse.json(
+      createSuccessResponse(result.data)
+    )
+
+  } catch (error) {
+    console.error("辞書一括更新API エラー:", error)
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }
 

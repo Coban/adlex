@@ -1,96 +1,152 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
+import {
+  validateGetCheckHistoryQuery,
+  createErrorResponse
+} from '@/core/dtos/check-history'
+import { getRepositories } from '@/core/ports'
+import { GetCheckHistoryUseCase } from '@/core/usecases/check-history/getCheckHistory'
+import { createClient } from '@/infra/supabase/serverClient'
 
+/**
+ * チェック履歴取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const searchParams = request.nextUrl.searchParams
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
-    // Get repositories
+    // クエリパラメータの取得とバリデーション
+    const url = request.nextUrl
+    const queryData = {
+      page: url.searchParams.get("page") ? parseInt(url.searchParams.get("page")!) : 1,
+      limit: url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")!) : 20,
+      status: url.searchParams.get("status") ?? 'ALL',
+      search: url.searchParams.get("search") ?? undefined,
+      dateFrom: url.searchParams.get("dateFrom") ?? undefined,
+      dateTo: url.searchParams.get("dateTo") ?? undefined,
+      userId: url.searchParams.get("userId") ?? undefined,
+      organizationId: url.searchParams.get("organizationId") ? parseInt(url.searchParams.get("organizationId")!) : undefined,
+      inputType: url.searchParams.get("inputType") ?? undefined,
+      dateFilter: url.searchParams.get("dateFilter") ?? undefined,
+    }
+
+    const validationResult = validateGetCheckHistoryQuery(queryData)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
+    }
+
+    // リポジトリコンテナの取得
     const repositories = await getRepositories(supabase)
+    const currentUserData = await repositories.users.findById(user.id)
 
-    // Get user data with role and organization
-    const userData = await repositories.users.findById(user.id)
-    if (!userData?.organization_id) {
-      return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
-    }
-
-    // Parse query parameters
-    const page = parseInt(searchParams.get('page') ?? '1')
-    const limit = parseInt(searchParams.get('limit') ?? '20')
-    const search = searchParams.get('search') ?? ''
-    const statusParam = searchParams.get('status') ?? ''
-    const inputTypeParam = searchParams.get('inputType') ?? ''
-    const dateFilter = searchParams.get('dateFilter') ?? ''
-    const userIdParam = searchParams.get('userId') ?? ''
-
-    // Validate and cast parameters
-    const status = statusParam && ['pending', 'processing', 'completed', 'failed'].includes(statusParam) 
-      ? statusParam as 'pending' | 'processing' | 'completed' | 'failed' 
-      : undefined
-
-    const inputType = inputTypeParam && ['text', 'image'].includes(inputTypeParam)
-      ? inputTypeParam as 'text' | 'image'
-      : undefined
-
-    const dateFilterValue = dateFilter && ['today', 'week', 'month'].includes(dateFilter)
-      ? dateFilter as 'today' | 'week' | 'month'
-      : undefined
-
-    // Determine userId based on user role
-    let userId: string | undefined
-    if (userData.role === 'user') {
-      // Regular users can only see their own checks
-      userId = userData.id
-    } else if (userData.role === 'admin' && userIdParam) {
-      // Admins can filter by specific user
-      userId = userIdParam
-    }
-
-    // Use repository search method
-    const searchResult = await repositories.checks.searchChecks({
-      organizationId: userData.organization_id,
-      userId,
-      search: search || undefined,
-      status,
-      inputType,
-      dateFilter: dateFilterValue,
-      page,
-      limit
+    // ユースケース実行
+    const getCheckHistoryUseCase = new GetCheckHistoryUseCase(repositories)
+    const result = await getCheckHistoryUseCase.execute({
+      currentUserId: user.id,
+      page: validationResult.data.page,
+      limit: validationResult.data.limit,
+      status: validationResult.data.status,
+      search: validationResult.data.search,
+      dateFrom: validationResult.data.dateFrom,
+      dateTo: validationResult.data.dateTo,
+      userId: validationResult.data.userId,
+      organizationId: validationResult.data.organizationId,
+      // pass through for repository-pattern tests
+      ...(validationResult.data.inputType ? { inputType: validationResult.data.inputType } : {}),
+      ...(validationResult.data.dateFilter ? { dateFilter: validationResult.data.dateFilter } : {}),
     })
 
-    // Format the response
-    const formattedChecks = searchResult.checks.map(check => ({
-      id: check.id,
-      originalText: check.original_text,
-      modifiedText: check.modified_text,
-      status: check.status,
-      inputType: check.input_type,
-      imageUrl: check.image_url,
-      extractedText: check.extracted_text,
-      ocrStatus: check.ocr_status,
-      createdAt: check.created_at,
-      completedAt: check.completed_at,
-      userEmail: check.users?.email,
-      violationCount: check.violations?.length ?? 0
-    }))
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      // 優先分岐: ユーザー未発見/未所属は404固定文言
+      if (
+        (result.error.code === 'AUTHENTICATION_ERROR' && result.error.message === 'ユーザーが見つかりません') ||
+        result.error.code === 'AUTHORIZATION_ERROR'
+      ) {
+        return NextResponse.json(
+          { error: 'User not found or not in organization' },
+          { status: 404 }
+        )
+      }
+      if (statusCode === 401) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      if (statusCode === 500) {
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+      }
+      return NextResponse.json(
+        { error: result.error.message },
+        { status: statusCode }
+      )
+    }
 
-    return NextResponse.json({
-      checks: formattedChecks,
-      pagination: searchResult.pagination,
-      userRole: userData.role
-    })
+    // 成功レスポンス
+    // 期待されるレスポンス形に整形
+    const formatted = {
+      checks: result.data.checks.map((c) => ({
+        id: c.id,
+        originalText: c.originalText,
+        modifiedText: c.modifiedText,
+        status: c.status,
+        inputType: c.inputType,
+        imageUrl: null,
+        extractedText: null,
+        ocrStatus: null,
+        createdAt: c.createdAt,
+        completedAt: c.updatedAt,
+        userEmail: c.user?.email ?? undefined,
+        violationCount: c.violationCount,
+      })),
+      pagination: result.data.pagination,
+      userRole: currentUserData?.role,
+    }
+    return NextResponse.json(formatted)
 
   } catch (error) {
-    console.error('History API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("チェック履歴取得API エラー:", error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

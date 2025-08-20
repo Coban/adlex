@@ -4,8 +4,8 @@ import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
+import { createClient } from '@/infra/supabase/clientClient'
 import { apiClient } from '@/lib/api-client'
-import { createClient } from '@/lib/supabase/client'
 import { UserProfile, Organization } from '@/types'
 
 interface AuthContextType {

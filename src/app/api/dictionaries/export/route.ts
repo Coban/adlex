@@ -1,66 +1,105 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getRepositories } from "@/lib/repositories"
-import { createClient } from "@/lib/supabase/server"
+import {
+  validateExportDictionariesQuery,
+  createErrorResponse
+} from '@/core/dtos/dictionaries'
+import { getRepositories } from "@/core/ports"
+import { ExportDictionariesUseCase } from '@/core/usecases/dictionaries/exportDictionaries'
+import { createClient } from "@/infra/supabase/serverClient"
 
-function escapeCsvField(value: string | null | undefined): string {
-  const text = (value ?? "").replace(/\r\n|\r|\n/g, "\n")
-  if (text.includes("\n") || text.includes(",") || text.includes('"')) {
-    return '"' + text.replace(/"/g, '""') + '"'
-  }
-  return text
-}
-
-export async function GET(_request: NextRequest) {
+/**
+ * 辞書エクスポートAPI（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 })
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
+      )
     }
 
-    // Get repositories
+    // クエリパラメータの取得とバリデーション
+    const url = new URL(request.url)
+    const queryParams = {
+      format: url.searchParams.get('format') ?? 'csv'
+    }
+
+    const validationResult = validateExportDictionariesQuery(queryParams)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
+    }
+
+    // リポジトリコンテナの取得
     const repositories = await getRepositories(supabase)
 
-    // 組織と権限確認
-    const userProfile = await repositories.users.findById(user.id)
-    if (!userProfile?.organization_id) {
-      return NextResponse.json({ error: "ユーザープロファイルが見つかりません" }, { status: 404 })
+    // ユースケース実行
+    const exportDictionariesUseCase = new ExportDictionariesUseCase(repositories)
+    const result = await exportDictionariesUseCase.execute({
+      currentUserId: user.id,
+      format: validationResult.data.format
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
     }
 
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 })
-    }
-
-    const dictionaries = await repositories.dictionaries.findByOrganizationId(
-      userProfile.organization_id,
-      {
-        orderBy: [{ field: 'created_at', direction: 'asc' }]
-      }
-    )
-
-    const header = ["phrase", "category", "notes"].join(",")
-    const rows = dictionaries.map((d) => [
-      escapeCsvField(d.phrase),
-      escapeCsvField(d.category),
-      escapeCsvField(d.notes ?? null)
-    ].join(","))
-
-    // Excel互換のためBOM付きUTF-8
-    const csv = "\ufeff" + [header, ...rows].join("\n")
-
-    return new NextResponse(csv, {
+    // 成功レスポンス（ファイルダウンロード）
+    return new NextResponse(result.data.content, {
       status: 200,
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": "attachment; filename=\"dictionaries.csv\"",
-        "Cache-Control": "no-store",
-      },
+        'Content-Type': result.data.contentType,
+        'Content-Disposition': `attachment; filename="${result.data.filename}"`,
+        'Cache-Control': 'no-cache'
+      }
     })
-  } catch (e) {
-    console.error("CSVエクスポートAPIエラー:", e)
-    return NextResponse.json({ error: "サーバーエラーが発生しました" }, { status: 500 })
+
+  } catch (error) {
+    console.error("辞書エクスポートAPI エラー:", error)
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }
 

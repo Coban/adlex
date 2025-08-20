@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getRepositories } from '@/lib/repositories'
-import { createClient } from '@/lib/supabase/server'
+import { getRepositories } from '@/core/ports'
+import { DeleteCheckUseCase } from '@/core/usecases/checks/deleteCheck'
+import { GetCheckDetailUseCase } from '@/core/usecases/checks/getCheckDetail'
+import { createClient } from '@/infra/supabase/serverClient'
 
 interface RouteParams {
   params: Promise<{
@@ -11,65 +13,37 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const supabase = await createClient()
     const resolvedParams = await params
     const checkId = parseInt(resolvedParams.id)
+    const supabase = await createClient()
 
-    if (isNaN(checkId)) {
-      return NextResponse.json({ error: 'Invalid check ID' }, { status: 400 })
-    }
-
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get repositories
+    // リポジトリコンテナとUseCase作成
     const repositories = await getRepositories(supabase)
+    const useCase = new GetCheckDetailUseCase(repositories)
 
-    // Get user data with role and organization
-    const userData = await repositories.users.findById(user.id)
-    if (!userData?.organization_id) {
-      return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
+    // UseCase実行
+    const result = await useCase.execute({
+      checkId,
+      currentUserId: user.id
+    })
+
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500
+      return NextResponse.json({ error: result.error }, { status: statusCode })
     }
 
-    // Get check details with violations
-    const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id)
-    if (!check) {
-      return NextResponse.json({ error: 'Check not found' }, { status: 404 })
-    }
-
-    // Check access permissions
-    if (userData.role === 'user' && check.user_id !== userData.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    // Format the response
-    const formattedCheck = {
-      id: check.id,
-      originalText: check.original_text,
-      modifiedText: check.modified_text,
-      status: check.status,
-      inputType: check.input_type,
-      imageUrl: check.image_url,
-      extractedText: check.extracted_text,
-      ocrStatus: check.ocr_status,
-      ocrMetadata: check.ocr_metadata,
-      createdAt: check.created_at,
-      completedAt: check.completed_at,
-      userEmail: check.users?.email,
-      violations: check.violations?.map(violation => ({
-        id: violation.id,
-        startPos: violation.start_pos,
-        endPos: violation.end_pos,
-        reason: violation.reason,
-        dictionaryPhrase: violation.dictionaries?.phrase,
-        dictionaryCategory: violation.dictionaries?.category
-      })) ?? []
-    }
-
-    return NextResponse.json({ check: formattedCheck })
+    return NextResponse.json({ check: result.data.check })
 
   } catch (error) {
     console.error('Check detail API error:', error)
@@ -79,47 +53,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const supabase = await createClient()
     const resolvedParams = await params
     const checkId = parseInt(resolvedParams.id)
+    const supabase = await createClient()
 
-    if (isNaN(checkId)) {
-      return NextResponse.json({ error: 'Invalid check ID' }, { status: 400 })
-    }
-
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get repositories
+    // リポジトリコンテナとUseCase作成
     const repositories = await getRepositories(supabase)
+    const useCase = new DeleteCheckUseCase(repositories)
 
-    // Get user data with role and organization
-    const userData = await repositories.users.findById(user.id)
-    if (!userData?.organization_id) {
-      return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
+    // UseCase実行
+    const result = await useCase.execute({
+      checkId,
+      currentUserId: user.id
+    })
+
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500
+      return NextResponse.json({ error: result.error }, { status: statusCode })
     }
 
-    // Get check to verify ownership and existence
-    const check = await repositories.checks.findById(checkId)
-    if (!check || check.organization_id !== userData.organization_id || check.deleted_at) {
-      return NextResponse.json({ error: 'Check not found' }, { status: 404 })
-    }
-
-    // Check access permissions - users can only delete their own checks, admins can delete any
-    if (userData.role === 'user' && check.user_id !== userData.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    // Perform logical deletion
-    const deletedCheck = await repositories.checks.logicalDelete(checkId)
-    if (!deletedCheck) {
-      return NextResponse.json({ error: 'Failed to delete check' }, { status: 500 })
-    }
-
-    return NextResponse.json({ message: 'Check deleted successfully' })
+    return NextResponse.json({ message: result.data.message })
 
   } catch (error) {
     console.error('Check deletion API error:', error)

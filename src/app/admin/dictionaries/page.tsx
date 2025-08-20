@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { createClient } from '@/infra/supabase/clientClient'
 import { authFetch } from '@/lib/api-client'
-import { supabase } from '@/lib/supabase'
 import { Database } from '@/types/database.types'
 
 type Dictionary = Database['public']['Tables']['dictionaries']['Row']
@@ -66,6 +66,7 @@ export default function DictionariesPage() {
     if (!organization) {
       try {
         // Try to get dictionaries directly based on current user
+        const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           // Get user profile directly from database
@@ -109,6 +110,7 @@ export default function DictionariesPage() {
     }
     
     try {
+      const supabase = createClient()
       const { data, error } = await supabase
         .from('dictionaries')
         .select('*')
@@ -272,6 +274,7 @@ export default function DictionariesPage() {
     if (!showDeleteDialog) return
 
     try {
+      const supabase = createClient()
       const { error } = await supabase
         .from('dictionaries')
         .delete()

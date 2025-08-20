@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/infra/supabase/clientClient'
 import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
 
 export interface AuthError {

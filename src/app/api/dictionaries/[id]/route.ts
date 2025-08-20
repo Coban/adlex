@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getRepositories } from "@/lib/repositories";
-import { createClient } from "@/lib/supabase/server";
+import { getRepositories } from "@/core/ports";
+import { DeleteDictionaryUseCase } from "@/core/usecases/dictionaries/deleteDictionary";
+import { GetDictionaryUseCase } from "@/core/usecases/dictionaries/getDictionary";
+import { UpdateDictionaryUseCase } from "@/core/usecases/dictionaries/updateDictionary";
+import { createClient } from "@/infra/supabase/serverClient";
 
 interface RouteParams {
   params: Promise<{
@@ -12,38 +15,36 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
+    const dictionaryId = parseInt(id);
     const supabase = await createClient();
 
-    // ユーザーの認証確認
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    // Get repositories
+    // リポジトリコンテナとUseCase作成
     const repositories = await getRepositories(supabase);
+    const useCase = new GetDictionaryUseCase(repositories);
 
-    // ユーザープロファイルと組織情報を取得
-    const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile?.organization_id) {
-      return NextResponse.json({
-        error: "ユーザープロファイルが見つかりません",
-      }, { status: 404 });
+    // UseCase実行
+    const result = await useCase.execute({
+      dictionaryId,
+      currentUserId: user.id
+    });
+
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
-    const dictionaryId = parseInt(id);
-    if (isNaN(dictionaryId)) {
-      return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
-    }
-
-    const dictionary = await repositories.dictionaries.findByIdAndOrganization(dictionaryId, userProfile.organization_id);
-    if (!dictionary) {
-      return NextResponse.json({ error: "辞書項目が見つかりません" }, {
-        status: 404,
-      });
-    }
-
-    return NextResponse.json({ dictionary });
+    return NextResponse.json({ dictionary: result.data.dictionary });
   } catch (error) {
     console.error("API エラー:", error);
     return NextResponse.json({ error: "サーバーエラーが発生しました" }, {
@@ -55,67 +56,49 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
+    const dictionaryId = parseInt(id);
     const supabase = await createClient();
 
-    // ユーザーの認証確認
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    // Get repositories
-    const repositories = await getRepositories(supabase);
-
-    // ユーザープロファイルと組織情報を取得
-    const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile?.organization_id) {
-      return NextResponse.json({
-        error: "ユーザープロファイルが見つかりません",
-      }, { status: 404 });
-    }
-
-    // 管理者権限チェック
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, {
-        status: 403,
-      });
-    }
-
-    const dictionaryId = parseInt(id);
-    if (isNaN(dictionaryId)) {
-      return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
-    }
-
-    let body
+    // リクエストボディ解析
+    let body;
     try {
-      body = await request.json()
+      body = await request.json();
     } catch (error) {
-      console.error('Error parsing JSON:', error)
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+      console.error('Error parsing JSON:', error);
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     const { phrase, category, notes } = body;
 
-    // バリデーション
-    if (!phrase?.trim()) {
-      return NextResponse.json({ error: "フレーズは必須です" }, {
-        status: 400,
-      });
-    }
+    // リポジトリコンテナとUseCase作成
+    const repositories = await getRepositories(supabase);
+    const useCase = new UpdateDictionaryUseCase(repositories);
 
-    if (!["NG", "ALLOW"].includes(category)) {
-      return NextResponse.json({ error: "無効なカテゴリです" }, {
-        status: 400,
-      });
-    }
-
-    // Use repository method for update with embedding
-    const response = await repositories.dictionaries.updateWithEmbedding(dictionaryId, userProfile.organization_id, {
+    // UseCase実行
+    const result = await useCase.execute({
+      dictionaryId,
+      currentUserId: user.id,
       phrase,
       category,
-      notes,
+      notes
     });
 
-    return NextResponse.json(response);
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
+    }
+
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("API エラー:", error);
     return NextResponse.json({ error: "サーバーエラーが発生しました" }, {
@@ -127,53 +110,36 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
+    const dictionaryId = parseInt(id);
     const supabase = await createClient();
 
-    // ユーザーの認証確認
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    // Get repositories
+    // リポジトリコンテナとUseCase作成
     const repositories = await getRepositories(supabase);
+    const useCase = new DeleteDictionaryUseCase(repositories);
 
-    // ユーザープロファイルと組織情報を取得
-    const userProfile = await repositories.users.findById(user.id);
-    if (!userProfile?.organization_id) {
-      return NextResponse.json({
-        error: "ユーザープロファイルが見つかりません",
-      }, { status: 404 });
+    // UseCase実行
+    const result = await useCase.execute({
+      dictionaryId,
+      currentUserId: user.id
+    });
+
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : result.code === 'NOT_FOUND_ERROR' ? 404
+                        : result.code === 'VALIDATION_ERROR' ? 400
+                        : 500;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
-    // 管理者権限チェック
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, {
-        status: 403,
-      });
-    }
-
-    const dictionaryId = parseInt(id);
-    if (isNaN(dictionaryId)) {
-      return NextResponse.json({ error: "無効なIDです" }, { status: 400 });
-    }
-
-    // 辞書項目が組織に属しているか確認
-    const existingDictionary = await repositories.dictionaries.findByIdAndOrganization(dictionaryId, userProfile.organization_id);
-    if (!existingDictionary) {
-      return NextResponse.json({ error: "辞書項目が見つかりません" }, {
-        status: 404,
-      });
-    }
-
-    const success = await repositories.dictionaries.delete(dictionaryId);
-    if (!success) {
-      return NextResponse.json({ error: "辞書項目の削除に失敗しました" }, {
-        status: 500,
-      });
-    }
-
-    return NextResponse.json({ message: "辞書項目を削除しました" });
+    return NextResponse.json({ message: result.data.message });
   } catch (error) {
     console.error("API エラー:", error);
     return NextResponse.json({ error: "サーバーエラーが発生しました" }, {
