@@ -12,7 +12,7 @@ interface RouteParams {
   }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(_: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const dictionaryId = parseInt(id);
@@ -106,7 +106,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const dictionaryId = parseInt(id);
