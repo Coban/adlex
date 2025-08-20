@@ -1,4 +1,6 @@
 import OpenAI from 'openai'
+import { preprocessImage, ImageProcessingOptions, validateImageForProcessing } from './ocr/image-preprocessing'
+import { defaultOcrMetadataManager, type OcrMetadata } from './ocr/metadata'
 
 /**
  * テキストからネストしたJSONオブジェクトを抽出する堅牢な関数
@@ -570,38 +572,291 @@ export async function createChatCompletion(params: {
 }
 
 /**
- * Vision機能を持つLLMを使用して画像からテキストを抽出する
- * - 本番環境: OpenAI (gpt-4o)
- * - 開発環境: 利用可能な場合はLM Studio; visionをサポートしていない場合はガイダンス付きでエラーを投げる
+ * OCR処理のオプション
  */
+export interface OcrOptions {
+  /** 画像前処理のオプション */
+  preprocessing?: ImageProcessingOptions
+  /** 前処理をスキップするか */
+  skipPreprocessing?: boolean
+  /** 最大リトライ回数 */
+  maxRetries?: number
+  /** タイムアウト時間（ミリ秒） */
+  timeout?: number
+  /** メタデータ記録を無効にするか */
+  disableMetadata?: boolean
+  /** デバッグ情報を記録するか */
+  enableDebug?: boolean
+}
+
+/**
+ * OCR処理の詳細結果
+ */
+export interface OcrResult {
+  /** 抽出されたテキスト */
+  text: string
+  /** 使用されたプロバイダー */
+  provider: 'openai' | 'lmstudio' | 'openrouter'
+  /** 使用されたモデル */
+  model: string
+  /** 信頼度スコア（0.0-1.0） */
+  confidence: number
+  /** 処理時間（ミリ秒） */
+  processingTimeMs: number
+  /** 画像情報 */
+  imageInfo: {
+    originalSize: number
+    processedSize?: number
+    dimensions?: { width: number; height: number }
+    wasPreprocessed: boolean
+  }
+  /** メタデータID（記録が有効な場合） */
+  metadataId?: string
+  /** パフォーマンス情報 */
+  performance?: {
+    tokenUsage?: { prompt: number; completion: number; total: number }
+    modelLatency?: number
+  }
+}
+
 /**
  * LLMを使用して画像からテキストを抽出する（OCR処理）
- * LM StudioまたはOpenAIのVision機能を使用
- * @param imageUrl 処理対象の画像URL
- * @returns 抽出されたテキストと使用されたプロバイダー情報
+ * 
+ * 強化された機能:
+ * - 自動画像前処理（リサイズ、形式変換）
+ * - 複数プロバイダー対応（OpenAI、LM Studio、OpenRouter）
+ * - 信頼度推定
+ * - 包括的エラーハンドリング
+ * - メタデータ記録
+ * - パフォーマンス監視
+ * 
+ * @param imageInput 画像データ（URL、File、Blob、Base64）
+ * @param options OCR処理オプション
+ * @returns OCR処理の詳細結果
  */
-export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
-  text: string
-  provider: 'openai' | 'lmstudio' | 'openrouter'
-  model: string
-}> {
-  // 本番環境ではOpenAIを優先、開発環境ではaiProviderの設定に従う
-  // ただし、LM StudioがVision対応でない場合は明確なエラーを表示
+export async function extractTextFromImageWithLLM(
+  imageInput: string | File | Blob,
+  options: OcrOptions = {}
+): Promise<OcrResult> {
+  const startTime = Date.now()
+  let processedImageUrl: string = ''
+  let imageInfo: OcrResult['imageInfo']
+  let metadataId: string | undefined
 
+  const {
+    preprocessing = {},
+    skipPreprocessing = false,
+    maxRetries = 2,
+    timeout = 60000,
+    disableMetadata = false,
+    enableDebug = process.env.NODE_ENV === 'development'
+  } = options
+
+  try {
+    // 入力画像の検証
+    if (typeof imageInput === 'string' && !imageInput.startsWith('data:') && !imageInput.startsWith('http')) {
+      throw new Error('無効な画像URLです。データURL、HTTP(S)URL、またはファイルオブジェクトを指定してください。')
+    }
+
+    if (typeof imageInput !== 'string') {
+      const validation = validateImageForProcessing(imageInput)
+      if (!validation.isValid) {
+        throw new Error(`画像検証エラー: ${validation.reason}`)
+      }
+    }
+
+    // 画像前処理の実行
+    let preprocessingResult = null
+    if (!skipPreprocessing && typeof imageInput !== 'string') {
+      try {
+        console.log('[OCR] 画像前処理を開始...')
+        preprocessingResult = await preprocessImage(imageInput, {
+          maxWidth: 2048,
+          maxHeight: 2048,
+          quality: 85,
+          format: 'jpeg',
+          asDataUrl: true,
+          ...preprocessing
+        })
+        processedImageUrl = preprocessingResult.data as string
+        
+        imageInfo = {
+          originalSize: preprocessingResult.originalSize,
+          processedSize: preprocessingResult.processedSize,
+          dimensions: preprocessingResult.processedDimensions,
+          wasPreprocessed: true
+        }
+        
+        console.log(`[OCR] 画像前処理完了: ${preprocessingResult.originalSize}B → ${preprocessingResult.processedSize}B (${Math.round(preprocessingResult.compressionRatio * 100)}%)`)
+      } catch (preprocessError) {
+        console.warn('[OCR] 画像前処理に失敗、元の画像を使用:', preprocessError)
+        // 前処理に失敗した場合は元の画像を使用
+        processedImageUrl = typeof imageInput === 'string' ? imageInput : URL.createObjectURL(imageInput)
+        imageInfo = {
+          originalSize: typeof imageInput !== 'string' ? imageInput.size : 0,
+          wasPreprocessed: false
+        }
+      }
+    } else {
+      // 前処理をスキップ
+      processedImageUrl = typeof imageInput === 'string' ? imageInput : URL.createObjectURL(imageInput)
+      imageInfo = {
+        originalSize: typeof imageInput !== 'string' ? imageInput.size : 0,
+        wasPreprocessed: false
+      }
+    }
+
+    // メタデータ記録開始
+    if (!disableMetadata) {
+      metadataId = defaultOcrMetadataManager.startProcessing(aiProvider as any, AI_MODELS.chat, {
+        originalSize: imageInfo.originalSize,
+        processedSize: imageInfo.processedSize,
+        dimensions: imageInfo.dimensions || { width: 0, height: 0 },
+        format: typeof imageInput !== 'string' ? imageInput.type : 'unknown',
+        wasPreprocessed: imageInfo.wasPreprocessed
+      })
+    }
+
+    // OCR処理の実行（リトライ付き）
+    let lastError: Error | null = null
+    let result: OcrResult | null = null
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[OCR] 試行 ${attempt}/${maxRetries}: ${aiProvider} (${AI_MODELS.chat})`)
+        
+        const ocrResult = await executeOcrWithTimeout(processedImageUrl, timeout)
+        const processingTimeMs = Date.now() - startTime
+        
+        // 信頼度の計算
+        const confidence = estimateOcrConfidence(ocrResult.text, {
+          dimensions: imageInfo.dimensions,
+          wasPreprocessed: imageInfo.wasPreprocessed
+        })
+        
+        result = {
+          text: ocrResult.text,
+          provider: ocrResult.provider,
+          model: ocrResult.model,
+          confidence,
+          processingTimeMs,
+          imageInfo,
+          metadataId,
+          performance: ocrResult.performance
+        }
+
+        // 成功をメタデータに記録
+        if (!disableMetadata && metadataId) {
+          await defaultOcrMetadataManager.recordSuccess(
+            metadataId,
+            {
+              text: result.text,
+              confidence: result.confidence,
+              characterCount: result.text.length,
+              estimatedLines: result.text.split('\n').length,
+              detectedLanguage: detectTextLanguage(result.text)
+            },
+            result.performance,
+            enableDebug ? {
+              requestPayloadSize: processedImageUrl.length,
+              retryCount: attempt - 1
+            } : undefined
+          )
+        }
+
+        console.log(`[OCR] 成功: ${result.text.length}文字抽出, 信頼度: ${confidence.toFixed(2)}`)
+        break
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        console.warn(`[OCR] 試行 ${attempt} 失敗:`, lastError.message)
+        
+        if (attempt === maxRetries) {
+          // 最後の試行で失敗した場合、エラーを記録
+          if (!disableMetadata && metadataId) {
+            await defaultOcrMetadataManager.recordError(
+              metadataId,
+              {
+                message: lastError.message,
+                type: categorizeOcrError(lastError),
+                technicalDetails: enableDebug ? { attempts: attempt, aiProvider, model: AI_MODELS.chat } : undefined
+              },
+              undefined,
+              enableDebug ? {
+                retryCount: attempt - 1,
+                requestPayloadSize: processedImageUrl.length
+              } : undefined
+            )
+          }
+          throw lastError
+        }
+        
+        // リトライ前の待機時間（指数バックオフ）
+        if (attempt < maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+          console.log(`[OCR] ${waitTime}ms 待機後にリトライします...`)
+          await new Promise(resolve => setTimeout(resolve, waitTime))
+        }
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error('OCR処理が完了しませんでした')
+    }
+
+    return result
+
+  } finally {
+    // リソースクリーンアップ
+    if (typeof imageInput !== 'string' && processedImageUrl && !processedImageUrl.startsWith('data:')) {
+      URL.revokeObjectURL(processedImageUrl)
+    }
+  }
+}
+
+/**
+ * タイムアウト付きでOCR処理を実行する
+ */
+async function executeOcrWithTimeout(
+  imageUrl: string, 
+  timeout: number
+): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: any }> {
+  
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`OCR処理がタイムアウトしました (${timeout}ms)`)), timeout)
+  })
+
+  const ocrPromise = executeOcrRequest(imageUrl)
+  
+  return Promise.race([ocrPromise, timeoutPromise])
+}
+
+/**
+ * 実際のOCRリクエストを実行する
+ */
+async function executeOcrRequest(
+  imageUrl: string
+): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: any }> {
+  
   // マルチモーダル用のユーザーコンテンツを構築（OpenAI Vision 仕様に準拠）
   const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
-    { type: 'text', text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' },
+    { 
+      type: 'text', 
+      text: '以下の画像に写っているすべての文字列を読み取り、読み順に沿って日本語で忠実に出力してください。装飾記号は必要に応じて省略して構いません。出力は純粋なテキストのみとし、説明や前置きは不要です。' 
+    },
     { type: 'image_url', image_url: { url: imageUrl } }
+  ]
+
+  const messages = [
+    { role: 'system' as const, content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。可能であれば段落・改行を保ち、ノイズを除去して出力してください。' },
+    { role: 'user' as const, content: userContent }
   ]
 
   // OpenRouterを使用する場合
   if (aiProvider === 'openrouter') {
     try {
       const response: unknown = await createChatCompletion({
-        messages: [
-          { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
-          { role: 'user', content: userContent }
-        ],
+        messages,
         temperature: 0,
         max_tokens: 4000
       })
@@ -616,7 +871,6 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
         model: AI_MODELS.chat
       }
     } catch (error) {
-      // OpenRouterでVision機能をサポートしていない場合の分かりやすいエラーメッセージ
       if (error instanceof Error && (
         error.message.includes('image') ||
         error.message.toLowerCase().includes('vision') ||
@@ -629,14 +883,11 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
     }
   }
 
-  // 開発環境でLM Studioが設定されている場合は最初に試行
+  // 開発環境でLM Studioが設定されている場合
   if (aiProvider === 'lmstudio') {
     try {
       const response: unknown = await createChatCompletion({
-        messages: [
-          { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。' },
-          { role: 'user', content: userContent }
-        ],
+        messages,
         temperature: 0,
         max_tokens: 4000
       })
@@ -651,7 +902,6 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
         model: AI_MODELS.chat
       }
     } catch (error) {
-      // モデルがVision機能をサポートしていない場合の分かりやすいエラーメッセージ
       if (error instanceof Error && (
         error.message.includes('image') ||
         error.message.toLowerCase().includes('vision') ||
@@ -671,10 +921,7 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
 
   const response = await openaiClient.chat.completions.create({
     model: AI_MODELS.chat,
-    messages: [
-      { role: 'system', content: 'あなたはOCRエンジンです。画像内の文字を正確に読み取り、プレーンテキストとして返します。可能であれば段落・改行を保ち、ノイズを除去して出力してください。' },
-      { role: 'user', content: userContent }
-    ],
+    messages,
     temperature: 0,
     max_tokens: 4000
   })
@@ -686,47 +933,303 @@ export async function extractTextFromImageWithLLM(imageUrl: string): Promise<{
   return {
     text: sanitizePlainText(content),
     provider: 'openai',
-    model: AI_MODELS.chat
+    model: AI_MODELS.chat,
+    performance: {
+      tokenUsage: response.usage ? {
+        prompt: response.usage.prompt_tokens,
+        completion: response.usage.completion_tokens,
+        total: response.usage.total_tokens
+      } : undefined
+    }
   }
 }
 
-// OCR品質のヒューリスティックスコア（長さ/ユニーク文字数/文字化けの有無）
 /**
- * OCR結果テキストの簡易信頼度を 0.0〜1.0 で推定するヒューリスティック関数。
- *
- * 評価項目:
- * - 長さスコア: 文字数/50 を上限1.0でクリップ（極端に短い結果は低信頼）
- * - 多様性スコア: 空白除去後のユニーク文字数/20 を上限1.0でクリップ（単調な繰り返しを低信頼）
- * - モジバケ系ペナルティ: 置換文字 '�' や U+FFFD の検出で減点
- *
- * 合成方法:
- *   score = clamp01( 0.5*長さ + 0.5*多様性 - ペナルティ ) を小数第2位で丸めて返します。
- *
- * 目的: 厳密な品質指標ではなく、UIでの注意喚起や再撮影の推奨に使う軽量指標です。
+ * エラーをカテゴリ別に分類する
  */
+function categorizeOcrError(error: Error): 'network' | 'ai_provider' | 'image_processing' | 'validation' | 'timeout' | 'unknown' {
+  const message = error.message.toLowerCase()
+  
+  if (message.includes('timeout') || message.includes('timed out')) {
+    return 'timeout'
+  }
+  if (message.includes('network') || message.includes('connection') || message.includes('fetch')) {
+    return 'network'
+  }
+  if (message.includes('vision') || message.includes('not supported') || message.includes('model')) {
+    return 'ai_provider'
+  }
+  if (message.includes('validation') || message.includes('invalid') || message.includes('format')) {
+    return 'validation'
+  }
+  if (message.includes('preprocessing') || message.includes('resize') || message.includes('canvas')) {
+    return 'image_processing'
+  }
+  
+  return 'unknown'
+}
+
 /**
- * OCR結果テキストの信頼度を推定する
- * テキストの長さ、文字の多様性、文字化けの有無などから算出
+ * テキストの言語を推定する（簡易版）
+ */
+function detectTextLanguage(text: string): string {
+  // 日本語文字の検出
+  const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/
+  const englishPattern = /[A-Za-z]/
+  
+  const japaneseCount = (text.match(japanesePattern) || []).length
+  const englishCount = (text.match(englishPattern) || []).length
+  const totalChars = text.replace(/\s/g, '').length
+  
+  if (totalChars === 0) return 'unknown'
+  
+  const japaneseRatio = japaneseCount / totalChars
+  const englishRatio = englishCount / totalChars
+  
+  if (japaneseRatio > 0.3) {
+    return englishRatio > 0.2 ? 'ja-en' : 'ja'
+  }
+  if (englishRatio > 0.5) {
+    return 'en'
+  }
+  
+  return 'unknown'
+}
+
+/**
+ * OCR結果テキストの信頼度を推定する（強化版）
+ * 
+ * 強化されたヒューリスティック評価:
+ * - 基本スコア: 長さと文字多様性
+ * - 言語整合性: 日本語文法パターンの検出
+ * - 文字品質: 文字化けや異常文字の検出
+ * - 構造品質: 改行、句読点の自然さ
+ * - コンテキスト品質: 意味のある単語/フレーズの検出
+ * 
  * @param text OCR処理されたテキスト
+ * @param imageInfo 画像情報（オプション）
  * @returns 0.0-1.0の範囲の信頼度スコア
  */
-export function estimateOcrConfidence(text: string): number {
-  // テキスト長に基づくスコア（最大50文字で1.0）
-  const lengthScore = Math.min(1, text.length / 50)
+export function estimateOcrConfidence(
+  text: string, 
+  imageInfo?: { 
+    dimensions?: { width: number; height: number }
+    wasPreprocessed?: boolean 
+  }
+): number {
+  if (!text || text.trim().length === 0) {
+    return 0
+  }
+
+  const cleanText = text.trim()
+  let score = 0
+  let totalWeight = 0
+
+  // 1. 基本長さスコア（重み: 0.15）
+  const lengthScore = Math.min(1, cleanText.length / 100) // 100文字で満点
+  score += lengthScore * 0.15
+  totalWeight += 0.15
+
+  // 2. 文字多様性スコア（重み: 0.15）
+  const uniqueChars = new Set(cleanText.replace(/\s/g, '').split(''))
+  const diversityScore = Math.min(1, uniqueChars.size / 30) // 30文字種で満点
+  score += diversityScore * 0.15
+  totalWeight += 0.15
+
+  // 3. 日本語言語品質スコア（重み: 0.25）
+  const japaneseQualityScore = assessJapaneseTextQuality(cleanText)
+  score += japaneseQualityScore * 0.25
+  totalWeight += 0.25
+
+  // 4. 文字化け・異常文字検出（重み: 0.2, ペナルティ）
+  const corruptionPenalty = detectTextCorruption(cleanText)
+  score += Math.max(0, 1 - corruptionPenalty) * 0.2
+  totalWeight += 0.2
+
+  // 5. 構造品質（改行、句読点）（重み: 0.15）
+  const structureScore = assessTextStructure(cleanText)
+  score += structureScore * 0.15
+  totalWeight += 0.15
+
+  // 6. 画像品質ボーナス/ペナルティ（重み: 0.1）
+  const imageQualityAdjustment = imageInfo ? assessImageQualityImpact(imageInfo) : 0.5
+  score += imageQualityAdjustment * 0.1
+  totalWeight += 0.1
+
+  // 正規化
+  const normalizedScore = totalWeight > 0 ? score / totalWeight : 0
+  return Number(Math.max(0, Math.min(1, normalizedScore)).toFixed(2))
+}
+
+/**
+ * 日本語テキストの品質を評価する
+ */
+function assessJapaneseTextQuality(text: string): number {
+  let score = 0
+  let checks = 0
+
+  // ひらがな・カタカナ・漢字の適切な混合
+  const hiraganaCount = (text.match(/[\u3040-\u309F]/g) || []).length
+  const katakanaCount = (text.match(/[\u30A0-\u30FF]/g) || []).length
+  const kanjiCount = (text.match(/[\u4E00-\u9FAF]/g) || []).length
+  const totalJapanese = hiraganaCount + katakanaCount + kanjiCount
+
+  if (totalJapanese > 0) {
+    // バランスの良い文字種混合を評価
+    const balance = 1 - Math.abs(0.5 - hiraganaCount / totalJapanese) 
+    score += balance
+    checks++
+
+    // 一般的な日本語パターンの検出
+    const commonPatterns = [
+      /です[。、]?/g,           // です調
+      /である[。、]?/g,         // である調
+      /ます[。、]?/g,           // ます調
+      /した[。、]?/g,           // 過去形
+      /する[。、]?/g,           // 動詞
+      /[のでにをがは][、。\s]/g, // 助詞
+    ]
+    
+    const patternMatches = commonPatterns.reduce((sum, pattern) => 
+      sum + (text.match(pattern) || []).length, 0
+    )
+    
+    const patternScore = Math.min(1, patternMatches / Math.max(1, totalJapanese / 20))
+    score += patternScore
+    checks++
+  }
+
+  // 英語・数字の適切な配置
+  const englishCount = (text.match(/[A-Za-z]/g) || []).length
+  const numberCount = (text.match(/[0-9]/g) || []).length
   
-  // 一意文字数に基づくスコア（最大20文字で1.0）
-  const uniqueChars = new Set(text.replace(/\s/g, '').split(''))
-  const uniqueScore = Math.min(1, uniqueChars.size / 20)
+  if (englishCount > 0 || numberCount > 0) {
+    // 過度な英数字は品質低下の兆候
+    const alphaNumRatio = (englishCount + numberCount) / text.length
+    const alphaNumScore = alphaNumRatio < 0.3 ? 1 : Math.max(0, 2 - alphaNumRatio * 3)
+    score += alphaNumScore
+    checks++
+  }
+
+  return checks > 0 ? score / checks : 0.5
+}
+
+/**
+ * テキストの破損・文字化けを検出する
+ */
+function detectTextCorruption(text: string): number {
+  let corruptionLevel = 0
+
+  // Unicode置換文字（�）
+  const replacementChars = (text.match(/\ufffd/g) || []).length
+  corruptionLevel += replacementChars * 0.3
+
+  // 異常な制御文字
+  const controlChars = (text.match(/[\u0000-\u001F\u007F-\u009F]/g) || []).length
+  corruptionLevel += controlChars * 0.2
+
+  // 不自然な文字の繰り返し
+  const repeatedChars = text.match(/(.)\1{4,}/g) // 同じ文字が5回以上連続
+  if (repeatedChars) {
+    corruptionLevel += repeatedChars.length * 0.1
+  }
+
+  // 不自然なスペーシング
+  const abnormalSpacing = text.match(/\s{3,}/g) // 3つ以上の連続スペース
+  if (abnormalSpacing) {
+    corruptionLevel += abnormalSpacing.length * 0.05
+  }
+
+  // 文字エンコーディング問題の兆候
+  const encodingIssues = text.match(/[��？\ufffd\ufeff]/g)
+  if (encodingIssues) {
+    corruptionLevel += encodingIssues.length * 0.2
+  }
+
+  return Math.min(1, corruptionLevel)
+}
+
+/**
+ * テキスト構造の品質を評価する
+ */
+function assessTextStructure(text: string): number {
+  let score = 0
+  let checks = 0
+
+  // 適切な句読点の使用
+  const sentences = text.split(/[。！？]/).filter(s => s.trim().length > 0)
+  if (sentences.length > 0) {
+    const avgSentenceLength = text.length / sentences.length
+    // 適切な文の長さ（20-100文字程度）
+    const sentenceLengthScore = avgSentenceLength < 20 
+      ? avgSentenceLength / 20
+      : avgSentenceLength > 100
+        ? Math.max(0, 1 - (avgSentenceLength - 100) / 100)
+        : 1
+    score += sentenceLengthScore
+    checks++
+  }
+
+  // 改行の自然さ
+  const lines = text.split('\n').filter(line => line.trim().length > 0)
+  if (lines.length > 1) {
+    const avgLineLength = text.replace(/\n/g, '').length / lines.length
+    // 極端に短い行や長い行は品質低下の兆候
+    const lineLengthScore = avgLineLength < 5 
+      ? 0.3 
+      : avgLineLength > 200 
+        ? 0.5 
+        : 1
+    score += lineLengthScore
+    checks++
+  }
+
+  // 段落構造
+  const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0)
+  if (paragraphs.length > 1) {
+    // 適切な段落分けがされている場合はボーナス
+    score += 1
+    checks++
+  }
+
+  return checks > 0 ? score / checks : 0.7 // デフォルトは中程度の品質
+}
+
+/**
+ * 画像品質がOCR結果に与える影響を評価する
+ */
+function assessImageQualityImpact(imageInfo: { 
+  dimensions?: { width: number; height: number }
+  wasPreprocessed?: boolean 
+}): number {
+  let score = 0.5 // ベースライン
   
-  // 文字化け文字によるペナルティ
-  const mojibakePenalty = /\ufffd|\ufffd/.test(text) ? 0.3 : 0
+  if (imageInfo.dimensions) {
+    const { width, height } = imageInfo.dimensions
+    const area = width * height
+    
+    // 解像度が高いほどOCR品質が良い傾向
+    if (area >= 2048 * 2048) {
+      score += 0.3 // 高解像度ボーナス
+    } else if (area >= 1024 * 1024) {
+      score += 0.2 // 中解像度ボーナス
+    } else if (area < 512 * 512) {
+      score -= 0.2 // 低解像度ペナルティ
+    }
+    
+    // アスペクト比の評価（極端な比率は読み取りにくい）
+    const aspectRatio = Math.max(width, height) / Math.min(width, height)
+    if (aspectRatio > 5) {
+      score -= 0.1 // 極端なアスペクト比ペナルティ
+    }
+  }
   
-  // 句読点異常によるペナルティ
-  const punctuationPenalty = (text.match(/[\uFFFD]/g)?.length ?? 0) > 0 ? 0.2 : 0
+  // 前処理が行われた場合の品質向上
+  if (imageInfo.wasPreprocessed) {
+    score += 0.1
+  }
   
-  // 最終スコア算出（0.0-1.0の範囲で制限）
-  const score = Math.max(0, Math.min(1, 0.5 * lengthScore + 0.5 * uniqueScore - mojibakePenalty - punctuationPenalty))
-  return Number(score.toFixed(2))
+  return Math.max(0, Math.min(1, score))
 }
 
 // 埋め込み作成用ユーティリティ関数
