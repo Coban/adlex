@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { POST } from '@/app/api/checks/route'
+import { CreateCheckUseCase } from '@/core/usecases/checks/createCheck'
 import { mockRepositories } from 'tests/mocks/repositories'
 
 // Mock the repository provider
@@ -38,11 +39,9 @@ const mockSupabaseClient = {
   auth: mockAuth
 }
 
-import { queueManager } from '@/lib/queue-manager'
-import { CreateCheckUseCase } from '@/core/usecases/checks/createCheck'
 
 describe('Checks API Route (Unit Tests)', () => {
-  let mockCreateCheckUseCase: any
+  let mockCreateCheckUseCase: { execute: ReturnType<typeof vi.fn> }
   
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -56,7 +55,7 @@ describe('Checks API Route (Unit Tests)', () => {
     const supabaseModule = await import('@/infra/supabase/serverClient')
     const repositoriesModule = await import('@/core/ports')
     
-    vi.mocked(supabaseModule.createClient).mockReturnValue(mockSupabaseClient as any)
+    vi.mocked(supabaseModule.createClient).mockResolvedValue(mockSupabaseClient as unknown as Awaited<ReturnType<typeof supabaseModule.createClient>>)
     vi.mocked(repositoriesModule.getRepositories).mockResolvedValue(mockRepositories)
     
     // Default to authenticated user
@@ -78,7 +77,7 @@ describe('Checks API Route (Unit Tests)', () => {
     mockCreateCheckUseCase = {
       execute: vi.fn()
     }
-    vi.mocked(CreateCheckUseCase).mockImplementation(() => mockCreateCheckUseCase)
+    vi.mocked(CreateCheckUseCase).mockImplementation(() => mockCreateCheckUseCase as unknown as InstanceType<typeof CreateCheckUseCase>)
   })
 
   describe('POST /api/checks', () => {

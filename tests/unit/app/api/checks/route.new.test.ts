@@ -24,7 +24,7 @@ const { supabaseMock } = vi.hoisted(() => {
   return { supabaseMock: mock }
 })
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => supabaseMock),
 }))
 

@@ -76,14 +76,13 @@ export abstract class SupabaseBaseRepository<
   /**
    * フィルター条件をSupabaseクエリに適用
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private applyFilters(query: any, filters: Record<string, any>): any {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  private applyFilters(query: any, filters: Record<string, unknown>): any {
     Object.entries(filters).forEach(([key, value]) => {
       if (value === undefined) return
 
       // 複雑なフィルター条件（演算子付き）
       if (typeof value === 'object' && value !== null && 'operator' in value) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { operator, value: filterValue } = value as { operator: FilterOperator; value: any }
         
         switch (operator) {
@@ -129,6 +128,7 @@ export abstract class SupabaseBaseRepository<
 
     return query
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   async create(data: CreateT): Promise<T> {
     try {

@@ -8,6 +8,7 @@ import { SupabaseChecksRepository } from './checks'
 import { SupabaseDictionariesRepository } from './dictionaries'
 import { SupabaseOrganizationsRepository } from './organizations'
 import { SupabaseRealtimeRepository } from './realtime'
+import { SupabaseStorageRepository } from './supabaseStorageRepository'
 import { SupabaseUserInvitationsRepository } from './user-invitations'
 import { SupabaseUsersRepository } from './users'
 import { SupabaseViolationsRepository } from './violations'
@@ -43,6 +44,7 @@ export function createRepositories(
     userInvitations: new SupabaseUserInvitationsRepository(supabase),
     realtime: new SupabaseRealtimeRepository(supabase),
     auth: authRepository,
+    storage: new SupabaseStorageRepository(supabase),
   }
 }
 
@@ -55,4 +57,5 @@ export * from './violations'
 export * from './user-invitations'
 export * from './realtime'
 export * from './base'
+export * from './supabaseStorageRepository'
 export { SupabaseAuthRepository } from '@/lib/repositories/supabase/authRepository'

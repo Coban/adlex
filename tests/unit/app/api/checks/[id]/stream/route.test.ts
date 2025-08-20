@@ -54,7 +54,7 @@ const mockSupabase: SupabaseClientMock = {
   channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn(), unsubscribe: vi.fn() })),
 }
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => mockSupabase),
 }))
 

@@ -75,7 +75,10 @@
       "WebFetch(domain:localhost)",
       "Bash(gh pr list:*)",
       "Bash(gh issue create:*)",
-      "Bash(yamllint:*)"
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(yamllint:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

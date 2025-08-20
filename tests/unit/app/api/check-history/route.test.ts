@@ -20,7 +20,7 @@ const mockSupabaseClient = {
   auth: { getUser: vi.fn() }
 }
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => mockSupabaseClient),
 }))
 

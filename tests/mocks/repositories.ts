@@ -8,7 +8,8 @@ import type {
   ViolationsRepository,
   UserInvitationsRepository,
   RealtimeRepository,
-  AuthRepository
+  AuthRepository,
+  StorageRepository
 } from '@/core/ports'
 
 /**
@@ -161,6 +162,29 @@ export function createMockRepositories() {
     isSessionValid: vi.fn().mockResolvedValue(false),
   }
 
+  // Storage Repository Mock
+  const storageRepository: StorageRepository = {
+    uploadFile: vi.fn().mockResolvedValue({ 
+      data: { path: 'test/path.jpg' }, 
+      error: null 
+    }),
+    createSignedUrl: vi.fn().mockResolvedValue({ 
+      data: { signedUrl: 'http://mock-signed-url' }, 
+      error: null 
+    }),
+    deleteFile: vi.fn().mockResolvedValue({ 
+      data: { message: 'File deleted successfully' }, 
+      error: null 
+    }),
+    getPublicUrl: vi.fn().mockReturnValue({ 
+      data: { publicUrl: 'http://mock-public-url' } 
+    }),
+    listFiles: vi.fn().mockResolvedValue({ 
+      data: [], 
+      error: null 
+    })
+  }
+
   return {
     users: usersRepository,
     organizations: organizationsRepository,
@@ -170,6 +194,7 @@ export function createMockRepositories() {
     userInvitations: userInvitationsRepository,
     realtime: realtimeRepository,
     auth: authRepository,
+    storage: storageRepository,
   }
 }
 
@@ -277,6 +302,7 @@ const mockRepositoriesInstance = (() => {
   const repositories = createMockRepositories();
   
   // Add reset methods to each repository
+   
   const addResetMethods = (repo: any) => {
     repo.reset = () => {
       Object.values(repo).forEach((method: unknown) => {
@@ -297,6 +323,7 @@ const mockRepositoriesInstance = (() => {
     userInvitations: addResetMethods(repositories.userInvitations),
     realtime: addResetMethods(repositories.realtime),
     auth: addResetMethods(repositories.auth),
+    storage: addResetMethods(repositories.storage),
   };
 })();
 

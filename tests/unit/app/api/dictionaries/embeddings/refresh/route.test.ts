@@ -55,7 +55,7 @@ const mockSupabase = {
   rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 };
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => mockSupabase),
 }))
 
