@@ -1,68 +1,38 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Comprehensive mock query builder with all methods
-const createMockQueryBuilder = () => ({
-  select: vi.fn().mockReturnThis(),
-  from: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  neq: vi.fn().mockReturnThis(),
-  gt: vi.fn().mockReturnThis(),
-  gte: vi.fn().mockReturnThis(),
-  lt: vi.fn().mockReturnThis(),
-  lte: vi.fn().mockReturnThis(),
-  like: vi.fn().mockReturnThis(),
-  ilike: vi.fn().mockReturnThis(),
-  is: vi.fn().mockReturnThis(),
-  in: vi.fn().mockReturnThis(),
-  contains: vi.fn().mockReturnThis(),
-  containedBy: vi.fn().mockReturnThis(),
-  rangeGt: vi.fn().mockReturnThis(),
-  rangeGte: vi.fn().mockReturnThis(),
-  rangeLt: vi.fn().mockReturnThis(),
-  rangeLte: vi.fn().mockReturnThis(),
-  rangeAdjacent: vi.fn().mockReturnThis(),
-  overlaps: vi.fn().mockReturnThis(),
-  textSearch: vi.fn().mockReturnThis(),
-  match: vi.fn().mockReturnThis(),
-  not: vi.fn().mockReturnThis(),
-  or: vi.fn().mockReturnThis(),
-  filter: vi.fn().mockReturnThis(),
-  order: vi.fn().mockReturnThis(),
-  limit: vi.fn().mockReturnThis(),
-  range: vi.fn().mockReturnThis(),
-  offset: vi.fn().mockReturnThis(),
-  single: vi.fn().mockResolvedValue({ data: null, error: null }),
-  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-  insert: vi.fn().mockReturnThis(),
-  update: vi.fn().mockReturnThis(),
-  upsert: vi.fn().mockReturnThis(),
-  delete: vi.fn().mockReturnThis(),
-  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
-})
+import { createMockRepositories } from 'tests/mocks/repositories'
 
-// 型定義
-type SupabaseClient = {
-  auth: {
-    getUser: ReturnType<typeof vi.fn>
-  }
-  from: ReturnType<typeof vi.fn>
-  storage: {
-    from: ReturnType<typeof vi.fn>
-  }
-}
-
-const mockSupabase: SupabaseClient = {
-  auth: { getUser: vi.fn() },
-  from: vi.fn(),
-  storage: {
-    from: vi.fn(),
-  },
-}
-
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => mockSupabase),
+// Mock the repository provider
+vi.mock('@/core/ports', () => ({
+  getRepositories: vi.fn(),
 }))
+
+const mockAuth = {
+  getUser: vi.fn()
+}
+
+const mockStorage = {
+  from: vi.fn()
+}
+
+const mockSupabaseClient = {
+  auth: mockAuth,
+  storage: mockStorage
+}
+
+// Mock Supabase auth
+vi.mock('@/infra/supabase/serverClient', () => ({
+  createClient: vi.fn(async () => mockSupabaseClient)
+}))
+
+// Mock UploadImageUseCase
+vi.mock('@/core/usecases/images/uploadImage', () => ({
+  UploadImageUseCase: vi.fn()
+}))
+
+import { getRepositories } from '@/core/ports'
+import { UploadImageUseCase } from '@/core/usecases/images/uploadImage'
 
 // target import after mocks
 import { POST } from '@/app/api/images/upload/route'
@@ -75,52 +45,90 @@ function makeFormDataWithFile(contentType = 'image/jpeg', size = 1000) {
 }
 
 describe('Images Upload API Route', () => {
-  beforeEach(() => {
+  let mockRepositories: any
+  let mockUploadImageUseCase: any
+  
+  beforeEach(async () => {
     vi.clearAllMocks()
-    // Reset the mock query builder
-    const newMockQuery = createMockQueryBuilder();
-    mockSupabase.from.mockReturnValue(newMockQuery);
+    
+    // Reset mock repositories
+    mockRepositories = createMockRepositories()
+    vi.mocked(getRepositories).mockResolvedValue(mockRepositories)
+    
+    // Reset mock usecase
+    mockUploadImageUseCase = {
+      execute: vi.fn()
+    }
+    vi.mocked(UploadImageUseCase).mockImplementation(() => mockUploadImageUseCase)
   })
 
   it('未認証は401', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('no') })
+    mockAuth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('no') })
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: new FormData() })
     const res = await POST(req)
     expect(res.status).toBe(401)
   })
 
   it('image未指定は400', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: new FormData() })
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
 
-  it.skip('不正なcontent-typeは400', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+  it('ユーザーが見つからない場合は401', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'AUTHENTICATION_ERROR', message: 'ユーザーが見つかりません' }
+    })
+    const fd = makeFormDataWithFile('image/jpeg', 1000)
+    const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
+    const res = await POST(req)
+    expect(res.status).toBe(401)
+  })
+
+  it('組織に所属していないユーザーは401', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'AUTHENTICATION_ERROR', message: 'ユーザーが組織に所属していません' }
+    })
+    const fd = makeFormDataWithFile('image/jpeg', 1000)
+    const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
+    const res = await POST(req)
+    expect(res.status).toBe(401)
+  })
+
+  it('不正なcontent-typeは400', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'サポートされていないファイルタイプです（JPEG、PNG、WebPのみ）' }
+    })
     const fd = makeFormDataWithFile('image/gif')
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
 
-  it.skip('大きすぎるファイルは400', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+  it('大きすぎるファイルは400', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'ファイルサイズが大きすぎます（最大10MBまで）' }
+    })
     const fd = makeFormDataWithFile('image/jpeg', 11 * 1024 * 1024)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
 
-  it.skip('アップロード失敗で500', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
-    mockSupabase.from.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { organization_id: 'o1' }, error: null }),
-    })
-    mockSupabase.storage.from.mockReturnValue({
-      upload: vi.fn().mockResolvedValue({ error: new Error('upload failed') }),
+  it('アップロード失敗で500', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'REPOSITORY_ERROR', message: 'ファイルのアップロードに失敗しました' }
     })
     const fd = makeFormDataWithFile('image/png', 1000)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
@@ -128,16 +136,11 @@ describe('Images Upload API Route', () => {
     expect(res.status).toBe(500)
   })
 
-  it.skip('署名URL作成失敗で500', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
-    mockSupabase.from.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { organization_id: 'o1' }, error: null }),
-    })
-    mockSupabase.storage.from.mockReturnValue({
-      upload: vi.fn().mockResolvedValue({ error: null }),
-      createSignedUrl: vi.fn().mockResolvedValue({ data: null, error: new Error('sign failed') }),
+  it('署名URL作成失敗で500', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: false,
+      error: { code: 'REPOSITORY_ERROR', message: '署名付きURLの生成に失敗しました' }
     })
     const fd = makeFormDataWithFile('image/webp', 1000)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
@@ -145,21 +148,19 @@ describe('Images Upload API Route', () => {
     expect(res.status).toBe(500)
   })
 
-  it.skip('正常系（複雑なパス生成はskip）', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
-    mockSupabase.from.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { organization_id: 'o1' }, error: null }),
-    })
-    mockSupabase.storage.from.mockReturnValue({
-      upload: vi.fn().mockResolvedValue({ error: null }),
-      createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'http://signed' }, error: null }),
+  it('正常系：成功時は200と署名付きURLを返す', async () => {
+    mockAuth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
+    mockUploadImageUseCase.execute.mockResolvedValue({
+      success: true,
+      data: { signedUrl: 'http://signed-url.example.com' }
     })
     const fd = makeFormDataWithFile('image/jpeg', 1000)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(200)
+    
+    const responseBody = await res.json()
+    expect(responseBody.signedUrl).toBe('http://signed-url.example.com')
   })
 })
 
