@@ -76,7 +76,8 @@ export abstract class SupabaseBaseRepository<
   /**
    * フィルター条件をSupabaseクエリに適用
    */
-  private applyFilters(query: any, filters: Record<string, any>): any {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  private applyFilters(query: any, filters: Record<string, unknown>): any {
     Object.entries(filters).forEach(([key, value]) => {
       if (value === undefined) return
 
@@ -127,6 +128,7 @@ export abstract class SupabaseBaseRepository<
 
     return query
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   async create(data: CreateT): Promise<T> {
     try {

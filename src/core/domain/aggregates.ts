@@ -383,7 +383,7 @@ export class DictionaryAggregate extends AggregateRoot<number> {
    */
   updateContent(newPhrase?: string, newCategory?: 'NG' | 'ALLOW', _newNotes?: string): void {
     const hasContentChanged = 
-      (newPhrase && newPhrase !== this._dictionaryItem.phrase) ||
+      (newPhrase && newPhrase !== this._dictionaryItem.phrase) ??
       (newCategory && newCategory !== this._dictionaryItem.category)
 
     if (hasContentChanged) {

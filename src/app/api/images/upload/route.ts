@@ -29,9 +29,17 @@ export async function POST(request: NextRequest) {
     let formData
     try {
       formData = await request.formData()
-    } catch {
+    } catch (formDataError) {
+      console.error('フォームデータ解析エラー:', { 
+        error: formDataError,
+        contentType: request.headers.get('content-type'),
+        userId: user.id
+      })
       return NextResponse.json(
-        createErrorResponse('VALIDATION_ERROR', '無効なフォームデータです'),
+        createErrorResponse('VALIDATION_ERROR', '無効なフォームデータです', { 
+          contentType: request.headers.get('content-type'),
+          errorType: formDataError instanceof Error ? formDataError.name : 'UnknownError'
+        }),
         { status: 400 }
       )
     }
@@ -57,8 +65,19 @@ export async function POST(request: NextRequest) {
     // 結果の処理
     if (!result.success) {
       const statusCode = getStatusCodeFromError(result.error.code)
+      
+      // デバッグ用の詳細ログ出力（本番環境では詳細は非表示）
+      if (result.error.details) {
+        console.error('画像アップロードエラー詳細:', {
+          code: result.error.code,
+          message: result.error.message,
+          details: result.error.details,
+          userId: user.id
+        })
+      }
+      
       return NextResponse.json(
-        createErrorResponse(result.error.code, result.error.message),
+        createErrorResponse(result.error.code, result.error.message, result.error.details),
         { status: statusCode }
       )
     }
@@ -69,9 +88,20 @@ export async function POST(request: NextRequest) {
     )
 
   } catch (error) {
-    console.error("画像アップロードAPI エラー:", error)
+    console.error("画像アップロードAPI 予期しないエラー:", {
+      error,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      stack: error instanceof Error ? error.stack : undefined,
+      requestUrl: request.url,
+      requestMethod: request.method,
+      userAgent: request.headers.get('user-agent')
+    })
     return NextResponse.json(
-      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました', {
+        errorType: error instanceof Error ? error.name : 'UnknownError',
+        timestamp: new Date().toISOString()
+      }),
       { status: 500 }
     )
   }
@@ -94,7 +124,14 @@ function getStatusCodeFromError(errorCode: string): number {
       return 409
     case 'REPOSITORY_ERROR':
       return 500
+    case 'RATE_LIMIT_ERROR':
+      return 429
+    case 'QUOTA_EXCEEDED_ERROR':
+      return 413
+    case 'INTERNAL_ERROR':
+      return 500
     default:
+      console.warn('未知のエラーコード:', errorCode)
       return 500
   }
 }
