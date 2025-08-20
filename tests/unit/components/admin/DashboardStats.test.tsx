@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest'
@@ -139,7 +140,8 @@ describe('DashboardStats', () => {
     expect(screen.getByText('user@example.com')).toBeInTheDocument()
   })
 
-  it.skip('パフォーマンスタブを表示する', async () => {
+  it('パフォーマンスタブを表示する', async () => {
+    const user = userEvent.setup()
     render(<DashboardStats />)
 
     await waitFor(() => {
@@ -148,19 +150,32 @@ describe('DashboardStats', () => {
 
     // パフォーマンスタブをクリック
     const performanceTab = screen.getByRole('tab', { name: 'パフォーマンス' })
-    performanceTab.click()
+    await user.click(performanceTab)
 
+    // タブの切り替えとデータの表示を待機
     await waitFor(() => {
       expect(screen.getByText('処理ステータス分布')).toBeInTheDocument()
-    })
+    }, { timeout: 10000 })
 
-    // ステータス別の件数
-    expect(screen.getByText('240件')).toBeInTheDocument() // completed
-    expect(screen.getByText('3件')).toBeInTheDocument() // processing  
-    expect(screen.getByText('2件')).toBeInTheDocument() // failed
-  })
+    // ステータス別の件数を確認
+    await waitFor(() => {
+      const countElements = screen.getAllByText('240件')
+      expect(countElements.length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+    
+    await waitFor(() => {
+      const processingElements = screen.getAllByText('3件')
+      expect(processingElements.length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+    
+    await waitFor(() => {
+      const failedElements = screen.getAllByText('2件')
+      expect(failedElements.length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+  }, 15000)
 
-  it.skip('利用状況タブを表示する', async () => {
+  it('利用状況タブを表示する', async () => {
+    const user = userEvent.setup()
     render(<DashboardStats />)
 
     await waitFor(() => {
@@ -169,16 +184,24 @@ describe('DashboardStats', () => {
 
     // 利用状況タブをクリック
     const usageTab = screen.getByRole('tab', { name: '利用状況' })
-    usageTab.click()
+    await user.click(usageTab)
 
+    // タブの切り替えとデータの表示を待機
     await waitFor(() => {
       expect(screen.getByText('日別チェック数')).toBeInTheDocument()
-    })
+    }, { timeout: 10000 })
 
     // 日別データの一部を確認
-    expect(screen.getByText('45件')).toBeInTheDocument()
-    expect(screen.getByText('89件')).toBeInTheDocument()
-  })
+    await waitFor(() => {
+      const day1Elements = screen.getAllByText('45件')
+      expect(day1Elements.length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+    
+    await waitFor(() => {
+      const day2Elements = screen.getAllByText('89件')
+      expect(day2Elements.length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+  }, 15000)
 
   it.skip('APIエラー時にエラーメッセージを表示する', async () => {
     // このテストは MSW の設定で問題があるためスキップ
