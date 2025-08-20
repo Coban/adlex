@@ -1,11 +1,22 @@
-import { Client as QStashClient } from "@upstash/qstash";
 import { NextRequest, NextResponse } from "next/server";
 
-import { embeddingQueue } from "@/lib/embedding-queue";
-import { createClient } from "@/lib/supabase/server";
+import {
+  validateRefreshEmbeddingsBody,
+  validateEmbeddingStatsQuery,
+  createRefreshSuccessResponse,
+  createStatsSuccessResponse,
+  createJobProgressSuccessResponse,
+  createEmbeddingErrorResponse
+} from '@/core/dtos/dictionary-embeddings'
+import { getRepositories } from '@/core/ports'
+import { GetEmbeddingStatsUseCase } from '@/core/usecases/dictionaries/getEmbeddingStats'
+import { RefreshEmbeddingsUseCase } from '@/core/usecases/dictionaries/refreshEmbeddings'
+import { createClient } from "@/infra/supabase/serverClient";
 
-// (unused type removed)
-
+/**
+ * 辞書埋め込みリフレッシュAPI（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -13,111 +24,74 @@ export async function POST(request: NextRequest) {
     // ユーザーの認証確認
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+      return NextResponse.json(
+        createEmbeddingErrorResponse('AUTH_ERROR', '認証が必要です'),
+        { status: 401 }
+      );
     }
 
-    // ユーザープロファイルと組織情報を取得
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !userProfile?.organization_id) {
-      return NextResponse.json({
-        error: "ユーザープロファイルが見つかりません",
-      }, { status: 404 });
-    }
-
-    // 管理者権限チェック
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, {
-        status: 403,
-      });
-    }
-
-    // リクエストボディから対象IDを取得（省略可能）
+    // リクエストボディの解析とバリデーション
     let body
     try {
       body = await request.json()
     } catch (error) {
       console.error('Error parsing JSON:', error)
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
-    const { dictionaryIds } = body ?? {};
-
-    // QStashが設定されていればQStashで非同期化、なければアプリ内キューにフォールバック
-    const useQStash = !!process.env.QSTASH_TOKEN && !!process.env.NEXT_PUBLIC_BASE_URL
-
-    if (useQStash) {
-      const supabase = await createClient()
-      // 送信対象の辞書項目IDを確定
-      let query = supabase
-        .from("dictionaries")
-        .select("id, phrase")
-        .eq("organization_id", userProfile.organization_id)
-
-      if (Array.isArray(dictionaryIds) && dictionaryIds.length > 0) {
-        query = query.in("id", dictionaryIds)
-      }
-      const { data: dictionaries, error: fetchError } = await query
-      if (fetchError) {
-        console.error("辞書項目取得エラー:", fetchError)
-        return NextResponse.json({ error: "辞書項目の取得に失敗しました" }, { status: 500 })
-      }
-
-      if (!dictionaries || dictionaries.length === 0) {
-        return NextResponse.json({ message: "対象となる辞書項目が見つかりません" })
-      }
-
-      const client = new QStashClient({ token: process.env.QSTASH_TOKEN! })
-      const targetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/dictionaries/embeddings/qstash`
-
-      // 逐次キュー投入（QStash側の自動リトライに任せる）
-      // バックオフ: 30s, 60s, 120s など（maxRetries 3）
-      const publishPromises = dictionaries.map((d) =>
-        client.publishJSON({
-          url: targetUrl,
-          body: {
-            dictionaryId: d.id,
-            organizationId: userProfile.organization_id,
-            phrase: d.phrase,
-          },
-          retries: 3,
-          backoff: 30, // seconds
-          method: "POST",
-        })
+      return NextResponse.json(
+        createEmbeddingErrorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
+        { status: 400 }
       )
-      await Promise.allSettled(publishPromises)
-
-      return NextResponse.json({ message: "QStashへ再生成ジョブを投入しました", count: dictionaries.length })
-    } else {
-      // フォールバック: アプリ内キュー
-      const job = await embeddingQueue.enqueueOrganization(
-        userProfile.organization_id,
-        Array.isArray(dictionaryIds) && dictionaryIds.length > 0 ? dictionaryIds : undefined
-      )
-      return NextResponse.json({
-        message: "Embedding再生成ジョブを開始しました",
-        jobId: job.id,
-        total: job.total,
-        status: job.status,
-      })
     }
+
+    // DTOバリデーション
+    const validationResult = validateRefreshEmbeddingsBody(body ?? {})
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createEmbeddingErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          JSON.stringify(validationResult.error.details)
+        ),
+        { status: 400 }
+      )
+    }
+
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
+
+    // ユースケース実行
+    const refreshEmbeddingsUseCase = new RefreshEmbeddingsUseCase(repositories)
+    const result = await refreshEmbeddingsUseCase.execute({
+      userId: user.id,
+      dictionaryIds: validationResult.data.dictionaryIds
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createEmbeddingErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
+    }
+
+    // 成功レスポンス
+    return NextResponse.json(createRefreshSuccessResponse(result.data))
+
   } catch (error) {
     console.error("Embedding再生成API エラー:", error);
-    return NextResponse.json({
-      error: "サーバーエラーが発生しました",
-      details: error instanceof Error ? error.message : "不明なエラー",
-    }, {
-      status: 500,
-    });
+    return NextResponse.json(
+      createEmbeddingErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    );
   }
 }
 
-// GETメソッド
-// - ?jobId=... がある場合: 非同期ジョブの進捗を返す
-// - パラメータがない場合: 組織の辞書項目のembedding状況を返す
+/**
+ * 埋め込み統計取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ * - ?jobId=... がある場合: 非同期ジョブの進捗を返す
+ * - パラメータがない場合: 組織の辞書項目のembedding状況を返す
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -125,75 +99,80 @@ export async function GET(request: NextRequest) {
     // ユーザーの認証確認
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+      return NextResponse.json(
+        createEmbeddingErrorResponse('AUTH_ERROR', '認証が必要です'),
+        { status: 401 }
+      );
     }
 
-    // ユーザープロファイルと組織情報を取得
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !userProfile?.organization_id) {
-      return NextResponse.json({
-        error: "ユーザープロファイルが見つかりません",
-      }, { status: 404 });
-    }
-
-    // 管理者権限チェック
-    if (userProfile.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, {
-        status: 403,
-      });
-    }
-
-    // ジョブ進捗の問い合わせ
     const url = new URL(request.url)
-    const jobId = url.searchParams.get('jobId')
-    if (jobId) {
-      const job = embeddingQueue.getJob(jobId)
-      if (!job) {
-        return NextResponse.json({ error: '指定されたジョブが見つかりません' }, { status: 404 })
-      }
-      return NextResponse.json(job)
+    const queryParams = Object.fromEntries(url.searchParams.entries())
+
+    // DTOバリデーション
+    const validationResult = validateEmbeddingStatsQuery(queryParams)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createEmbeddingErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          JSON.stringify(validationResult.error.details)
+        ),
+        { status: 400 }
+      )
     }
 
-    // 組織の辞書項目のembedding統計を取得
-    const { data: stats, error: statsError } = await supabase
-      .from("dictionaries")
-      .select("id, phrase, vector")
-      .eq("organization_id", userProfile.organization_id);
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
 
-    if (statsError) {
-      console.error("統計情報取得エラー:", statsError);
-      return NextResponse.json({ error: "統計情報の取得に失敗しました" }, {
-        status: 500,
-      });
+    // ユースケース実行
+    const getStatsUseCase = new GetEmbeddingStatsUseCase(repositories)
+    const result = await getStatsUseCase.execute({
+      userId: user.id,
+      jobId: validationResult.data.jobId
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createEmbeddingErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
     }
 
-    const totalItems = stats?.length || 0;
-    const itemsWithEmbedding = stats?.filter((item) =>
-      item.vector !== null
-    ).length || 0;
-    const itemsWithoutEmbedding = totalItems - itemsWithEmbedding;
+    // 成功レスポンス（ジョブ進捗か統計かを判定）
+    if ('id' in result.data && 'status' in result.data) {
+      // ジョブ進捗レスポンス
+      return NextResponse.json(createJobProgressSuccessResponse(result.data))
+    } else {
+      // 統計レスポンス
+      return NextResponse.json(createStatsSuccessResponse(result.data))
+    }
 
-    return NextResponse.json({
-      organizationId: userProfile.organization_id,
-      totalItems,
-      itemsWithEmbedding,
-      itemsWithoutEmbedding,
-      embeddingCoverageRate: totalItems > 0
-        ? Math.round((itemsWithEmbedding / totalItems) * 100)
-        : 0,
-    });
   } catch (error) {
     console.error("Embedding統計情報API エラー:", error);
-    return NextResponse.json({
-      error: "サーバーエラーが発生しました",
-      details: error instanceof Error ? error.message : "不明なエラー",
-    }, {
-      status: 500,
-    });
+    return NextResponse.json(
+      createEmbeddingErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'VALIDATION_ERROR':
+    case 'AUTH_ERROR':
+      return 400
+    case 'FORBIDDEN_ERROR':
+      return 403
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'INTERNAL_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2017",
     "lib": [
       "dom",
@@ -33,11 +34,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/test/vitest.d.ts"
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
   ],
   "exclude": [
-    "node_modules",
-    "src/app/api/**/__tests__/**/*.ts",
-    "src/**/__tests__/**/*.ts"
+    "node_modules"
   ]
 }

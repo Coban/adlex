@@ -1,73 +1,181 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  validateGetUsersQuery,
+  validateInviteUserRequest,
+  createSuccessResponse,
+  createErrorResponse
+} from '@/core/dtos/users'
+import { getRepositories } from '@/core/ports'
+import { GetUsersUseCase } from '@/core/usecases/users/getUsers'
+import { InviteUserUseCase } from '@/core/usecases/users/inviteUser'
+import { createClient } from "@/infra/supabase/serverClient";
 
-export async function GET() {
+/**
+ * ユーザー一覧取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // 現在のユーザーを取得
+    // 認証チェック
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: "認証が必要です" },
-        { status: 401 },
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // クエリパラメータの取得とバリデーション
+    const url = new URL(request.url);
+    const queryData = {
+      search: url.searchParams.get("search") ?? undefined,
+      role: url.searchParams.get("role") ?? 'ALL',
+      organizationId: url.searchParams.get("organizationId") ? parseInt(url.searchParams.get("organizationId")!) : undefined
+    }
 
-    if (userError || !currentUser) {
+    const validationResult = validateGetUsersQuery(queryData)
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: "ユーザー情報の取得に失敗しました" },
-        { status: 400 },
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
       );
     }
 
-    // 管理者権限をチェック
-    if (currentUser.role !== "admin") {
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase);
+
+    // ユースケース実行
+    const getUsersUseCase = new GetUsersUseCase(repositories)
+    const result = await getUsersUseCase.execute({
+      currentUserId: user.id,
+      search: validationResult.data.search,
+      role: validationResult.data.role,
+      organizationId: validationResult.data.organizationId
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
       return NextResponse.json(
-        { error: "管理者権限が必要です" },
-        { status: 403 },
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
       );
     }
 
-    // 組織IDを確認
-    if (!currentUser.organization_id) {
-      return NextResponse.json(
-        { error: "組織に所属していません" },
-        { status: 400 },
-      );
-    }
-
-    // 組織に所属するユーザー一覧を取得
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, email, role, created_at, updated_at")
-      .eq("organization_id", currentUser.organization_id)
-      .order("created_at", { ascending: false });
-
-    if (usersError) {
-      console.error("Users fetch error:", usersError);
-      return NextResponse.json(
-        { error: "ユーザー一覧の取得に失敗しました" },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({
-      users: users || [],
-    });
-  } catch (error) {
-    console.error("Get users error:", error);
+    // 成功レスポンス
     return NextResponse.json(
-      { error: "ユーザー一覧の取得に失敗しました" },
-      { status: 500 },
+      createSuccessResponse(result.data)
     );
+
+  } catch (error) {
+    console.error("ユーザー一覧取得API エラー:", error);
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * ユーザー招待API（リファクタリング済み）
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        createErrorResponse('AUTHENTICATION_ERROR', '認証が必要です'),
+        { status: 401 }
+      );
+    }
+
+    // リクエストボディの取得と基本バリデーション
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json(
+        createErrorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
+        { status: 400 }
+      );
+    }
+
+    // DTOバリデーション
+    const validationResult = validateInviteUserRequest(body)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      );
+    }
+
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase);
+
+    // ユースケース実行
+    const inviteUserUseCase = new InviteUserUseCase(repositories)
+    const result = await inviteUserUseCase.execute({
+      currentUserId: user.id,
+      email: validationResult.data.email,
+      role: validationResult.data.role
+    })
+
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      );
+    }
+
+    // 成功レスポンス
+    return NextResponse.json(
+      createSuccessResponse(result.data),
+      { status: 201 }
+    );
+
+  } catch (error) {
+    console.error("ユーザー招待API エラー:", error);
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

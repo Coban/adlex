@@ -1,18 +1,22 @@
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 import path from "path";
+
+import react from "@vitejs/plugin-react";
+import dotenv from "dotenv";
+import { defineConfig } from "vitest/config";
+
+dotenv.config({ path: ".env.test" });
 
 export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: ["./tests/setup.ts"],
     globals: true,
     css: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: [
       "node_modules/",
-      "e2e/",
+      "tests/e2e/",
       "**/*.e2e.{ts,tsx}",
       "**/e2e/**",
     ],
@@ -21,11 +25,19 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       exclude: [
         "node_modules/",
-        "src/test/",
+        "tests/",
         "**/*.d.ts",
         "*.config.*",
         "src/types/database.types.ts",
-        "e2e/",
+        "tests/e2e/",
+        ".next/",
+        "**/*.hot-update.js",
+        "**/webpack/**",
+        "**/chunks/**",
+        "**/static/**",
+        "**/vendor-chunks/**",
+        "**/*-manifest.js",
+        "**/polyfills.js",
       ],
     },
     typecheck: {
@@ -35,6 +47,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "tests": path.resolve(__dirname, "./tests"),      
     },
   },
 });

@@ -2,20 +2,31 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useAuth } from '@/contexts/AuthContext'
 import { signIn } from '@/lib/auth'
+import { getRedirectUrl } from '@/lib/auth-redirect'
 
 export default function SignInPage() {
+  const router = useRouter()
+  const { user, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
+
+  // 既にサインイン済み、またはサインイン直後の状態変化を検知して遷移
+  useEffect(() => {
+    if (!loading && user) {
+      const redirectUrl = getRedirectUrl()
+      router.replace(redirectUrl)
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,8 +34,18 @@ export default function SignInPage() {
     setError('')
 
     try {
-      await signIn({ email, password })
-      router.push('/')
+      const result = await signIn({ email, password })
+      
+      
+      
+      
+      // Verify sign in was successful
+      if (result?.user) {
+        const redirectUrl = getRedirectUrl()
+        router.replace(redirectUrl)
+      } else {
+        throw new Error('サインインに失敗しました')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {

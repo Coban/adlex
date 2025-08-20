@@ -3,7 +3,8 @@ import fs from 'node:fs'
 import { NextRequest, NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit'
 
-import { createClient } from '@/lib/supabase/server'
+import { getRepositories } from '@/core/ports'
+import { createClient } from '@/infra/supabase/serverClient'
 
 export const runtime = 'nodejs'
 
@@ -27,48 +28,18 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // ユーザー/組織情報
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // ユーザー/組織情報
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
     // チェック詳細取得（違反含む）
-    const { data: check, error: checkError } = await supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        created_at,
-        completed_at,
-        user_id,
-        organization_id,
-        input_type,
-        image_url,
-        extracted_text,
-        users!inner(email),
-        violations(
-          id,
-          start_pos,
-          end_pos,
-          reason,
-          dictionary_id,
-          dictionaries(phrase, category)
-        )
-      `)
-      .eq('id', checkId)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .single()
-
-    if (checkError || !check) {
+    const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id)
+    if (!check) {
       return NextResponse.json({ error: 'Check not found' }, { status: 404 })
     }
 
@@ -78,10 +49,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
 
     // PDF生成（Buffer）
-    const pdfBuffer = await generatePdfBuffer(check)
+    const pdfBuffer = await generatePdfBuffer(check as CheckRow)
 
     const filename = `check_${check.id}.pdf`
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -165,17 +136,26 @@ async function generatePdfBuffer(check: CheckRow): Promise<Buffer> {
   doc.moveDown()
   doc.fillColor('#000')
 
-  // 原文
+  // 違反一覧の準備
+  const violations: ViolationRow[] = Array.isArray(check.violations) ? check.violations : []
+
+  // 原文（ハイライト付き）
   doc.fontSize(14).text('原文', { underline: true })
   doc.moveDown(0.3)
-  doc.fontSize(10).text(String(check.original_text ?? ''), { width: 500 })
+  
+  // ハイライト付きテキストを描画
+  const originalText = String(check.original_text ?? '')
+  renderTextWithHighlights(doc, originalText, violations)
   doc.moveDown()
 
   // 画像→OCRの抽出テキスト（該当時）
   if (check.input_type === 'image' && check.extracted_text) {
     doc.fontSize(14).text('抽出テキスト（OCR）', { underline: true })
     doc.moveDown(0.3)
-    doc.fontSize(10).text(String(check.extracted_text ?? ''), { width: 500 })
+    
+    // OCRテキストにもハイライトを適用
+    const extractedText = String(check.extracted_text ?? '')
+    renderTextWithHighlights(doc, extractedText, violations)
     doc.moveDown()
   }
 
@@ -186,7 +166,6 @@ async function generatePdfBuffer(check: CheckRow): Promise<Buffer> {
   doc.moveDown()
 
   // 違反一覧
-  const violations: ViolationRow[] = Array.isArray(check.violations) ? check.violations : []
   doc.fontSize(14).text(`検出された違反（${violations.length}件）`, { underline: true })
   doc.moveDown(0.3)
   doc.fontSize(10)
@@ -228,6 +207,78 @@ function formatDate(iso: string | null | undefined): string {
   }
 }
 
+function renderTextWithHighlights(doc: PDFKit.PDFDocument, text: string, violations: ViolationRow[]) {
+  if (!violations || violations.length === 0) {
+    doc.fontSize(10).fillColor('#000').text(text, { width: 500 })
+    return
+  }
+
+  // 違反箇所を位置順でソート
+  const sortedViolations = violations
+    .filter(v => v.start_pos !== null && v.end_pos !== null && v.start_pos < text.length)
+    .sort((a, b) => a.start_pos - b.start_pos)
+
+  if (sortedViolations.length === 0) {
+    doc.fontSize(10).fillColor('#000').text(text, { width: 500 })
+    return
+  }
+
+  doc.fontSize(10)
+  let currentPos = 0
+
+  // 違反箇所ごとにテキストを分割して描画
+  for (const violation of sortedViolations) {
+    const start = Math.max(0, Math.min(violation.start_pos, text.length))
+    const end = Math.max(start, Math.min(violation.end_pos, text.length))
+
+    // 前の通常テキストを描画
+    if (currentPos < start) {
+      const beforeText = text.substring(currentPos, start)
+      drawNormalText(doc, beforeText, true)
+    }
+
+    // 違反箇所を赤色でハイライト
+    const violationText = text.substring(start, end)
+    if (violationText) {
+      drawHighlightedText(doc, violationText)
+    }
+
+    currentPos = end
+  }
+
+  // 残りのテキストを描画
+  if (currentPos < text.length) {
+    const remainingText = text.substring(currentPos)
+    doc.fillColor('#000').text(remainingText)
+  } else {
+    doc.text('') // 改行を確保
+  }
+}
+
+/**
+ * 通常のテキストを描画
+ */
+function drawNormalText(doc: PDFKit.PDFDocument, text: string, continued = false) {
+  doc.font('Helvetica').fontSize(10).fillColor('#000').text(text, { continued })
+}
+
+/**
+ * ハイライトされたテキストを描画
+ */
+function drawHighlightedText(doc: PDFKit.PDFDocument, text: string) {
+  // フォント設定を先に行い、文字幅を正確に計算
+  doc.font('Helvetica').fontSize(10).fillColor('#dc2626')
+  
+  // 背景の赤い矩形を描画（座標の範囲チェック付き）
+  doc.rect(Math.max(0, doc.x), Math.max(0, doc.y - 2), doc.widthOfString(text), doc.currentLineHeight())
+     .fillOpacity(0.2)
+     .fill()
+     .fillOpacity(1)
+  
+  // テキストを描画
+  doc.fillColor('#dc2626').text(text, { continued: true })
+}
+
 function statusLabel(status: string | null | undefined): string {
   switch (status) {
     case 'pending':
@@ -242,5 +293,3 @@ function statusLabel(status: string | null | undefined): string {
       return String(status ?? '')
   }
 }
-
-

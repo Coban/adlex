@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getRepositories } from "@/core/ports";
+import { GetInvitationsUseCase } from "@/core/usecases/users/getInvitations";
+import { createClient } from "@/infra/supabase/serverClient";
 
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    // 現在のユーザーを取得
+    // 認証チェック
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
@@ -15,53 +17,25 @@ export async function GET() {
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // リポジトリコンテナとUseCase作成
+    const repositories = await getRepositories(supabase);
+    const useCase = new GetInvitationsUseCase(repositories);
 
-    if (userError || !currentUser) {
-      return NextResponse.json(
-        { error: "ユーザー情報の取得に失敗しました" },
-        { status: 400 },
-      );
-    }
+    // UseCase実行
+    const result = await useCase.execute({
+      currentUserId: user.id
+    });
 
-    // 管理者権限をチェック
-    if (currentUser.role !== "admin") {
-      return NextResponse.json(
-        { error: "管理者権限が必要です" },
-        { status: 403 },
-      );
-    }
-
-    // 組織IDを確認
-    if (!currentUser.organization_id) {
-      return NextResponse.json(
-        { error: "組織に所属していません" },
-        { status: 400 },
-      );
-    }
-
-    // 招待リストを取得
-    const { data: invitations, error: invitationsError } = await supabase
-      .from("user_invitations")
-      .select("*")
-      .eq("organization_id", currentUser.organization_id)
-      .order("created_at", { ascending: false });
-
-    if (invitationsError) {
-      console.error("Invitations fetch error:", invitationsError);
-      return NextResponse.json(
-        { error: "招待リストの取得に失敗しました" },
-        { status: 500 },
-      );
+    // 結果処理
+    if (!result.success) {
+      const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401
+                        : result.code === 'AUTHORIZATION_ERROR' ? 403
+                        : 500;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
     return NextResponse.json({
-      invitations: invitations || [],
+      invitations: result.data.invitations
     });
   } catch (error) {
     console.error("Get invitations error:", error);

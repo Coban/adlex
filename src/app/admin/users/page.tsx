@@ -46,10 +46,11 @@ export default function UsersAdminPage() {
   const fetchUsers = async () => {
     try {
       const data = await fetchOrganizationUsers()
-      console.log('Fetched organization users:', data.users)
       setOrganizationUsers(data.users ?? [])
     } catch (err) {
-      console.error('ユーザー一覧の取得に失敗しました:', err)
+      // Show a visible error for E2E admin error handling
+      const message = err instanceof Error ? err.message : '管理者データの読み込みに失敗しました'
+      setError(message)
     }
   }
 
@@ -60,8 +61,9 @@ export default function UsersAdminPage() {
         const data = await response.json()
         setInvitations(data.invitations ?? [])
       }
-    } catch (err) {
-      console.error('招待リストの取得に失敗しました:', err)
+    } catch {
+      // Show a visible error for E2E admin error handling
+      setError('管理者データの読み込みに失敗しました')
     }
   }
 
@@ -86,9 +88,7 @@ export default function UsersAdminPage() {
     setIsLoading(true)
 
     try {
-      console.log('Sending invitation for:', { email, role })
-      const result = await inviteUser({ email, role })
-      console.log('Invitation result:', result)
+      await inviteUser({ email, role })
       
       setMessage('招待メールを送信しました')
       setEmail('')
@@ -102,12 +102,8 @@ export default function UsersAdminPage() {
       // 招待リストを更新
       fetchInvitations()
       
-      // 招待URLをコンソールに表示（デバッグ用）
-      if (result.invitation?.invitation_url) {
-        console.log('Invitation URL:', result.invitation.invitation_url)
-      }
+      // Invitation sent successfully
     } catch (err) {
-      console.error('Invitation error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setIsLoading(false)
@@ -122,7 +118,6 @@ export default function UsersAdminPage() {
     if (!showRoleChangeDialog) return
     
     const { userId, newRole } = showRoleChangeDialog
-    console.log('Changing role for user:', { userId, newRole })
     setUserUpdateLoading(userId)
     setError('')
     setMessage('')
@@ -135,7 +130,6 @@ export default function UsersAdminPage() {
       // ユーザー一覧を更新
       fetchUsers()
     } catch (err) {
-      console.error('Role change error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setUserUpdateLoading(null)
@@ -145,7 +139,6 @@ export default function UsersAdminPage() {
   const handleDeactivateUser = async (userId: string) => {
     try {
       // ユーザーを無効化する（実際のAPI呼び出しは省略、UI状態のみ更新）
-      console.log('Deactivating user:', userId)
       
       // 無効化状態をローカルで更新
       setOrganizationUsers(prevUsers => 
@@ -247,7 +240,10 @@ export default function UsersAdminPage() {
                 </select>
               </div>
               {error && (
-                <div className="text-red-600 text-sm mb-4">
+                <div
+                  className="text-red-600 text-sm mb-4"
+                  data-testid={error.includes('権限') ? 'permission-error' : 'admin-error'}
+                >
                   {error}
                 </div>
               )}
