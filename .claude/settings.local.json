@@ -76,7 +76,8 @@
       "Bash(gh pr list:*)",
       "Bash(gh issue create:*)",
       "Bash(git rm:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(yamllint:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
