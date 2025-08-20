@@ -13,7 +13,7 @@ type SupabaseClient = {
 }
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => mockSupabaseClient),
+  createClient: vi.fn(() => Promise.resolve(mockSupabaseClient)),
 }))
 
 const mockSupabaseClient: SupabaseClient = {
@@ -53,23 +53,27 @@ describe('Images Upload API Route', () => {
     expect(res.status).toBe(400)
   })
 
-  it.skip('不正なcontent-typeは400', async () => {
+  it('不正なcontent-typeは400', async () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     const fd = makeFormDataWithFile('image/gif')
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toBe('Unsupported file type')
   })
 
-  it.skip('大きすぎるファイルは400', async () => {
+  it('大きすぎるファイルは400', async () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     const fd = makeFormDataWithFile('image/jpeg', 11 * 1024 * 1024)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toBe('File too large (max 10MB)')
   })
 
-  it.skip('アップロード失敗で500', async () => {
+  it('アップロード失敗で500', async () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockSupabaseClient.from.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -85,7 +89,7 @@ describe('Images Upload API Route', () => {
     expect(res.status).toBe(500)
   })
 
-  it.skip('署名URL作成失敗で500', async () => {
+  it('署名URL作成失敗で500', async () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockSupabaseClient.from.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -102,7 +106,7 @@ describe('Images Upload API Route', () => {
     expect(res.status).toBe(500)
   })
 
-  it.skip('正常系（複雑なパス生成はskip）', async () => {
+  it('正常系', async () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockSupabaseClient.from.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -112,11 +116,16 @@ describe('Images Upload API Route', () => {
     mockSupabaseClient.storage.from.mockReturnValue({
       upload: vi.fn().mockResolvedValue({ error: null }),
       createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'http://signed' }, error: null }),
+      getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'http://public' } }),
     })
     const fd = makeFormDataWithFile('image/jpeg', 1000)
     const req = new NextRequest('http://localhost:3000/api/images/upload', { method: 'POST', body: fd })
     const res = await POST(req)
     expect(res.status).toBe(200)
+    
+    const body = await res.json()
+    expect(body).toHaveProperty('url', 'http://public')
+    expect(body).toHaveProperty('signedUrl', 'http://signed')
   })
 })
 

@@ -67,7 +67,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
     }
 
-    return NextResponse.json({ signedUrl: signed.signedUrl })
+    // Public URL (permanent storage path)
+    const { data: publicUrl } = supabase.storage
+      .from('uploads')
+      .getPublicUrl(path)
+
+    return NextResponse.json({ 
+      url: publicUrl.publicUrl, 
+      signedUrl: signed.signedUrl 
+    })
   } catch (e) {
     console.error('Image upload API error:', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
