@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getRepositories } from "@/lib/repositories";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -15,14 +16,12 @@ export async function GET() {
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // Get repositories
+    const repositories = await getRepositories(supabase);
 
-    if (userError || !currentUser) {
+    // 現在のユーザー情報を取得
+    const currentUser = await repositories.users.findById(user.id);
+    if (!currentUser) {
       return NextResponse.json(
         { error: "ユーザー情報の取得に失敗しました" },
         { status: 400 },
@@ -45,20 +44,13 @@ export async function GET() {
       );
     }
 
-    // 招待リストを取得
-    const { data: invitations, error: invitationsError } = await supabase
-      .from("user_invitations")
-      .select("*")
-      .eq("organization_id", currentUser.organization_id)
-      .order("created_at", { ascending: false });
-
-    if (invitationsError) {
-      console.error("Invitations fetch error:", invitationsError);
-      return NextResponse.json(
-        { error: "招待リストの取得に失敗しました" },
-        { status: 500 },
-      );
-    }
+    // 招待リストを取得（作成日時の降順でソート）
+    const invitations = await repositories.userInvitations.findByOrganizationId(
+      currentUser.organization_id,
+      {
+        orderBy: [{ field: 'created_at', direction: 'desc' }]
+      }
+    );
 
     return NextResponse.json({
       invitations: invitations || [],

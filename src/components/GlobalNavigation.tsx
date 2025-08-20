@@ -3,15 +3,13 @@
 import { 
   Home, 
   FileText, 
-  Users, 
-  Book,
   LogIn,
   UserPlus,
   Clock,
   LogOut,
   Menu,
   X,
-  Settings
+  BarChart3
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -52,25 +50,9 @@ const navigationItems: NavigationItem[] = [
     showInMobile: true
   },
   {
-    name: 'ユーザー管理',
-    href: '/admin/users',
-    icon: Users,
-    requireAuth: true,
-    requireRole: 'admin',
-    showInMobile: true
-  },
-  {
-    name: '辞書管理',
-    href: '/dictionaries',
-    icon: Book,
-    requireAuth: true,
-    requireRole: 'admin',
-    showInMobile: true
-  },
-  {
-    name: '組織設定',
-    href: '/admin/settings',
-    icon: Settings,
+    name: '管理',
+    href: '/admin',
+    icon: BarChart3,
     requireAuth: true,
     requireRole: 'admin',
     showInMobile: true
@@ -164,7 +146,6 @@ export default function GlobalNavigation() {
                       item.href === '/checker' ? 'nav-checker' :
                       item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
-                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
                       item.href === '/admin/settings' ? 'nav-settings' :
                       undefined
                     }
@@ -274,7 +255,6 @@ export default function GlobalNavigation() {
                       item.href === '/checker' ? 'nav-checker' :
                       item.href === '/history' ? 'nav-history' :
                       item.href === '/admin/users' ? 'nav-admin' : 
-                      item.href === '/dictionaries' ? 'nav-dictionaries' : 
                       item.href === '/admin/settings' ? 'nav-settings' :
                       undefined
                     }

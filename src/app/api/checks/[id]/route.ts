@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 interface RouteParams {
@@ -24,51 +25,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // Get user data with role and organization
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
     // Get check details with violations
-    const { data: check, error: checkError } = await supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        input_type,
-        image_url,
-        extracted_text,
-        ocr_status,
-        ocr_metadata,
-        created_at,
-        completed_at,
-        user_id,
-        organization_id,
-        users!inner(email),
-        violations!inner(
-          id,
-          start_pos,
-          end_pos,
-          reason,
-          dictionary_id,
-          dictionaries(phrase, category)
-        )
-      `)
-      .eq('id', checkId)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .single()
-
-    if (checkError) {
-      console.error('Check query error:', checkError)
+    const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id)
+    if (!check) {
       return NextResponse.json({ error: 'Check not found' }, { status: 404 })
     }
 
@@ -98,7 +66,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         reason: violation.reason,
         dictionaryPhrase: violation.dictionaries?.phrase,
         dictionaryCategory: violation.dictionaries?.category
-      })) || []
+      })) ?? []
     }
 
     return NextResponse.json({ check: formattedCheck })
@@ -125,28 +93,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // Get user data with role and organization
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
     // Get check to verify ownership and existence
-    const { data: check, error: checkError } = await supabase
-      .from('checks')
-      .select('id, user_id, organization_id')
-      .eq('id', checkId)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .single()
-
-    if (checkError) {
-      console.error('Check query error:', checkError)
+    const check = await repositories.checks.findById(checkId)
+    if (!check || check.organization_id !== userData.organization_id || check.deleted_at) {
       return NextResponse.json({ error: 'Check not found' }, { status: 404 })
     }
 
@@ -155,17 +113,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Perform logical deletion by setting deleted_at timestamp
-    const { error: deleteError } = await supabase
-      .from('checks')
-      .update({ 
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', checkId)
-
-    if (deleteError) {
-      console.error('Check deletion error:', deleteError)
+    // Perform logical deletion
+    const deletedCheck = await repositories.checks.logicalDelete(checkId)
+    if (!deletedCheck) {
       return NextResponse.json({ error: 'Failed to delete check' }, { status: 500 })
     }
 

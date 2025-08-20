@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 // Simple image upload API to Supabase Storage with signed URL response
@@ -12,6 +13,9 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
     const formData = await request.formData()
     const file = formData.get('image')
@@ -31,11 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Path: org/{orgId}/{yyyy}/{mm}/{dd}/{timestamp}-{random}.ext
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
+    const userRow = await repositories.users.findById(user.id)
     const orgId = userRow?.organization_id ?? 'unknown'
 
     const now = new Date()

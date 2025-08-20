@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -13,14 +14,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // Get user data with role and organization
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
@@ -51,107 +50,58 @@ export async function GET(request: NextRequest) {
     }
 
 
+    // Determine userId based on role
+    let searchUserId: string | undefined
+    if (userData.role === 'user') {
+      searchUserId = userData.id
+    } else if (userData.role === 'admin' && userId) {
+      searchUserId = userId
+    }
+
     // Get total checks count
-    let totalCountQuery = supabase
-      .from('checks')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .gte('created_at', startDate.toISOString())
+    const totalChecks = await repositories.checks.countByDateRange(
+      startDate.toISOString(),
+      now.toISOString()
+    )
 
-    if (userData.role === 'user') {
-      totalCountQuery = totalCountQuery.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      totalCountQuery = totalCountQuery.eq('user_id', userId)
-    }
+    // Get checks for status breakdown and daily activity
+    const checksForPeriod = await repositories.checks.findMany({
+      where: {
+        organization_id: userData.organization_id,
+        user_id: searchUserId,
+        created_at: startDate.toISOString(),
+        deleted_at: null
+      },
+      orderBy: [{ field: 'created_at', direction: 'desc' }]
+    })
 
-    const { count: totalChecks, error: totalError } = await totalCountQuery
-
-    if (totalError) {
-      console.error('Total checks count error:', totalError)
-      return NextResponse.json({ error: 'Failed to get statistics' }, { status: 500 })
-    }
-
-    // Get status breakdown
-    let statusQuery = supabase
-      .from('checks')
-      .select('status, created_at')
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .gte('created_at', startDate.toISOString())
-
-    if (userData.role === 'user') {
-      statusQuery = statusQuery.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      statusQuery = statusQuery.eq('user_id', userId)
-    }
-
-    const { data: statusData, error: statusError } = await statusQuery
-
-    if (statusError) {
-      console.error('Status breakdown error:', statusError)
-      return NextResponse.json({ error: 'Failed to get status statistics' }, { status: 500 })
-    }
-
-    // Get input type breakdown
-    let inputTypeQuery = supabase
-      .from('checks')
-      .select('input_type')
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .gte('created_at', startDate.toISOString())
-
-    if (userData.role === 'user') {
-      inputTypeQuery = inputTypeQuery.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      inputTypeQuery = inputTypeQuery.eq('user_id', userId)
-    }
-
-    const { data: inputTypeData, error: inputTypeError } = await inputTypeQuery
-
-    if (inputTypeError) {
-      console.error('Input type breakdown error:', inputTypeError)
-      return NextResponse.json({ error: 'Failed to get input type statistics' }, { status: 500 })
-    }
-
-    // Get violations statistics
-    let violationsQuery = supabase
-      .from('checks')
-      .select(`
-        id,
-        violations:violations(id)
-      `)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .gte('created_at', startDate.toISOString())
-
-    if (userData.role === 'user') {
-      violationsQuery = violationsQuery.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      violationsQuery = violationsQuery.eq('user_id', userId)
-    }
-
-    const { data: violationsData, error: violationsError } = await violationsQuery
-
-    if (violationsError) {
-      console.error('Violations statistics error:', violationsError)
-      return NextResponse.json({ error: 'Failed to get violations statistics' }, { status: 500 })
-    }
-
-    // Process statistics
-    const statusBreakdown = statusData?.reduce((acc: Record<string, number>, item) => {
+    // Process status and input type breakdown from the same data
+    const statusBreakdown = checksForPeriod.reduce((acc: Record<string, number>, item) => {
       const status = item.status ?? 'unknown'
       acc[status] = (acc[status] ?? 0) + 1
       return acc
-    }, {}) ?? {}
+    }, {})
 
-    const inputTypeBreakdown = inputTypeData?.reduce((acc: Record<string, number>, item) => {
+    const inputTypeBreakdown = checksForPeriod.reduce((acc: Record<string, number>, item) => {
       const inputType = item.input_type ?? 'unknown'
       acc[inputType] = (acc[inputType] ?? 0) + 1
       return acc
-    }, {}) ?? {}
+    }, {})
 
-    const violationStats = violationsData?.reduce((acc, check) => {
+    // Get violations statistics
+    // Since we need violation counts, we'll need to get detailed violations
+    const checksWithViolations = await Promise.all(
+      checksForPeriod.map(async (check) => {
+        const violations = await repositories.violations.findByCheckId(check.id)
+        return {
+          id: check.id,
+          violations
+        }
+      })
+    )
+
+    // Process violation statistics
+    const violationStats = checksWithViolations.reduce((acc, check) => {
       const violationCount = check.violations?.length ?? 0
       acc.totalViolations += violationCount
       if (violationCount > 0) {
@@ -163,7 +113,7 @@ export async function GET(request: NextRequest) {
       totalViolations: 0,
       checksWithViolations: 0,
       maxViolationsInSingleCheck: 0
-    }) || { totalViolations: 0, checksWithViolations: 0, maxViolationsInSingleCheck: 0 }
+    })
 
     // Get daily activity for the period (last 30 days max)
     const activityDays = Math.min(30, Math.ceil((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)))
@@ -175,7 +125,7 @@ export async function GET(request: NextRequest) {
       dailyActivity[dateKey] = 0
     }
 
-    statusData?.forEach(check => {
+    checksForPeriod.forEach(check => {
       if (check.created_at) {
         const dateKey = new Date(check.created_at).toISOString().split('T')[0]
         if (dailyActivity.hasOwnProperty(dateKey)) {

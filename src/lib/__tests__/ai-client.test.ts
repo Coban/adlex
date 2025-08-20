@@ -18,8 +18,8 @@ vi.mock('openai', () => ({
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
-// Import after mocking
-import { createChatCompletion, createEmbedding } from '../ai-client'
+// Import the actual AI client module to access the real implementation
+const actualAIClient = await vi.importActual('@/lib/ai-client') as typeof import('@/lib/ai-client')
 
 describe('AIクライアント', () => {
   beforeEach(() => {
@@ -45,7 +45,7 @@ describe('AIクライアント', () => {
       })
 
       it('テストモードでモックレスポンスを返すこと', async () => {
-        const result = await createChatCompletion({
+        const result = await actualAIClient.createChatCompletion({
           messages: [
             { role: 'user', content: 'Test message' }
           ]
@@ -60,7 +60,7 @@ describe('AIクライアント', () => {
             index: 0,
             message: {
               role: 'assistant',
-              content: expect.any(String)
+              content: expect.stringContaining('"modified"')
             },
             finish_reason: 'stop'
           }],
@@ -89,7 +89,7 @@ describe('AIクライアント', () => {
           }
         }]
 
-        const result = await createChatCompletion({
+        const result = await actualAIClient.createChatCompletion({
           messages: [
             { role: 'user', content: 'Check this text' }
           ],
@@ -114,7 +114,7 @@ describe('AIクライアント', () => {
                 type: 'function',
                 function: {
                   name: 'apply_yakukiho_rules',
-                  arguments: expect.any(String)
+                  arguments: expect.stringContaining('"modified"')
                 }
               }]
             },
@@ -137,11 +137,12 @@ describe('AIクライアント', () => {
       })
 
       it('テストモードでモック埋め込みを返すこと', async () => {
-        const result = await createEmbedding('Test text')
+        const result = await actualAIClient.createEmbedding('Test text')
 
         expect(result).toEqual(expect.any(Array))
         expect(result).toHaveLength(384)
         expect(result.every(val => typeof val === 'number')).toBe(true)
+        expect(result.every(val => val >= -0.5 && val <= 0.5)).toBe(true)
 
         expect(mockFetch).not.toHaveBeenCalled()
       })

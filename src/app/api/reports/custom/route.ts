@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { NextRequest, NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 interface Violation {
@@ -60,14 +61,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userDataError || !userData?.organization_id) {
+    // Get user data with role and organization
+    const userData = await repositories.users.findById(user.id)
+    if (!userData?.organization_id) {
       return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
     }
 
@@ -76,49 +75,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'チェックIDが指定されていません' }, { status: 400 })
     }
 
-    // Get check data
-    let checksQuery = supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        input_type,
-        image_url,
-        extracted_text,
-        ocr_status,
-        created_at,
-        completed_at,
-        user_id,
-        users!inner(email),
-        violations:violations(
-          id,
-          reason
-        )
-      `)
-      .in('id', checkIds)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
+    // Get check data with violations for each check ID
+    const checksWithViolations = await Promise.all(
+      checkIds.map(async (checkId: number) => {
+        const check = await repositories.checks.findByIdWithDetailedViolations(checkId, userData.organization_id!)
+        return check
+      })
+    )
 
-    // Apply role-based filtering
-    if (userData.role === 'user') {
-      checksQuery = checksQuery.eq('user_id', userData.id)
-    }
+    // Filter out null checks and apply role-based filtering
+    const checks = checksWithViolations.filter((check): check is NonNullable<typeof check> => {
+      if (!check) return false
+      if (userData.role === 'user' && check.user_id !== userData.id) return false
+      return true
+    })
 
-    const { data: checks, error: checksError } = await checksQuery
-
-    if (checksError || !checks || checks.length === 0) {
+    if (checks.length === 0) {
       return NextResponse.json({ error: 'チェックが見つかりません' }, { status: 404 })
     }
+
+    // Sort by created_at descending
+    checks.sort((a, b) => {
+      if (!a.created_at || !b.created_at) return 0
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
 
     // Generate report based on format
     const reportTitle = title ?? `カスタムレポート ${new Date().toLocaleDateString('ja-JP')}`
     
     switch (format) {
       case 'pdf':
-        const pdfBuffer = await generateCustomPDFReport(checks, {
+        const pdfBuffer = await generateCustomPDFReport(checks as Check[], {
           title: reportTitle,
           includeStats,
           includeSummary,
@@ -135,7 +122,7 @@ export async function POST(request: NextRequest) {
         })
 
       case 'excel':
-        const excelBuffer = await generateCustomExcelReport(checks, {
+        const excelBuffer = await generateCustomExcelReport(checks as Check[], {
           title: reportTitle,
           includeStats,
           includeSummary,

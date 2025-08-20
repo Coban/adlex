@@ -5,8 +5,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/components/CheckHistoryDetail', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  default: ({ checkId }: any) => <div data-testid="detail">Detail {checkId}</div>,
+  default: ({ checkId }: { checkId: number }) => <div data-testid="detail">Detail {checkId}</div>,
 }))
 
 // Page import不要（全テストskip）

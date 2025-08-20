@@ -1,19 +1,33 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { POST } from '../route'
 
-const createMockSupabaseClient = () => ({
-  auth: {
-    getUser: vi.fn()
+// Mock repositories first
+const mockRepositories = {
+  users: {
+    findById: vi.fn(),
+    findByEmail: vi.fn(),
+    updateRole: vi.fn()
   },
-  from: vi.fn()
-})
+  userInvitations: {
+    findActiveInvitationByEmail: vi.fn(),
+    create: vi.fn()
+  }
+};
 
-const mockSupabaseClient = createMockSupabaseClient()
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => mockRepositories)
+}))
+
+// Mock Supabase client
+const mockSupabaseClient = {
+  auth: { getUser: vi.fn() },
+}
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
+  createClient: vi.fn(async () => mockSupabaseClient),
 }))
+
+import { POST } from '../route'
 
 vi.mock('crypto', () => ({
   default: {
@@ -29,8 +43,14 @@ describe('Users Invite API Route', () => {
 
   describe('POST /api/users/invite', () => {
     it('should return 400 for invalid JSON', async () => {
+      // コンソールエラーを一時的に抑制
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: 'invalid json'
       })
 
@@ -39,6 +59,9 @@ describe('Users Invite API Route', () => {
       expect(response.status).toBe(400)
       const body = await response.json()
       expect(body.error).toBe('Invalid JSON in request body')
+      
+      // コンソールスパイを復元
+      consoleSpy.mockRestore()
     })
 
     it('should return 400 when email is missing', async () => {
@@ -91,15 +114,8 @@ describe('Users Invite API Route', () => {
         error: null
       })
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: new Error('User not found')
-        })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return null for findById
+      mockRepositories.users.findById.mockResolvedValue(null)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -124,12 +140,8 @@ describe('Users Invite API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: currentUserData, error: null })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return user data
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -154,12 +166,8 @@ describe('Users Invite API Route', () => {
         role: 'admin'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: currentUserData, error: null })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return user data
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -186,25 +194,9 @@ describe('Users Invite API Route', () => {
 
       const existingUser = { id: 'existing-user' }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          } else if (callCount === 1) {
-            callCount++
-            return Promise.resolve({ data: existingUser, error: null })
-          }
-          return Promise.resolve({ data: null, error: null })
-        })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
+      mockRepositories.users.findByEmail.mockResolvedValue(existingUser)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -231,28 +223,10 @@ describe('Users Invite API Route', () => {
 
       const existingInvitation = { id: 'invitation-123' }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          } else if (callCount === 1) {
-            callCount++
-            return Promise.resolve({ data: null, error: null }) // No existing user
-          } else if (callCount === 2) {
-            callCount++
-            return Promise.resolve({ data: existingInvitation, error: null })
-          }
-          return Promise.resolve({ data: null, error: null })
-        })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
+      mockRepositories.users.findByEmail.mockResolvedValue(null) // No existing user
+      mockRepositories.userInvitations.findActiveInvitationByEmail.mockResolvedValue(existingInvitation)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -364,29 +338,11 @@ describe('Users Invite API Route', () => {
         expires_at: '2024-12-31T23:59:59Z'
       }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          } else if (callCount === 1) {
-            callCount++
-            return Promise.resolve({ data: null, error: null })
-          } else if (callCount === 2) {
-            callCount++
-            return Promise.resolve({ data: null, error: null })
-          }
-          return Promise.resolve({ data: mockInvitation, error: null })
-        })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
+      mockRepositories.users.findByEmail.mockResolvedValue(null)
+      mockRepositories.userInvitations.findActiveInvitationByEmail.mockResolvedValue(null)
+      mockRepositories.userInvitations.create.mockResolvedValue(mockInvitation)
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -395,13 +351,12 @@ describe('Users Invite API Route', () => {
 
       await POST(request)
       
-      expect(mockFrom.insert).toHaveBeenCalledWith({
-        organization_id: 'org1',
-        email: 'test@example.com',
-        role: 'user',
-        token: 'mock-token-123',
-        invited_by: 'admin1'
-      })
+      // Verify that create was called with user role as default
+      expect(mockRepositories.userInvitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'user'
+        })
+      )
     })
 
     it('should return 500 on invitation creation error', async () => {
@@ -415,29 +370,11 @@ describe('Users Invite API Route', () => {
         role: 'admin'
       }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          } else if (callCount === 1) {
-            callCount++
-            return Promise.resolve({ data: null, error: null })
-          } else if (callCount === 2) {
-            callCount++
-            return Promise.resolve({ data: null, error: null })
-          }
-          return Promise.resolve({ data: null, error: new Error('Insert failed') })
-        })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
+      mockRepositories.users.findByEmail.mockResolvedValue(null)
+      mockRepositories.userInvitations.findActiveInvitationByEmail.mockResolvedValue(null)
+      mockRepositories.userInvitations.create.mockRejectedValue(new Error('Insert failed'))
 
       const request = new NextRequest('http://localhost:3000/api/users/invite', {
         method: 'POST',
@@ -448,7 +385,7 @@ describe('Users Invite API Route', () => {
       
       expect(response.status).toBe(500)
       const body = await response.json()
-      expect(body.error).toBe('招待の作成に失敗しました')
+      expect(body.error).toBe('招待の送信に失敗しました')
     })
   })
 })

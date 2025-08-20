@@ -887,7 +887,12 @@ export async function createChatCompletionForCheck(text: string, relevantEntries
 
 ${dictionaryReference}
 
-違反パターン: 効能効果標榜、医療効果、身体機能言及、疾病治療予防、医師推奨装い
+修正方針:
+- 違反表現は薬機法に準拠した適切な表現に置き換える
+- 元の文章の意味と構造を可能な限り保持する  
+- 断定的な表現は推定や可能性を示す表現に変更
+- 医療的・治療的効果の主張は一般的な健康支援表現に変更
+- 過度な効果を暗示する表現は控えめな表現に修正
 
 JSON形式:
 {
@@ -913,7 +918,7 @@ JSON形式:
           properties: {
             modified: {
               type: 'string',
-              description: '薬機法に準拠するよう修正されたテキスト'
+              description: '元のテキストの意味と構造を保持しつつ、違反表現を薬機法準拠の適切な表現に置き換えた修正版テキスト'
             },
             violations: {
               type: 'array',
@@ -1022,7 +1027,7 @@ JSON形式:
           properties: {
             modified: {
               type: 'string',
-              description: '薬機法に準拠するよう修正されたテキスト'
+              description: '元のテキストの意味と構造を保持しつつ、違反表現を薬機法準拠の適切な表現に置き換えた修正版テキスト'
             },
             violations: {
               type: 'array',

@@ -1,19 +1,28 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { PATCH } from '../route'
 
-const createMockSupabaseClient = () => ({
-  auth: {
-    getUser: vi.fn()
-  },
-  from: vi.fn()
-})
+// Mock repositories first
+const mockRepositories = {
+  users: {
+    findById: vi.fn(),
+    updateRole: vi.fn()
+  }
+};
 
-const mockSupabaseClient = createMockSupabaseClient()
+vi.mock('@/lib/repositories', () => ({
+  getRepositories: vi.fn(() => mockRepositories)
+}))
+
+// Mock Supabase client
+const mockSupabaseClient = {
+  auth: { getUser: vi.fn() },
+}
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
+  createClient: vi.fn(async () => mockSupabaseClient),
 }))
+
+import { PATCH } from '../route'
 
 describe('Users Role API Route', () => {
   beforeEach(() => {
@@ -73,15 +82,8 @@ describe('Users Role API Route', () => {
         error: null
       })
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: new Error('User not found')
-        })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return null for current user
+      mockRepositories.users.findById.mockResolvedValue(null)
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -106,12 +108,8 @@ describe('Users Role API Route', () => {
         role: 'user'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: currentUserData, error: null })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return non-admin user
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -136,12 +134,8 @@ describe('Users Role API Route', () => {
         role: 'admin'
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: currentUserData, error: null })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository to return admin user
+      mockRepositories.users.findById.mockResolvedValue(currentUserData)
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -166,19 +160,10 @@ describe('Users Role API Route', () => {
         role: 'admin'
       }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          }
-          return Promise.resolve({ data: null, error: new Error('User not found') })
-        })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls: first call for current user, second call for target user
+      mockRepositories.users.findById
+        .mockResolvedValueOnce(currentUserData)  // Current user
+        .mockResolvedValueOnce(null)             // Target user not found
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -209,19 +194,10 @@ describe('Users Role API Route', () => {
         email: 'target@test.com'
       }
 
-      let callCount = 0
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          }
-          return Promise.resolve({ data: targetUserData, error: null })
-        })
-      }
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls: first call for current user, second call for target user
+      mockRepositories.users.findById
+        .mockResolvedValueOnce(currentUserData)  // Current user
+        .mockResolvedValueOnce(targetUserData)   // Target user from different org
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -252,33 +228,19 @@ describe('Users Role API Route', () => {
         email: 'target@test.com'
       }
 
-      const updatedUserData = [{
+      const updatedUserData = {
         id: 'target-user-id',
         email: 'target@test.com',
         role: 'admin',
         updated_at: '2024-01-01T00:00:00Z'
-      }]
-
-      let callCount = 0
-      const mockUpdate = {
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockResolvedValue({ data: updatedUserData, error: null })
       }
 
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        update: vi.fn().mockReturnValue(mockUpdate),
-        single: vi.fn().mockImplementation(() => {
-          if (callCount === 0) {
-            callCount++
-            return Promise.resolve({ data: currentUserData, error: null })
-          }
-          return Promise.resolve({ data: targetUserData, error: null })
-        })
-      }
-
-      mockSupabaseClient.from.mockReturnValue(mockFrom)
+      // Mock repository calls
+      mockRepositories.users.findById
+        .mockResolvedValueOnce(currentUserData)  // Current user
+        .mockResolvedValueOnce(targetUserData)   // Target user from same org
+      
+      mockRepositories.users.updateRole.mockResolvedValue(updatedUserData)
 
       const request = new NextRequest('http://localhost:3000/api/users/target-user-id/role', {
         method: 'PATCH',
@@ -290,7 +252,7 @@ describe('Users Role API Route', () => {
       expect(response.status).toBe(200)
       const body = await response.json()
       expect(body.message).toBe('ユーザー権限が更新されました')
-      expect(body.user).toEqual(updatedUserData[0])
+      expect(body.user).toEqual(updatedUserData)
     })
   })
 })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { queueManager } from '@/lib/queue-manager'
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -51,30 +52,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 組織情報を含むユーザーデータを取得
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select(`
-        id,
-        role,
-        organization_id,
-        organizations!inner (
-          id,
-          name,
-          max_checks,
-          used_checks
-        )
-      `)
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (userError || !userData) {
-      console.error('User lookup failed:', userError)
+    // 組織情報を含むユーザーデータを取得
+    const userData = await repositories.users.findById(user.id)
+    if (!userData) {
+      console.error('User lookup failed: User not found')
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // 組織情報を取得
+    if (!userData.organization_id) {
+      return NextResponse.json({ error: 'User not in organization' }, { status: 404 })
+    }
+
+    const organization = await repositories.organizations.findById(userData.organization_id)
+    if (!organization) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+
     // 使用量制限のチェック
-    const organization = userData.organizations
     const currentUsage = organization.used_checks ?? 0
     const maxChecks = organization.max_checks ?? 1000
     if (currentUsage >= maxChecks) {
@@ -111,22 +109,18 @@ export async function POST(request: NextRequest) {
     }
 
     // チェックレコードの作成
-    const { data: checkData, error: checkError } = await supabase
-      .from('checks')
-      .insert({
-        user_id: user.id,
-        organization_id: userData.organization_id!,
-        input_type: input_type,
-        original_text: input_type === 'image' ? '' : cleanText,
-        image_url: image_url,
-        ocr_status: input_type === 'image' ? 'pending' : null,
-        status: 'pending'
-      })
-      .select()
-      .single()
+    const checkData = await repositories.checks.create({
+      user_id: user.id,
+      organization_id: userData.organization_id!,
+      input_type: input_type,
+      original_text: input_type === 'image' ? '' : cleanText,
+      image_url: image_url,
+      ocr_status: input_type === 'image' ? 'pending' : null,
+      status: 'pending'
+    })
 
-    if (checkError) {
-      console.error('Error creating check:', checkError)
+    if (!checkData) {
+      console.error('Error creating check: Failed to create check record')
       return NextResponse.json({ error: 'Failed to create check' }, { status: 500 })
     }
 

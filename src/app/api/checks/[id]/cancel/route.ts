@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(
@@ -24,24 +25,17 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Get check data to verify ownership
-  const { data: checkData, error: checkError } = await supabase
-    .from('checks')
-    .select('id, user_id, organization_id, status')
-    .eq('id', checkId)
-    .single()
+  // Get repositories
+  const repositories = await getRepositories(supabase)
 
-  if (checkError || !checkData) {
+  // Get check data to verify ownership
+  const checkData = await repositories.checks.findById(checkId)
+  if (!checkData) {
     return NextResponse.json({ error: 'Check not found' }, { status: 404 })
   }
   
   // Further validation to ensure user can access this check
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id, organization_id, role')
-    .eq('id', user.id)
-    .single()
-
+  const userProfile = await repositories.users.findById(user.id)
   if (!userProfile || 
       (userProfile.role === 'user' && checkData.user_id !== user.id) || 
       (userProfile.organization_id !== checkData.organization_id)) {
@@ -58,18 +52,14 @@ export async function POST(
 
   try {
     // Update check status to cancelled
-    const { error: updateError } = await supabase
-      .from('checks')
-      .update({ 
-        status: 'failed',
-        error_message: 'ユーザーによってキャンセルされました',
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', checkId)
-      .eq('status', checkData.status) // Optimistic locking
+    const updatedCheck = await repositories.checks.update(checkId, { 
+      status: 'failed',
+      error_message: 'ユーザーによってキャンセルされました',
+      completed_at: new Date().toISOString()
+    })
 
-    if (updateError) {
-      console.error(`[CANCEL] Failed to update check ${checkId}:`, updateError)
+    if (!updatedCheck) {
+      console.error(`[CANCEL] Failed to update check ${checkId}: Update failed`)
       return NextResponse.json({ error: 'Failed to cancel check' }, { status: 500 })
     }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getRepositories } from '@/lib/repositories'
 import { createClient } from '@/lib/supabase/server'
 
 // Validation helpers
@@ -29,14 +30,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user profile to check permissions
-    const { data: userProfile, error: profileError } = await supabase
-      .from('users')
-      .select('organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (profileError || !userProfile) {
+    // Get user profile to check permissions
+    const userProfile = await repositories.users.findById(user.id)
+    if (!userProfile) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
@@ -67,7 +66,7 @@ export async function PATCH(
       }, { status: 400 })
     }
 
-    // Update organization
+    // Update organization using repository
     const updateData: { 
       name?: string
       icon_url?: string | null
@@ -79,19 +78,12 @@ export async function PATCH(
     if (logo_url !== undefined) updateData.logo_url = logo_url
     updateData.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase
-      .from('organizations')
-      .update(updateData)
-      .eq('id', organizationId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Organization update error:', error)
+    const organization = await repositories.organizations.update(organizationId, updateData)
+    if (!organization) {
       return NextResponse.json({ error: 'Failed to update organization' }, { status: 500 })
     }
 
-    return NextResponse.json({ organization: data })
+    return NextResponse.json({ organization })
   } catch (error) {
     console.error('Organizations API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -116,14 +108,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user profile to check permissions
-    const { data: userProfile, error: profileError } = await supabase
-      .from('users')
-      .select('organization_id, role')
-      .eq('id', user.id)
-      .single()
+    // Get repositories
+    const repositories = await getRepositories(supabase)
 
-    if (profileError || !userProfile) {
+    // Get user profile to check permissions
+    const userProfile = await repositories.users.findById(user.id)
+    if (!userProfile) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
@@ -132,19 +122,13 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get organization
-    const { data, error } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('id', organizationId)
-      .single()
-
-    if (error) {
-      console.error('Organization fetch error:', error)
+    // Get organization using repository
+    const organization = await repositories.organizations.findById(organizationId)
+    if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ organization: data })
+    return NextResponse.json({ organization })
   } catch (error) {
     console.error('Organizations API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

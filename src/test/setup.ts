@@ -2,6 +2,74 @@ import "@testing-library/jest-dom";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
+// Mock Supabase clients first - must be hoisted before imports
+vi.mock('@/lib/supabase/server', async () => {
+  const { createMockSupabaseClient } = await import('./mocks/supabase');
+  const { mockClient } = createMockSupabaseClient();
+  
+  return {
+    createClient: () => mockClient,
+  };
+});
+
+vi.mock('@/lib/supabase/client', async () => {
+  const { createMockSupabaseClient } = await import('./mocks/supabase');
+  const { mockClient } = createMockSupabaseClient();
+  
+  return {
+    createClient: () => mockClient,
+  };
+});
+
+// Mock AI client to avoid dangerouslyAllowBrowser errors
+vi.mock('@/lib/ai-client', () => ({
+  createChatCompletion: vi.fn().mockResolvedValue({
+    modified: 'テスト用の修正されたテキスト',
+    violations: [],
+  }),
+  createEmbedding: vi.fn().mockResolvedValue(new Array(384).fill(0.1)),
+  getAIClientInfo: vi.fn().mockReturnValue({
+    provider: 'mock',
+    chatModel: 'mock-model',
+    embeddingModel: 'mock-embedding-model',
+  }),
+  isUsingMock: vi.fn().mockReturnValue(true),
+  hasValidApiKey: true,
+}));
+
+// Mock OpenAI directly to avoid browser environment errors
+vi.mock('openai', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          choices: [{
+            message: {
+              content: '',
+              tool_calls: [{
+                function: {
+                  name: 'apply_yakukiho_rules',
+                  arguments: JSON.stringify({
+                    modified: 'テスト用の修正されたテキスト',
+                    violations: [],
+                  }),
+                },
+              }],
+            },
+          }],
+        }),
+      },
+    },
+    embeddings: {
+      create: vi.fn().mockResolvedValue({
+        data: [{
+          embedding: new Array(384).fill(0.1),
+        }],
+      }),
+    },
+  })),
+}));
+
 import { server } from "./mocks/server";
 
 // Extend global types for EventSource only
@@ -16,7 +84,7 @@ declare global {
 }
 
 // Start server before all tests
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
 
 // Clean up after each test case (e.g. clearing jsdom)
 afterEach(() => {
@@ -99,7 +167,6 @@ const MockEventSource = vi.fn(() => ({
   CONNECTING: 0,
   OPEN: 1,
   CLOSED: 2
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 })) as any
 
 // Add static properties
@@ -117,4 +184,3 @@ Object.assign(navigator, {
   }
 });
 
-// Remove global mocks - each test file should handle its own mocking

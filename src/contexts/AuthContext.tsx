@@ -1,8 +1,10 @@
 'use client'
 
 import { User } from '@supabase/supabase-js'
+import { useRouter } from 'next/navigation'
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
+import { apiClient } from '@/lib/api-client'
 import { createClient } from '@/lib/supabase/client'
 import { UserProfile, Organization } from '@/types'
 
@@ -25,7 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const router = useRouter()
   const supabase = createClient()
+
+  // API client にルーターを設定
+  useEffect(() => {
+    apiClient.setRouter(router)
+  }, [router])
 
   // Prevent hydration mismatch by waiting for client-side mount
   useEffect(() => {

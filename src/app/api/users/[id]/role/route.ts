@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getRepositories } from "@/lib/repositories";
 import { createClient } from "@/lib/supabase/server";
 
 export async function PATCH(
@@ -34,14 +35,12 @@ export async function PATCH(
       );
     }
 
-    // 現在のユーザー情報を取得
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
+    // Get repositories
+    const repositories = await getRepositories(supabase);
 
-    if (userError || !currentUser) {
+    // 現在のユーザー情報を取得
+    const currentUser = await repositories.users.findById(user.id);
+    if (!currentUser) {
       return NextResponse.json(
         { error: "ユーザー情報の取得に失敗しました" },
         { status: 400 },
@@ -65,14 +64,8 @@ export async function PATCH(
     }
 
     // 対象ユーザーが同じ組織に所属しているかチェック
-    const { data: targetUser, error: targetUserError } = await supabase
-      .from("users")
-      .select("organization_id, role, email")
-      .eq("id", userId)
-      .single();
-    
-
-    if (targetUserError || !targetUser) {
+    const targetUser = await repositories.users.findById(userId);
+    if (!targetUser) {
       return NextResponse.json(
         { error: "対象ユーザーが見つかりません" },
         { status: 404 },
@@ -87,30 +80,22 @@ export async function PATCH(
     }
 
     // ユーザーの権限を更新
-    const { data: updatedUser, error: updateError } = await supabase
-      .from("users")
-      .update({ role, updated_at: new Date().toISOString() })
-      .eq("id", userId)
-      .select("id, email, role, updated_at");
-    
-
-    if (updateError) {
+    const updatedUser = await repositories.users.updateRole(userId, role);
+    if (!updatedUser) {
       return NextResponse.json(
         { error: "ユーザー権限の変更に失敗しました" },
         { status: 500 },
       );
     }
 
-    if (!updatedUser || updatedUser.length === 0) {
-      return NextResponse.json(
-        { error: "ユーザーが見つかりません" },
-        { status: 404 },
-      );
-    }
-
     return NextResponse.json({
       message: "ユーザー権限が更新されました",
-      user: updatedUser[0],
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        updated_at: updatedUser.updated_at
+      },
     });
   } catch {
     return NextResponse.json(
