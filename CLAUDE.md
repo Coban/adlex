@@ -7,17 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AdLex is a SaaS application for pharmaceutical law (薬機法) compliance checking and text rewriting. It uses AI to detect violations in Japanese advertising text and suggest safe alternatives. The application supports both text input and image upload with OCR processing.
 
 ### Tech Stack
-- **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: Next.js API Routes, Server-Sent Events (SSE)
-- **Database**: Supabase PostgreSQL with pgvector extension
-- **Authentication**: Supabase Auth
-- **AI**: Multi-provider support (OpenAI, OpenRouter, LM Studio) with unified configuration
-- **OCR**: Tesseract.js (MVP), Google Vision API (production)
-- **Testing**: Vitest (unit), Playwright (E2E), MSW (mocking)
+
+* **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS, shadcn/ui
+* **Backend**: Next.js API Routes, Server-Sent Events (SSE)
+* **Database**: Supabase PostgreSQL with pgvector extension
+* **Authentication**: Supabase Auth
+* **AI**: Multi-provider support (OpenAI, OpenRouter, LM Studio) with unified configuration
+* **OCR**: Tesseract.js (MVP), Google Vision API (production)
+* **Testing**: Vitest (unit), Playwright (E2E), MSW (mocking)
 
 ## Development Commands
 
 ### Core Development
+
 ```bash
 # Start development server (uses Turbopack)
 npm run dev
@@ -30,6 +32,7 @@ npm start
 ```
 
 ### Code Quality
+
 ```bash
 # Type checking
 npm run type-check
@@ -49,6 +52,7 @@ npm run check:fix
 ```
 
 ### Database (Supabase)
+
 ```bash
 # Start local Supabase
 npm run supabase:start
@@ -70,6 +74,7 @@ npm run seed
 ```
 
 ### Testing
+
 ```bash
 # Unit tests with Vitest
 npm run test          # Run once
@@ -90,45 +95,49 @@ npm run test:all
 ## Architecture
 
 ### Background Processing System
+
 AdLex uses a sophisticated background processing system for handling AI analysis:
 
-- **Queue Management**: `CheckQueueManager` in `src/lib/queue-manager.ts` handles concurrent processing
-- **Check Processing**: `src/lib/check-processor.ts` orchestrates the full AI analysis pipeline
-- **Real-time Updates**: Server-Sent Events provide live progress updates to the UI
-- **Embedding Pipeline**: `src/lib/embedding-queue.ts` manages vector embedding generation for dictionary entries
+* **Queue Management**: `CheckQueueManager` in `src/lib/queue-manager.ts` handles concurrent processing
+* **Check Processing**: `src/lib/check-processor.ts` orchestrates the full AI analysis pipeline
+* **Real-time Updates**: Server-Sent Events provide live progress updates to the UI
+* **Embedding Pipeline**: `src/lib/embedding-queue.ts` manages vector embedding generation for dictionary entries
 
 ### Core Processing Flow
 
 #### Text Check Processing
+
 1. **Text Input**: User submits text through `TextChecker` component
 2. **API Processing**: `/api/checks` creates check record and starts background processing
-3. **AI Analysis**: 
-   - Pre-filter using pg_trgm similarity (≥0.3)
-   - Semantic filtering using pgvector (similarity >0.75)
-   - LLM processing with OpenAI function calling or LM Studio
+3. **AI Analysis**:
+
+   * Pre-filter using pg\_trgm similarity (≥0.3)
+   * Semantic filtering using pgvector (similarity >0.75)
+   * LLM processing with OpenAI function calling or LM Studio
 4. **Real-time Updates**: `/api/checks/[id]/stream` provides SSE updates
 5. **Results Display**: Violations highlighted with modification suggestions
 
-
-
 ### Key Components
-- `src/components/TextChecker.tsx`: Main UI for text input/analysis
-- `src/lib/ai-client.ts`: Multi-provider AI service abstraction
-- `src/lib/check-processor.ts`: Core AI analysis pipeline orchestration
-- `src/lib/queue-manager.ts`: Background processing queue management
-- `src/app/api/checks/route.ts`: Main check processing API
-- `src/app/api/checks/[id]/stream/route.ts`: SSE streaming endpoint
+
+* `src/components/TextChecker.tsx`: Main UI for text input/analysis
+* `src/lib/ai-client.ts`: Multi-provider AI service abstraction
+* `src/lib/check-processor.ts`: Core AI analysis pipeline orchestration
+* `src/lib/queue-manager.ts`: Background processing queue management
+* `src/app/api/checks/route.ts`: Main check processing API
+* `src/app/api/checks/[id]/stream/route.ts`: SSE streaming endpoint
 
 ### Database Schema
-- `organizations`: Company/group data with usage limits
-- `users`: User accounts with role-based access
-- `dictionaries`: NG/ALLOW phrase dictionary with vector embeddings
-- `checks`: Text analysis records and processing status
-- `violations`: Specific violation details with position and reasoning
+
+* `organizations`: Company/group data with usage limits
+* `users`: User accounts with role-based access
+* `dictionaries`: NG/ALLOW phrase dictionary with vector embeddings
+* `checks`: Text analysis records and processing status
+* `violations`: Specific violation details with position and reasoning
 
 ## AI Configuration
 
 ### Environment Variables
+
 ```bash
 # AI Configuration (Unified)
 AI_PROVIDER=openai                    # openai | openrouter | lmstudio
@@ -150,30 +159,33 @@ LM_STUDIO_BASE_URL=http://localhost:1234/v1
 # OPENROUTER_API_KEY=your-openrouter-key # Use AI_API_KEY with AI_PROVIDER=openrouter instead
 # LM_STUDIO_CHAT_MODEL=model-name      # Use AI_CHAT_MODEL instead  
 # LM_STUDIO_EMBEDDING_MODEL=model-name # Use AI_EMBEDDING_MODEL instead
-
-
 ```
 
 ### AI Client Usage
+
 The system automatically selects the appropriate AI client based on `AI_PROVIDER`:
-- **OpenAI**: Function calling with GPT models (production default)
-- **OpenRouter**: Access to various models through unified API
-- **LM Studio**: Local development with JSON parsing fallback
-- **Mock**: Automated testing with predictable responses
+
+* **OpenAI**: Function calling with GPT models (production default)
+* **OpenRouter**: Access to various models through unified API
+* **LM Studio**: Local development with JSON parsing fallback
+* **Mock**: Automated testing with predictable responses
 
 Provider selection logic in `src/lib/ai-client.ts`:
-- Uses `AI_PROVIDER` environment variable
-- Falls back to provider-specific legacy environment variables
-- Defaults to `openai` in production, `lmstudio` in development
+
+* Uses `AI_PROVIDER` environment variable
+* Falls back to provider-specific legacy environment variables
+* Defaults to `openai` in production, `lmstudio` in development
 
 ### Embedding Provider Selection (OpenRouter)
+
 Since OpenRouter does not support embeddings API, when using `AI_PROVIDER=openrouter`, you can choose the embedding provider:
 
-- **`AI_EMBEDDING_PROVIDER=openai`**: Use OpenAI embeddings ($0.02/1M tokens)
-- **`AI_EMBEDDING_PROVIDER=lmstudio`**: Use local LM Studio embeddings (free, offline)
-- **`AI_EMBEDDING_PROVIDER=auto`**: Try OpenAI first, fallback to LM Studio if failed
+* **`AI_EMBEDDING_PROVIDER=openai`**: Use OpenAI embeddings (\$0.02/1M tokens)
+* **`AI_EMBEDDING_PROVIDER=lmstudio`**: Use local LM Studio embeddings (free, offline)
+* **`AI_EMBEDDING_PROVIDER=auto`**: Try OpenAI first, fallback to LM Studio if failed
 
 **Configuration Examples:**
+
 ```bash
 # Cost-effective: OpenRouter chat + OpenAI embeddings
 AI_PROVIDER=openrouter
@@ -195,70 +207,81 @@ OPENAI_API_KEY=sk-xxxxx
 LM_STUDIO_BASE_URL=http://localhost:1234/v1
 ```
 
-
-
 ## Testing Setup
 
 ### Unit Tests (Vitest)
-- Configuration: `vitest.config.ts`
-- Setup: `src/test/setup.ts`
-- Mocking: MSW handlers in `src/test/mocks/`
-- Location: `src/**/*.{test,spec}.{ts,tsx}`
+
+* Configuration: `vitest.config.ts`
+* Setup: `src/test/setup.ts`
+* Mocking: MSW handlers in `src/test/mocks/`
+* Location: `src/**/*.{test,spec}.{ts,tsx}`
 
 ### E2E Tests (Playwright)
-- Configuration: `playwright.config.ts`
-- Tests: `e2e/*.spec.ts`
-- Base URL: `http://localhost:3001`
-- Runs against actual Supabase local instance
+
+* Configuration: `playwright.config.ts`
+* Tests: `e2e/*.spec.ts`
+* Base URL: `http://localhost:3001`
+* Runs against actual Supabase local instance
 
 ### Test Data
+
 Use `npm run seed` to create test accounts:
-- Admin: `admin@test.com` / `password123`
-- User: `user1@test.com` / `password123`
+
+* Admin: `admin@test.com` / `password123`
+* User: `user1@test.com` / `password123`
 
 ## Development Guidelines
 
 ### Code Style
-- Follow existing TypeScript patterns
-- Use Next.js 15 App Router conventions
-- Implement proper error handling and loading states
-- Use Supabase client for database operations
-- Follow the established ESLint configuration
-- **コード内のコメントは日本語で記述すること**
+
+* Follow existing TypeScript patterns
+* Use Next.js 15 App Router conventions
+* Implement proper error handling and loading states
+* Use Supabase client for database operations
+* Follow the established ESLint configuration
+* **Write comments in Japanese within the code**
 
 ### Authentication
-- Use `createClient()` from `@/lib/supabase/server` for API routes
-- Check `user.role` for admin operations
-- Implement proper RLS policies for data access
+
+* Use `createClient()` from `@/lib/supabase/server` for API routes
+* Check `user.role` for admin operations
+* Implement proper RLS policies for data access
 
 ### AI Integration
-- Use `createChatCompletion()` and `createEmbedding()` from `@/lib/ai-client`
-- Support for multiple AI providers through unified interface
-- Provider-specific error handling with clear error messages
-- Function calling for OpenAI/OpenRouter, JSON parsing fallback for LM Studio
-- Automatic model validation and configuration suggestions
 
-
+* Use `createChatCompletion()` and `createEmbedding()` from `@/lib/ai-client`
+* Support for multiple AI providers through unified interface
+* Provider-specific error handling with clear error messages
+* Function calling for OpenAI/OpenRouter, JSON parsing fallback for LM Studio
+* Automatic model validation and configuration suggestions
 
 ### Real-time Updates
-- Use Server-Sent Events for progress updates
-- Implement proper SSE error handling
-- Keep connections lightweight and efficient
+
+* Use Server-Sent Events for progress updates
+* Implement proper SSE error handling
+* Keep connections lightweight and efficient
 
 ## Important Notes
 
-- Always run `npm run check` before committing
-- Use `npm run seed` to reset test data
-- E2E tests require local Supabase instance
-- LM Studio requires manual model loading for local development
-- Vector embeddings are automatically generated for dictionary entries using pgvector
-- Database schema is managed through Supabase migrations
+* Always run `npm run check` before committing
 
-- AI provider can be switched without code changes using environment variables
-- Background processing uses queue system to handle concurrent checks efficiently
-- Real-time progress updates are delivered via Server-Sent Events
+* Use `npm run seed` to reset test data
+
+* E2E tests require local Supabase instance
+
+* LM Studio requires manual model loading for local development
+
+* Vector embeddings are automatically generated for dictionary entries using pgvector
+
+* Database schema is managed through Supabase migrations
+
+* AI provider can be switched without code changes using environment variables
+
+* Background processing uses queue system to handle concurrent checks efficiently
+
+* Real-time progress updates are delivered via Server-Sent Events
 
 ## Task Management
 
-- After completing an implementation, update `TODO.md` to reflect the changes  
-- Keep tasks up to date to maintain accurate project tracking
+* After completing an implementation, update `TODO.md` to reflect the changes
+* **After completing each task, you must run `npm run test` and `npm run check`, and fix any errors before committing or opening a PR.**

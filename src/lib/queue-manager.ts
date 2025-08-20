@@ -188,7 +188,7 @@ class CheckQueueManager {
         
         // Mark check as permanently failed
         try {
-          const { createClient } = await import('@/lib/supabase/server')
+          const { createClient } = await import('@/infra/supabase/serverClient')
           const supabase = await createClient()
           
           await supabase

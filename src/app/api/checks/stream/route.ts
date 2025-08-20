@@ -1,31 +1,40 @@
 import { NextRequest } from 'next/server'
 
+import { getRepositories } from '@/core/ports'
+import { createClient } from '@/infra/supabase/serverClient'
 import { queueManager } from '@/lib/queue-manager'
-import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database.types'
 
 // キュー状況とチェック進捗を統合配信するSSEエンドポイント
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
 
-  // 認証チェック
-  const authResult = await supabase.auth.getUser()
+  // クエリパラメータからトークンを取得（EventSourceはheaderを送れないため）
+  const url = new URL(request.url)
+  const token = url.searchParams.get('token')
+
+  // 認証チェック（トークンがある場合は明示的に設定）
+  let authResult
+  if (token) {
+    authResult = await supabase.auth.getUser(token)
+  } else {
+    authResult = await supabase.auth.getUser()
+  }
+  
   const user = authResult.data.user
   const authError = authResult.error
   
   const currentUser = user
   if (authError || !currentUser) {
-    // 同一オリジンではクッキー認証のみを許可
+    // 認証失敗
     return new Response('Unauthorized', { status: 401 })
   }
 
-  // ユーザー組織情報を取得
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id, organization_id, role')
-    .eq('id', currentUser.id)
-    .single()
+  // Get repositories
+  const repositories = await getRepositories(supabase)
 
+  // ユーザー組織情報を取得
+  const userProfile = await repositories.users.findById(currentUser.id)
   if (!userProfile) {
     return new Response('User profile not found', { status: 404 })
   }
@@ -52,23 +61,18 @@ export async function GET(request: NextRequest) {
           const queueStatus = queueManager.getStatus()
           
           // データベースから処理中のチェック数を取得（より正確な情報）
-          const { data: processingChecks } = await supabase
-            .from('checks')
-            .select('id, status, created_at, input_type')
-            .in('status', ['pending', 'processing'])
-            .order('created_at', { ascending: true })
+          const processingChecks = await repositories.checks.findMany({
+            where: { status: 'pending' },
+            orderBy: [{ field: 'created_at', direction: 'asc' }]
+          })
 
           // 組織の使用制限情報を取得
-          const { data: organizationData } = await supabase
-            .from('organizations')
-            .select('max_checks, used_checks')
-            .eq('id', userProfile.organization_id ?? 0)
-            .single()
+          const organizationData = await repositories.organizations.findById(userProfile.organization_id ?? 0)
 
           // 処理タイプ別の統計
           const processingStats = {
-            text: processingChecks?.filter(c => c.input_type === 'text' || !c.input_type).length ?? 0,
-            image: processingChecks?.filter(c => c.input_type === 'image').length ?? 0
+            text: processingChecks.filter(c => c.input_type === 'text' || !c.input_type).length,
+            image: processingChecks.filter(c => c.input_type === 'image').length
           }
 
           const queueData = {
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
               queueLength: queueStatus.queueLength,
               processingCount: queueStatus.processingCount,
               maxConcurrent: queueStatus.maxConcurrent,
-              databaseProcessingCount: processingChecks?.length ?? 0,
+              databaseProcessingCount: processingChecks.length,
               availableSlots: Math.max(0, queueStatus.maxConcurrent - queueStatus.processingCount),
               processingStats,
               canStartNewCheck: queueStatus.processingCount < queueStatus.maxConcurrent

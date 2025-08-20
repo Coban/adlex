@@ -61,6 +61,8 @@ export interface CheckStreamData {
   id?: number
   original_text?: string
   modified_text?: string
+  ocr_status?: 'pending' | 'processing' | 'completed' | 'failed' | null
+  extracted_text?: string | null
   violations?: Array<{
     id: number
     start_pos: number

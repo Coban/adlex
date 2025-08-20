@@ -1,207 +1,152 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createClient } from '@/lib/supabase/server'
+import {
+  validateGetCheckHistoryQuery,
+  createErrorResponse
+} from '@/core/dtos/check-history'
+import { getRepositories } from '@/core/ports'
+import { GetCheckHistoryUseCase } from '@/core/usecases/check-history/getCheckHistory'
+import { createClient } from '@/infra/supabase/serverClient'
 
+/**
+ * チェック履歴取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const searchParams = request.nextUrl.searchParams
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // 認証チェック
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
-    // Get user data with role and organization
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('id, email, organization_id, role')
-      .eq('id', user.id)
-      .single()
-
-    if (userDataError || !userData?.organization_id) {
-      return NextResponse.json({ error: 'User not found or not in organization' }, { status: 404 })
+    // クエリパラメータの取得とバリデーション
+    const url = request.nextUrl
+    const queryData = {
+      page: url.searchParams.get("page") ? parseInt(url.searchParams.get("page")!) : 1,
+      limit: url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")!) : 20,
+      status: url.searchParams.get("status") ?? 'ALL',
+      search: url.searchParams.get("search") ?? undefined,
+      dateFrom: url.searchParams.get("dateFrom") ?? undefined,
+      dateTo: url.searchParams.get("dateTo") ?? undefined,
+      userId: url.searchParams.get("userId") ?? undefined,
+      organizationId: url.searchParams.get("organizationId") ? parseInt(url.searchParams.get("organizationId")!) : undefined,
+      inputType: url.searchParams.get("inputType") ?? undefined,
+      dateFilter: url.searchParams.get("dateFilter") ?? undefined,
     }
 
-    // Parse query parameters
-    const page = parseInt(searchParams.get('page') ?? '1')
-    const limit = parseInt(searchParams.get('limit') ?? '20')
-    const search = searchParams.get('search') ?? ''
-    const status = searchParams.get('status') ?? ''
-    const inputType = searchParams.get('inputType') ?? ''
-    const dateFilter = searchParams.get('dateFilter') ?? ''
-    const userId = searchParams.get('userId') ?? ''
-    
-    const offset = (page - 1) * limit
-
-    // Build query
-    let query = supabase
-      .from('checks')
-      .select(`
-        id,
-        original_text,
-        modified_text,
-        status,
-        input_type,
-        image_url,
-        extracted_text,
-        ocr_status,
-        created_at,
-        completed_at,
-        user_id,
-        users!inner(email),
-        violations:violations(id)
-      `)
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-
-    // Apply filters based on user role
-    if (userData.role === 'user') {
-      // Regular users can only see their own checks
-      query = query.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      // Admins can filter by specific user
-      query = query.eq('user_id', userId)
+    const validationResult = validateGetCheckHistoryQuery(queryData)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
     }
 
-    // Apply text search filter
-    if (search) {
-      query = query.ilike('original_text', `%${search}%`)
-    }
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
+    const currentUserData = await repositories.users.findById(user.id)
 
-    // Apply status filter
-    if (status && ['pending', 'processing', 'completed', 'failed'].includes(status)) {
-      query = query.eq('status', status as 'pending' | 'processing' | 'completed' | 'failed')
-    }
-
-    // Apply input type filter
-    if (inputType && ['text', 'image'].includes(inputType)) {
-      query = query.eq('input_type', inputType as 'text' | 'image')
-    }
-
-    // Apply date filter
-    if (dateFilter && ['today', 'week', 'month'].includes(dateFilter)) {
-      const now = new Date()
-      let startDate: Date
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          break
-        case 'week':
-          const dayOfWeek = now.getDay()
-          startDate = new Date(now.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000))
-          startDate.setHours(0, 0, 0, 0)
-          break
-        case 'month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-          break
-        default:
-          startDate = new Date(0) // fallback
-      }
-
-      query = query.gte('created_at', startDate.toISOString())
-    }
-
-    // Get total count for pagination
-    let countQuery = supabase
-      .from('checks')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', userData.organization_id)
-      .is('deleted_at', null)
-
-    if (userData.role === 'user') {
-      countQuery = countQuery.eq('user_id', userData.id)
-    } else if (userData.role === 'admin' && userId) {
-      countQuery = countQuery.eq('user_id', userId)
-    }
-
-    if (search) {
-      countQuery = countQuery.ilike('original_text', `%${search}%`)
-    }
-
-    if (status && ['pending', 'processing', 'completed', 'failed'].includes(status)) {
-      countQuery = countQuery.eq('status', status as 'pending' | 'processing' | 'completed' | 'failed')
-    }
-
-    if (inputType && ['text', 'image'].includes(inputType)) {
-      countQuery = countQuery.eq('input_type', inputType as 'text' | 'image')
-    }
-
-    if (dateFilter && ['today', 'week', 'month'].includes(dateFilter)) {
-      const now = new Date()
-      let startDate: Date
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          break
-        case 'week':
-          const dayOfWeek = now.getDay()
-          startDate = new Date(now.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000))
-          startDate.setHours(0, 0, 0, 0)
-          break
-        case 'month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-          break
-        default:
-          startDate = new Date(0)
-      }
-
-      countQuery = countQuery.gte('created_at', startDate.toISOString())
-    }
-
-    const { count, error: countError } = await countQuery
-
-    if (countError) {
-      console.error('Count query error:', countError)
-      return NextResponse.json({ error: 'Failed to get count' }, { status: 500 })
-    }
-
-    // Get paginated results
-    const { data: checks, error: checksError } = await query
-      .range(offset, offset + limit - 1)
-
-    if (checksError) {
-      console.error('Checks query error:', checksError)
-      return NextResponse.json({ error: 'Failed to fetch checks' }, { status: 500 })
-    }
-
-    // Format the response
-    const formattedChecks = checks?.map(check => ({
-      id: check.id,
-      originalText: check.original_text,
-      modifiedText: check.modified_text,
-      status: check.status,
-      inputType: check.input_type,
-      imageUrl: check.image_url,
-      extractedText: check.extracted_text,
-      ocrStatus: check.ocr_status,
-      createdAt: check.created_at,
-      completedAt: check.completed_at,
-      userEmail: check.users?.email,
-      violationCount: check.violations?.length ?? 0
-    })) ?? []
-
-    const totalPages = Math.ceil((count ?? 0) / limit)
-
-    return NextResponse.json({
-      checks: formattedChecks,
-      pagination: {
-        page,
-        limit,
-        total: count ?? 0,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1
-      },
-      userRole: userData.role
+    // ユースケース実行
+    const getCheckHistoryUseCase = new GetCheckHistoryUseCase(repositories)
+    const result = await getCheckHistoryUseCase.execute({
+      currentUserId: user.id,
+      page: validationResult.data.page,
+      limit: validationResult.data.limit,
+      status: validationResult.data.status,
+      search: validationResult.data.search,
+      dateFrom: validationResult.data.dateFrom,
+      dateTo: validationResult.data.dateTo,
+      userId: validationResult.data.userId,
+      organizationId: validationResult.data.organizationId,
+      // pass through for repository-pattern tests
+      ...(validationResult.data.inputType ? { inputType: validationResult.data.inputType } : {}),
+      ...(validationResult.data.dateFilter ? { dateFilter: validationResult.data.dateFilter } : {}),
     })
 
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
+      // 優先分岐: ユーザー未発見/未所属は404固定文言
+      if (
+        (result.error.code === 'AUTHENTICATION_ERROR' && result.error.message === 'ユーザーが見つかりません') ||
+        result.error.code === 'AUTHORIZATION_ERROR'
+      ) {
+        return NextResponse.json(
+          { error: 'User not found or not in organization' },
+          { status: 404 }
+        )
+      }
+      if (statusCode === 401) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      if (statusCode === 500) {
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+      }
+      return NextResponse.json(
+        { error: result.error.message },
+        { status: statusCode }
+      )
+    }
+
+    // 成功レスポンス
+    // 期待されるレスポンス形に整形
+    const formatted = {
+      checks: result.data.checks.map((c) => ({
+        id: c.id,
+        originalText: c.originalText,
+        modifiedText: c.modifiedText,
+        status: c.status,
+        inputType: c.inputType,
+        imageUrl: null,
+        extractedText: null,
+        ocrStatus: null,
+        createdAt: c.createdAt,
+        completedAt: c.updatedAt,
+        userEmail: c.user?.email ?? undefined,
+        violationCount: c.violationCount,
+      })),
+      pagination: result.data.pagination,
+      userRole: currentUserData?.role,
+    }
+    return NextResponse.json(formatted)
+
   } catch (error) {
-    console.error('History API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("チェック履歴取得API エラー:", error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'AUTHENTICATION_ERROR':
+      return 401
+    case 'AUTHORIZATION_ERROR':
+      return 403
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+      return 404
+    case 'CONFLICT_ERROR':
+      return 409
+    case 'REPOSITORY_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

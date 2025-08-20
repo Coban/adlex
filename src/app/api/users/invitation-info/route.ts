@@ -1,57 +1,82 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  validateGetInvitationInfoQuery,
+  createSuccessResponse,
+  createErrorResponse
+} from '@/core/dtos/user-invitations'
+import { getRepositories } from '@/core/ports'
+import { GetInvitationInfoUseCase } from '@/core/usecases/users/getInvitationInfo'
+import { createClient } from "@/infra/supabase/serverClient";
 
+/**
+ * 招待情報取得API（リファクタリング済み）
+ * DTO validate → usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const token = searchParams.get("token");
+    const queryParams = Object.fromEntries(searchParams.entries())
 
-    if (!token) {
+    // DTOバリデーション
+    const validationResult = validateGetInvitationInfoQuery(queryParams)
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: "トークンが必要です" },
-        { status: 400 },
-      );
+        createErrorResponse(
+          validationResult.error.code,
+          validationResult.error.message,
+          validationResult.error.details
+        ),
+        { status: 400 }
+      )
     }
 
-    const supabase = await createClient();
+    const supabase = await createClient()
+    
+    // リポジトリコンテナの取得
+    const repositories = await getRepositories(supabase)
 
-    // 有効な招待情報を取得
-    const { data: invitation, error: invitationError } = await supabase
-      .from("user_invitations")
-      .select(`
-        email,
-        role,
-        organization_id,
-        organizations (
-          name
-        )
-      `)
-      .eq("token", token)
-      .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .single();
+    // ユースケース実行
+    const getInvitationInfoUseCase = new GetInvitationInfoUseCase(repositories)
+    const result = await getInvitationInfoUseCase.execute({
+      token: validationResult.data.token
+    })
 
-    if (invitationError || !invitation) {
+    // 結果の処理
+    if (!result.success) {
+      const statusCode = getStatusCodeFromError(result.error.code)
       return NextResponse.json(
-        { error: "無効または期限切れの招待リンクです" },
-        { status: 400 },
-      );
+        createErrorResponse(result.error.code, result.error.message),
+        { status: statusCode }
+      )
     }
 
-    // TypeScriptのため、organizationsの型を確認
-    const organization = invitation.organizations as { name: string } | null;
+    // 成功レスポンス
+    return NextResponse.json(createSuccessResponse(result.data))
 
-    return NextResponse.json({
-      email: invitation.email,
-      role: invitation.role,
-      organizationName: organization?.name ?? "不明な組織",
-    });
   } catch (error) {
-    console.error("Get invitation info error:", error);
+    console.error("招待情報取得API エラー:", error)
     return NextResponse.json(
-      { error: "招待情報の取得に失敗しました" },
-      { status: 500 },
-    );
+      createErrorResponse('INTERNAL_ERROR', '招待情報の取得に失敗しました'),
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * エラーコードからHTTPステータスコードを取得するヘルパー
+ */
+function getStatusCodeFromError(errorCode: string): number {
+  switch (errorCode) {
+    case 'VALIDATION_ERROR':
+      return 400
+    case 'NOT_FOUND_ERROR':
+    case 'EXPIRED_ERROR':
+    case 'ALREADY_ACCEPTED_ERROR':
+      return 400
+    case 'INTERNAL_ERROR':
+      return 500
+    default:
+      return 500
   }
 }

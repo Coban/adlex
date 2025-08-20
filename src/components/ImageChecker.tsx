@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/infra/supabase/clientClient'
 
 type UploadState = 'idle' | 'ready' | 'validating' | 'uploading' | 'uploaded' | 'starting_check' | 'processing' | 'completed' | 'failed'
 

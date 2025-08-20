@@ -12,7 +12,7 @@ export default function MSWInit() {
        typeof window !== 'undefined' && window.location.search.includes('msw=true'))
     ) {
       // 動的インポートでブラウザー環境でのみMSWを読み込み
-      import('../test/mocks/browser').then(({ worker }) => {
+      import('../../tests/mocks/browser').then(({ worker }) => {
         worker.start({
           onUnhandledRequest: 'bypass',
         });

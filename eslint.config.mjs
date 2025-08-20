@@ -1,5 +1,6 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,23 +17,7 @@ const eslintConfig = [
       "src/app/api/**/__tests__/**/*.ts",
       "src/**/__tests__/**/*.ts"
     ],
-    languageOptions: {
-      parserOptions: {
-        project: "./tsconfig.json",
-        tsconfigRootDir: __dirname,
-      },
-    },
     rules: {
-      // TypeScript specific rules
-      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-inferrable-types": "error",
-      "@typescript-eslint/no-non-null-assertion": "off", // 開発中は許可
-      "@typescript-eslint/prefer-nullish-coalescing": "warn", // warningに変更
-      "@typescript-eslint/prefer-optional-chain": "error",
-      "@typescript-eslint/strict-boolean-expressions": "off", // Next.jsではfalsy値が多用されるため
-      "@typescript-eslint/no-unnecessary-condition": "off", // 開発中は無効化
-      
       // General code quality rules
       "prefer-const": "error",
       "no-var": "error",
@@ -53,6 +38,50 @@ const eslintConfig = [
         "newlines-between": "always",
         "alphabetize": { "order": "asc" }
       }],
+    },
+  },
+  // TypeScript files: enable type-aware linting and TS-specific rules
+  {
+    files: [
+      "**/*.{ts,tsx}",
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: "./tsconfig.eslint.json",
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      // TypeScript specific rules
+      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-inferrable-types": "error",
+      "@typescript-eslint/no-non-null-assertion": "off", // 開発中は許可
+      "@typescript-eslint/prefer-nullish-coalescing": "warn", // warningに変更
+      "@typescript-eslint/prefer-optional-chain": "error",
+      "@typescript-eslint/strict-boolean-expressions": "off", // Next.jsではfalsy値が多用されるため
+      "@typescript-eslint/no-unnecessary-condition": "off", // 開発中は無効化
+    },
+  },
+  // Test files: disable type-aware linting to avoid module resolution noise
+  {
+    files: [
+      "src/**/__tests__/**/*.{ts,tsx}",
+      "src/app/**/__tests__/**/*.{ts,tsx}",
+      "src/test/**/*.{ts,tsx}",
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: null,
+      },
+    },
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/prefer-optional-chain": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
+      "@typescript-eslint/no-unnecessary-condition": "off",
     },
   },
 ];

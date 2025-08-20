@@ -1,42 +1,59 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
-import type { Database } from '@/types/database.types'
+import {
+  createErrorResponse,
+  createSuccessResponse
+} from '@/core/dtos/auth'
+import { SignOutUseCase } from '@/core/usecases/auth/signOut'
 
+/**
+ * サインアウトAPI（リファクタリング済み）
+ * usecase 呼び出し → HTTP 変換の薄い層
+ */
 export async function POST(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  // Prepare a response object that Supabase client can write cookies into
-  const supabaseResponse = NextResponse.json({ success: true })
+    // Supabaseレスポンスオブジェクトを準備（クッキー書き込み用）
+    const supabaseResponse = NextResponse.json({ success: true })
 
-  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          supabaseResponse.cookies.set(name, value, options)
-        })
-      },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  })
+    // 認証リポジトリを作成
+    const { SupabaseAuthRepository } = await import('@/lib/repositories/supabase/authRepository')
+    const authRepository = new SupabaseAuthRepository(
+      supabaseUrl,
+      supabaseAnonKey,
+      request.cookies.getAll(),
+      (name: string, value: string, options?: Record<string, unknown>) => {
+        supabaseResponse.cookies.set(name, value, options)
+      }
+    )
 
-  const { error } = await supabase.auth.signOut()
-  if (error) {
+    // ユースケース実行
+    const signOutUseCase = new SignOutUseCase(authRepository)
+    const result = await signOutUseCase.execute({})
+
+    // 結果の処理
+    if (!result.success) {
+      return NextResponse.json(
+        createErrorResponse(result.error.code, result.error.message),
+        { status: 500, headers: supabaseResponse.headers }
+      )
+    }
+
+    // 成功レスポンス
     return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500, headers: supabaseResponse.headers }
+      createSuccessResponse(result.data),
+      { headers: supabaseResponse.headers }
+    )
+
+  } catch (error) {
+    console.error("サインアウトAPI エラー:", error)
+    return NextResponse.json(
+      createErrorResponse('INTERNAL_ERROR', 'サーバーエラーが発生しました'),
+      { status: 500 }
     )
   }
-
-  return supabaseResponse
 }
 
 
