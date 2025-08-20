@@ -4,13 +4,12 @@ import { Loader2, UploadCloud, Copy, Download, X, Image as ImageIcon, CheckCircl
 import { useEffect, useMemo, useRef, useState, useId } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/infra/supabase/clientClient'
-import { UploadState, QueueStatus, OrganizationStatus, SystemStatus, CheckItem, CheckResult, Violation, CheckStreamData } from '@/types'
+import { UploadState, QueueStatus, OrganizationStatus, SystemStatus, CheckItem, CheckResult, CheckStreamData } from '@/types'
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 const ACCEPT_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -41,6 +40,9 @@ export default function ImageChecker() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
   
+  // サーバーチェックIDとクライアントIDのマッピング
+  const serverCheckIds = useRef<Map<string, string>>(new Map())
+  
   // キューとシステム状態
   const [queueStatus, setQueueStatus] = useState<QueueStatus>({
     queueLength: 0,
@@ -66,28 +68,77 @@ export default function ImageChecker() {
   const globalStreamRef = useRef<EventSource | null>(null)
   const cancelControllers = useRef<Map<string, { eventSource: EventSource; pollInterval: NodeJS.Timeout; timeout: NodeJS.Timeout }>>(new Map())
   
+  // 型安全なEventSourceインターフェース
+  interface SafeEventSource {
+    close(): void;
+  }
+  
   // アクティブチェックの取得
   const activeCheck = useMemo(() => (
     activeCheckId ? checks.find(check => check.id === activeCheckId) : null
   ), [activeCheckId, checks])
   const hasActiveCheck = activeCheck?.result
 
-  // EventSourceの安全なクローズ
+  // EventSourceの安全なクローズ（型安全性を改善）
   function safeCloseEventSource(source: EventSource | null | undefined) {
     try {
-      const maybeClose = (source as unknown as { close?: unknown })?.close
-      if (typeof maybeClose === 'function') {
-        maybeClose.call(source)
+      if (source && typeof (source as SafeEventSource).close === 'function') {
+        (source as SafeEventSource).close()
       }
     } catch {
       // ignore errors in cleanup
     }
   }
+  
+  // タイムアウトエラーメッセージ生成のヘルパー
+  function createTimeoutErrorMessage(timeoutMs: number): string {
+    return `処理がタイムアウトしました（${Math.round(timeoutMs/60000)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`
+  }
+  
+  // cancelControllersの安全なクリーンアップ
+  function cleanupControllers(checkId: string) {
+    const controllers = cancelControllers.current.get(checkId)
+    if (controllers) {
+      safeCloseEventSource(controllers.eventSource)
+      clearInterval(controllers.pollInterval)
+      clearTimeout(controllers.timeout)
+      cancelControllers.current.delete(checkId)
+    }
+  }
+  
+  // 画像チェックレポート生成のヘルパー関数
+  function generateImageCheckReport(result: CheckResult): string {
+    return `AdLex - 画像チェック結果レポート
+
+生成日時: ${new Date().toLocaleString('ja-JP')}
+
+OCR抽出テキスト:
+${result.original_text}
+
+修正されたテキスト:
+${result.modified_text}
+
+検出された違反:
+${result.violations.length > 0 
+  ? result.violations.map((v, i) => `${i + 1}. ${result.original_text.slice(v.startPos, v.endPos)} - ${v.reason}`).join('\n') 
+  : '違反は検出されませんでした'}`
+  }
 
   // キューステータス監視用SSE接続（TextCheckerパターン）
   useEffect(() => {
+    // safeCloseEventSourceを効果内で定義
+    function safeCloseEventSourceLocal(source: EventSource | null | undefined) {
+      try {
+        if (source && typeof (source as SafeEventSource).close === 'function') {
+          (source as SafeEventSource).close()
+        }
+      } catch {
+        // ignore errors in cleanup
+      }
+    }
+
     if (globalStreamRef.current) {
-      safeCloseEventSource(globalStreamRef.current)
+      safeCloseEventSourceLocal(globalStreamRef.current)
     }
 
     const timer = setTimeout(() => {
@@ -120,7 +171,7 @@ export default function ImageChecker() {
     return () => {
       clearTimeout(timer)
       if (globalStreamRef.current) {
-        safeCloseEventSource(globalStreamRef.current)
+        safeCloseEventSourceLocal(globalStreamRef.current)
       }
       globalStreamRef.current = null
     }
@@ -131,12 +182,19 @@ export default function ImageChecker() {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       // すべてのキャンセルコントローラーをクリーンアップ
-      cancelControllers.current.forEach(controller => {
-        safeCloseEventSource(controller.eventSource)
+      const currentControllers = cancelControllers.current
+      currentControllers.forEach(controller => {
+        try {
+          if (controller.eventSource && typeof (controller.eventSource as SafeEventSource).close === 'function') {
+            (controller.eventSource as SafeEventSource).close()
+          }
+        } catch {
+          // ignore errors in cleanup
+        }
         clearInterval(controller.pollInterval)
         clearTimeout(controller.timeout)
       })
-      cancelControllers.current.clear()
+      currentControllers.clear()
     }
   }, [previewUrl])
 
@@ -375,6 +433,9 @@ export default function ImageChecker() {
         throw new Error('チェックIDが取得できませんでした')
       }
       
+      // サーバーチェックIDをマッピングに保存
+      serverCheckIds.current.set(checkId, checkData.checkId)
+      
       setUploadProgress(100)
 
       // 状態更新
@@ -413,10 +474,8 @@ export default function ImageChecker() {
           }
           
           if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
-            clearInterval(pollingIntervalId)
-            clearTimeout(timeout)
-            safeCloseEventSource(eventSource)
-            cancelControllers.current.delete(checkId)
+            cleanupControllers(checkId)
+            serverCheckIds.current.delete(checkId)
             
             if (currentCheck.status === 'completed') {
               // 違反情報の取得
@@ -431,7 +490,13 @@ export default function ImageChecker() {
                 `)
                 .eq('check_id', checkData.checkId)
               
-              const mappedViolations = violations?.map((v: any) => ({
+              const mappedViolations = violations?.map((v: { 
+                id: number; 
+                start_pos: number; 
+                end_pos: number; 
+                reason: string; 
+                dictionary_id: number | null 
+              }) => ({
                 id: v.id,
                 startPos: v.start_pos,
                 endPos: v.end_pos,
@@ -491,10 +556,8 @@ export default function ImageChecker() {
         }
         
         if (pollCount >= maxPolls) {
-          clearInterval(pollingIntervalId)
-          clearTimeout(timeout)
-          safeCloseEventSource(eventSource)
-          cancelControllers.current.delete(checkId)
+          cleanupControllers(checkId)
+          serverCheckIds.current.delete(checkId)
           setChecks(prev => prev.map(check => 
             check.id === checkId 
               ? { 
@@ -511,8 +574,8 @@ export default function ImageChecker() {
       
       const timeoutMs = maxPolls * pollIntervalMs
       const timeout = setTimeout(() => {
-        clearInterval(pollingIntervalId)
-        safeCloseEventSource(eventSource)
+        cleanupControllers(checkId)
+        serverCheckIds.current.delete(checkId)
         setChecks(prev => prev.map(check => 
           check.id === checkId 
             ? { 
@@ -522,7 +585,7 @@ export default function ImageChecker() {
               }
             : check
         ))
-        setErrorMessage(`処理がタイムアウトしました（${Math.round(timeoutMs/60000)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
+        setErrorMessage(createTimeoutErrorMessage(timeoutMs))
         setState('failed')
       }, timeoutMs)
 
@@ -563,9 +626,8 @@ export default function ImageChecker() {
         try {
           const data: CheckStreamData = JSON.parse(event.data)
           
-          clearInterval(pollingIntervalId)
-          clearTimeout(timeout)
-          cancelControllers.current.delete(checkId)
+          cleanupControllers(checkId)
+          serverCheckIds.current.delete(checkId)
           
           const mappedViolations = data.violations?.map((v) => ({
             id: v.id,
@@ -603,9 +665,8 @@ export default function ImageChecker() {
       eventSource.addEventListener('error', (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data)
-          clearInterval(pollingIntervalId)
-          clearTimeout(timeout)
-          cancelControllers.current.delete(checkId)
+          cleanupControllers(checkId)
+          serverCheckIds.current.delete(checkId)
           const errorMessage = data.error ?? 'チェック処理が失敗しました'
           console.error('Check failed via SSE error event:', errorMessage)
           setChecks(prev => prev.map(check => 
@@ -657,35 +718,32 @@ export default function ImageChecker() {
   
   // キャンセル機能（TextCheckerパターン）
   const handleCancel = async (checkId: string) => {
-    const controllers = cancelControllers.current.get(checkId)
-    if (controllers) {
-      safeCloseEventSource(controllers.eventSource)
-      clearInterval(controllers.pollInterval)
-      clearTimeout(controllers.timeout)
-      cancelControllers.current.delete(checkId)
+    cleanupControllers(checkId)
 
-      setChecks(prev => prev.map(check => 
-        check.id === checkId 
-          ? { 
-              ...check, 
-              status: 'cancelled',
-              statusMessage: 'チェックがキャンセルされました' 
-            }
-          : check
-      ))
+    setChecks(prev => prev.map(check => 
+      check.id === checkId 
+        ? { 
+            ...check, 
+            status: 'cancelled',
+            statusMessage: 'チェックがキャンセルされました' 
+          }
+        : check
+    ))
 
-      // サーバーサイドでのキャンセル処理
-      try {
-        const dbCheckId = checkId.split('-').pop()
-        if (dbCheckId && !isNaN(Number(dbCheckId))) {
-          await fetch(`/api/checks/${dbCheckId}/cancel`, {
-            method: 'POST',
-            credentials: 'same-origin'
-          })
-        }
-      } catch (error) {
-        console.error('Failed to cancel on server:', error)
+    // サーバーサイドでのキャンセル処理（修正：正しいサーバーIDを使用）
+    try {
+      const serverCheckId = serverCheckIds.current.get(checkId)
+      if (serverCheckId) {
+        await fetch(`/api/checks/${serverCheckId}/cancel`, {
+          method: 'POST',
+          credentials: 'same-origin'
+        })
+        serverCheckIds.current.delete(checkId)
+      } else {
+        console.warn('Server check ID not found for client check ID:', checkId)
       }
+    } catch (error) {
+      console.error('Failed to cancel on server:', error)
     }
   }
 
@@ -1029,7 +1087,7 @@ export default function ImageChecker() {
                     data-testid="download-button"
                     onClick={() => {
                       if (activeCheck?.result) {
-                        const content = `AdLex - 画像チェック結果レポート\n\n生成日時: ${new Date().toLocaleString('ja-JP')}\n\nOCR抽出テキスト:\n${activeCheck.result.original_text}\n\n修正されたテキスト:\n${activeCheck.result.modified_text}\n\n検出された違反:\n${activeCheck.result.violations.length > 0 ? activeCheck.result.violations.map((v, i) => `${i + 1}. ${activeCheck.result!.original_text.slice(v.startPos, v.endPos)} - ${v.reason}`).join('\n') : '違反は検出されませんでした'}`
+                        const content = generateImageCheckReport(activeCheck.result)
                         const blob = new Blob([content], { type: 'text/plain' })
                         const url = URL.createObjectURL(blob)
                         const link = document.createElement('a')
@@ -1104,7 +1162,7 @@ export default function ImageChecker() {
                           位置: {violation.startPos} - {violation.endPos}
                         </div>
                         <div className="text-sm mb-2">
-                          <strong>該当テキスト:</strong> "{activeCheck.result!.original_text.slice(violation.startPos, violation.endPos)}"
+                          <strong>該当テキスト:</strong> &quot;{activeCheck.result!.original_text.slice(violation.startPos, violation.endPos)}&quot;
                         </div>
                         <div className="text-sm">
                           <strong>理由:</strong> {violation.reason}

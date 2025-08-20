@@ -51,6 +51,11 @@ describe('ImageChecker (Enhanced)', () => {
     vi.clearAllMocks()
   })
 
+  // ヘルパー関数：ファイル入力要素を取得
+  const getFileInput = (): HTMLInputElement => {
+    return screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+  }
+
   describe('初期表示', () => {
     it('コンポーネントが正しく表示される', () => {
       render(<ImageChecker />)
@@ -76,10 +81,10 @@ describe('ImageChecker (Enhanced)', () => {
     it('有効なJPEGファイルを選択できる', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const validFile = new File([new Uint8Array([1,2,3])], 'test.jpg', { type: 'image/jpeg' })
       
-      fireEvent.change(input!, { target: { files: [validFile] } })
+      fireEvent.change(input, { target: { files: [validFile] } })
       
       await waitFor(() => {
         expect(screen.getByText('ファイルが選択されました')).toBeInTheDocument()
@@ -90,10 +95,10 @@ describe('ImageChecker (Enhanced)', () => {
     it('有効なPNGファイルを選択できる', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const validFile = new File([new Uint8Array([1,2,3])], 'test.png', { type: 'image/png' })
       
-      fireEvent.change(input!, { target: { files: [validFile] } })
+      fireEvent.change(input, { target: { files: [validFile] } })
       
       await waitFor(() => {
         expect(screen.getByText('ファイルが選択されました')).toBeInTheDocument()
@@ -103,7 +108,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('有効なWebPファイルを選択できる', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const validFile = new File([new Uint8Array([1,2,3])], 'test.webp', { type: 'image/webp' })
       
       fireEvent.change(input!, { target: { files: [validFile] } })
@@ -116,7 +121,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('不正なファイル形式（GIF）でエラーを表示', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const invalidFile = new File([new Uint8Array([1,2,3])], 'test.gif', { type: 'image/gif' })
       
       fireEvent.change(input!, { target: { files: [invalidFile] } })
@@ -129,7 +134,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('ファイルサイズが10MBを超える場合エラーを表示', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const largeFile = new File([new Uint8Array(11 * 1024 * 1024)], 'large.jpg', { type: 'image/jpeg' })
       
       fireEvent.change(input!, { target: { files: [largeFile] } })
@@ -142,7 +147,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('拡張子とMIMEタイプが一致しない場合エラーを表示', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const mismatchFile = new File([new Uint8Array([1,2,3])], 'test.jpg', { type: 'image/png' })
       
       fireEvent.change(input!, { target: { files: [mismatchFile] } })
@@ -201,7 +206,7 @@ describe('ImageChecker (Enhanced)', () => {
     beforeEach(async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const validFile = new File([new Uint8Array([1,2,3])], 'test.jpg', { type: 'image/jpeg' })
       
       fireEvent.change(input!, { target: { files: [validFile] } })
@@ -272,7 +277,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('エラーメッセージが表示される', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const invalidFile = new File([new Uint8Array([1,2,3])], 'test.bmp', { type: 'image/bmp' })
       
       fireEvent.change(input!, { target: { files: [invalidFile] } })
@@ -286,7 +291,7 @@ describe('ImageChecker (Enhanced)', () => {
     it('再試行ボタンが表示される', async () => {
       render(<ImageChecker />)
       
-      const input = screen.getByLabelText(/画像ファイル/)?.closest('div')?.querySelector('#file-input') as HTMLInputElement
+      const input = getFileInput()
       const invalidFile = new File([new Uint8Array([1,2,3])], 'test.bmp', { type: 'image/bmp' })
       
       fireEvent.change(input!, { target: { files: [invalidFile] } })
