@@ -74,7 +74,8 @@
       "mcp__ide__getDiagnostics",
       "WebFetch(domain:localhost)",
       "Bash(gh pr list:*)",
-      "Bash(gh issue create:*)"
+      "Bash(gh issue create:*)",
+      "Bash(yamllint:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
