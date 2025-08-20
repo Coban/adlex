@@ -21,6 +21,16 @@ vi.mock('@/lib/supabase/client', async () => {
   };
 });
 
+// Mock the infra Supabase client used by API routes and use cases
+vi.mock('@/infra/supabase/serverClient', async () => {
+  const { createMockSupabaseClient } = await import('./mocks/supabase');
+  const { mockClient } = createMockSupabaseClient();
+  
+  return {
+    createClient: vi.fn(() => Promise.resolve(mockClient)),
+  };
+});
+
 // Mock AI client to avoid dangerouslyAllowBrowser errors
 vi.mock('@/lib/ai-client', () => ({
   createChatCompletion: vi.fn().mockResolvedValue({

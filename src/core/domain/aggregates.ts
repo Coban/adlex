@@ -383,7 +383,6 @@ export class DictionaryAggregate extends AggregateRoot<number> {
    */
   updateContent(newPhrase?: string, newCategory?: 'NG' | 'ALLOW', _newNotes?: string): void {
     const hasContentChanged = 
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       (newPhrase && newPhrase !== this._dictionaryItem.phrase) ||
       (newCategory && newCategory !== this._dictionaryItem.category)
 

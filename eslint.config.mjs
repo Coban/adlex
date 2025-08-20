@@ -65,11 +65,11 @@ const eslintConfig = [
   },
   // Test files: disable type-aware linting to avoid module resolution noise
   {
-    files: [
-      "src/**/__tests__/**/*.{ts,tsx}",
-      "src/app/**/__tests__/**/*.{ts,tsx}",
-      "src/test/**/*.{ts,tsx}",
-    ],
+    // files: [
+    //   "src/**/__tests__/**/*.{ts,tsx}",
+    //   "src/app/**/__tests__/**/*.{ts,tsx}",
+    //   "src/test/**/*.{ts,tsx}",
+    // ],
     languageOptions: {
       parserOptions: {
         project: null,

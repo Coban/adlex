@@ -1,6 +1,5 @@
 import { AuthenticationError, ValidationError } from '@/core/domain/errors'
 import { RepositoryContainer } from '@/core/ports'
-import { createClient } from '@/infra/supabase/serverClient'
 
 /**
  * 画像アップロードのユースケース入力
@@ -69,22 +68,22 @@ export class UploadImageUseCase {
       // ファイルパスの生成
       const filePath = this.generateFilePath(currentUser.organization_id, input.file)
 
-      // Supabaseクライアントの取得（一時的に直接取得）
-      const supabase = await createClient()
-
-      // ファイルのアップロード
+      // ファイルのアップロード（ストレージリポジトリ経由）
       const arrayBuffer = await input.file.arrayBuffer()
       const uint8Array = new Uint8Array(arrayBuffer)
 
-      const { error: uploadError } = await supabase.storage
-        .from('uploads')
-        .upload(filePath, uint8Array, { 
+      const uploadResult = await this.repositories.storage.uploadFile(
+        'uploads',
+        filePath,
+        uint8Array,
+        { 
           contentType: input.file.type, 
           upsert: false 
-        })
+        }
+      )
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError)
+      if (uploadResult.error) {
+        console.error('Upload error:', uploadResult.error)
         return {
           success: false,
           error: { code: 'REPOSITORY_ERROR', message: 'ファイルのアップロードに失敗しました' }
@@ -92,12 +91,14 @@ export class UploadImageUseCase {
       }
 
       // 署名付きURLの生成（1時間有効）
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('uploads')
-        .createSignedUrl(filePath, 60 * 60)
+      const signedUrlResult = await this.repositories.storage.createSignedUrl(
+        'uploads',
+        filePath,
+        60 * 60 // 1時間
+      )
 
-      if (signedError || !signedData?.signedUrl) {
-        console.error('Signed URL error:', signedError)
+      if (signedUrlResult.error || !signedUrlResult.data?.signedUrl) {
+        console.error('Signed URL error:', signedUrlResult.error)
         return {
           success: false,
           error: { code: 'REPOSITORY_ERROR', message: '署名付きURLの生成に失敗しました' }
@@ -107,7 +108,7 @@ export class UploadImageUseCase {
       return {
         success: true,
         data: {
-          signedUrl: signedData.signedUrl
+          signedUrl: signedUrlResult.data.signedUrl
         }
       }
 

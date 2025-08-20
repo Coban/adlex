@@ -17,7 +17,7 @@ const { mockSupabaseClient } = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(() => Promise.resolve(mockSupabaseClient))
 }))
 

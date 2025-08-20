@@ -10,7 +10,7 @@ vi.mock('@/core/ports', () => ({
 }))
 
 // Mock Supabase auth
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn()
@@ -57,7 +57,7 @@ describe('/api/admin/stats (Repository Pattern)', () => {
     mockRepositories.checks.reset()
     
     // Mock auth and repositories
-    const supabaseModule = await import('@/lib/supabase/server')
+    const supabaseModule = await import('@/infra/supabase/serverClient')
     const nextServerModule = await import('next/server')
     const repositoriesModule = await import('@/core/ports')
     

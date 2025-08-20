@@ -8,7 +8,7 @@ vi.mock('@/core/ports', () => ({
 }))
 
 // Mock Supabase auth
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn()
@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 import { getRepositories } from '@/core/ports'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/infra/supabase/serverClient'
 
 describe('/api/admin/performance', () => {
   let mockRepositories: ReturnType<typeof createMockRepositories>
