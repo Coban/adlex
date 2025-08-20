@@ -25,7 +25,7 @@ const mockSupabaseClient: SupabaseClient = {
 }
 
 // target import after mocks
-import { POST } from '../route'
+import { POST } from '@/app/api/images/upload/route'
 
 function makeFormDataWithFile(contentType = 'image/jpeg', size = 1000) {
   const file = new File([new Uint8Array(size)], 'test.jpg', { type: contentType })
@@ -128,5 +128,3 @@ describe('Images Upload API Route', () => {
     expect(body).toHaveProperty('signedUrl', 'http://signed')
   })
 })
-
-

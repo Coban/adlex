@@ -10,7 +10,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
     css: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: [
       "node_modules/",
       "e2e/",
@@ -38,7 +38,7 @@ export default defineConfig({
       ],
     },
     typecheck: {
-      include: ["**/*.{test,spec}.{ts,tsx}"],
+      include: ["src/**/*.{test,spec}.{ts,tsx}", "tests/**/*.{test,spec}.{ts,tsx}"],
     },
   },
   resolve: {

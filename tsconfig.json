@@ -37,8 +37,6 @@
     "src/test/vitest.d.ts"
   ],
   "exclude": [
-    "node_modules",
-    "src/app/api/**/__tests__/**/*.ts",
-    "src/**/__tests__/**/*.ts"
+    "node_modules"
   ]
 }
