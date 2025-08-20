@@ -6,28 +6,32 @@ vi.mock('@/core/ports', () => ({
   getRepositories: vi.fn(),
 }))
 
-// Mock Supabase client
+// Mock the use case directly
+vi.mock('@/core/usecases/images/uploadImage', () => ({
+  UploadImageUseCase: vi.fn()
+}))
+
+// Mock Supabase client - hoisting問題を避けるため、ファクトリー内で直接定義
 vi.mock('@/infra/supabase/serverClient', () => ({
-  createClient: vi.fn(() => ({
+  createClient: vi.fn().mockResolvedValue({
     auth: {
       getUser: vi.fn()
     },
     storage: {
-      from: vi.fn(() => ({
-        upload: vi.fn(),
-        createSignedUrl: vi.fn(),
-      }))
+      from: vi.fn()
     }
-  }))
+  })
 }))
 
 // Import mocked modules
 import { POST } from '@/app/api/images/upload/route'
 import { createClient } from '@/infra/supabase/serverClient'
 import { getRepositories } from '@/core/ports'
+import { UploadImageUseCase } from '@/core/usecases/images/uploadImage'
 
 const mockCreateClient = vi.mocked(createClient)
 const mockGetRepositories = vi.mocked(getRepositories)
+const MockUploadImageUseCase = vi.mocked(UploadImageUseCase)
 
 function makeFormDataWithFile(contentType = 'image/jpeg', size = 1000) {
   const file = new File([new Uint8Array(size)], 'test.jpg', { type: contentType })
@@ -39,6 +43,7 @@ function makeFormDataWithFile(contentType = 'image/jpeg', size = 1000) {
 describe('Images Upload API Route', () => {
   let mockSupabaseClient: any
   let mockStorageBucket: any
+  let mockUploadImageUseCaseInstance: any
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -59,8 +64,14 @@ describe('Images Upload API Route', () => {
       }
     }
     
+    // Setup mock use case instance
+    mockUploadImageUseCaseInstance = {
+      execute: vi.fn()
+    }
+    
     // Configure mocks
     mockCreateClient.mockResolvedValue(mockSupabaseClient)
+    MockUploadImageUseCase.mockImplementation(() => mockUploadImageUseCaseInstance)
     mockGetRepositories.mockResolvedValue({
       users: {
         findById: vi.fn().mockResolvedValue({
@@ -109,6 +120,15 @@ describe('Images Upload API Route', () => {
     mockSupabaseClient.auth.getUser.mockResolvedValue({ 
       data: { user: { id: 'user-123' } }, 
       error: null 
+    })
+    
+    // ユースケースがバリデーションエラーを返すよう設定
+    mockUploadImageUseCaseInstance.execute.mockResolvedValue({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'サポートされていないファイルタイプです（JPEG、PNG、WebPのみ）'
+      }
     })
     
     const fd = makeFormDataWithFile('image/gif')
