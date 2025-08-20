@@ -1,6 +1,6 @@
 # AdLex 開発進捗管理 - 統合TODO
 
-最終更新: 2025-08-18
+最終更新: 2025-08-20
 
 ## 📋 概要
 
@@ -198,45 +198,45 @@ OCR機能はLLM（Vision）を使用する。
 本番ではOpenAI（gpt-4o）を使用する。
 
 ### 4.1 画像アップロードUI
-- [x] ✅ ImageChecker コンポーネント作成 🎯 (`src/components/ImageChecker.tsx`)
-- [x] ✅ ドラッグ&ドロップ/クリック選択
-- [x] ✅ 画像プレビュー
-- [x] ✅ ファイル形式・サイズ検証（JPEG/PNG/WebP, ≤10MB）
-- [x] ✅ 進捗表示UI（アップロード/OCR/解析）
+- [ ] 🔄 ImageChecker コンポーネント作成 🎯 (`src/components/ImageChecker.tsx`) [Issue #20 登録済み]
+- [ ] 🔄 ドラッグ&ドロップ/クリック選択 [Issue #20 に含む]
+- [ ] 🔄 画像プレビュー [Issue #20 に含む]
+- [ ] 🔄 ファイル形式・サイズ検証（JPEG/PNG/WebP, ≤10MB）[Issue #20 に含む]
+- [ ] 🔄 進捗表示UI（アップロード/OCR/解析）[Issue #20 に含む]
 
 ### 4.2 画像ストレージ
-- [x] ✅ Supabase Storage 連携（バケット: `uploads` 前提）
-- [x] ✅ 画像アップロード API (`POST /api/images/upload`)
-- [x] ✅ 署名付きURL発行（1時間）による一時アクセス
+- [ ] 🔄 Supabase Storage 連携（バケット: `uploads` 前提）[Issue #19 登録済み]
+- [ ] 🔄 画像アップロード API (`POST /api/images/upload`) [Issue #19 登録済み]
+- [ ] 🔄 署名付きURL発行（1時間）による一時アクセス [Issue #19 に含む]
 - [ ] ⏳ 自動削除機能（1時間後）
 - [ ] ⏳ アクセス制御の詳細設定（RLS/バケットポリシーの整備）
 
 ### 4.3 OCR処理システム
-- [x] ✅ LLMベースOCR（OpenAI gpt-4o / LM Studio dev）🎯
-  - 実装: `src/lib/ai-client.ts` の `extractTextFromImageWithLLM`
-  - 呼出: `src/lib/check-processor.ts` 画像処理フローから呼び出し
-- [x] ✅ 画像前処理（クライアント）
+- [ ] 🔄 LLMベースOCR（OpenAI gpt-4o / LM Studio dev）🎯 [Issue #21 登録済み]
+  - 実装予定: `src/lib/ai-client.ts` の `extractTextFromImageWithLLM`
+  - 呼出予定: `src/lib/check-processor.ts` 画像処理フローから呼び出し
+- [ ] 🔄 画像前処理（クライアント）[Issue #21 に含む]
   - `src/components/ImageChecker.tsx` でアップロード前に最大2000pxへリサイズ、JPEG変換、画質90%
-- [x] ✅ OCR精度の簡易検証
+- [ ] 🔄 OCR精度の簡易検証 [Issue #21 に含む]
   - `src/lib/ai-client.ts` の `estimateOcrConfidence` を用意し、`check-processor` の `ocr_metadata` にconfidenceを記録
 - [ ] ⏳ 追加前処理（傾き補正、ノイズ除去）
 - [ ] ⏳ 言語推定・信頼度の高度化（言語検出/記号率/レイアウト判定）
 
 ### 4.4 画像チェック API
-- [x] ✅ 画像処理ワークフロー（既存 `/api/checks` へ `input_type: "image"` + `image_url` 指定）
-- [x] ✅ OCR→テキストチェック連携（`check-processor` 内で連携）
-- [x] ✅ 処理状況管理（SSEにOCR進捗送出）
-- [x] ✅ エラーハンドリング（LLM未対応/タイムアウト含む）
+- [ ] 🔄 画像処理ワークフロー（既存 `/api/checks` へ `input_type: "image"` + `image_url` 指定）[Issue #21 に含む]
+- [ ] 🔄 OCR→テキストチェック連携（`check-processor` 内で連携）[Issue #21 に含む]
+- [ ] 🔄 処理状況管理（SSEにOCR進捗送出）[Issue #21 に含む]
+- [ ] 🔄 エラーハンドリング（LLM未対応/タイムアウト含む）[Issue #21 に含む]
 - [ ] ⏳ 画像アップロード専用 `POST /api/ocr` 検討（将来）
 
 ### 4.5 データベース拡張
-- [x] ✅ checks テーブル拡張 🎯
-  - [x] ✅ input_type カラム追加
-  - [x] ✅ extracted_text カラム追加
-  - [x] ✅ image_url カラム追加
-  - [x] ✅ ocr_status カラム追加
-  - [x] ✅ ocr_metadata カラム追加
-  - [x] ✅ error_message カラム追加
+- [ ] 🔄 checks テーブル拡張 🎯 [Issue #18 登録済み]
+  - [ ] 🔄 input_type カラム追加 [Issue #18 に含む]
+  - [ ] 🔄 extracted_text カラム追加 [Issue #18 に含む]
+  - [ ] 🔄 image_url カラム追加 [Issue #18 に含む]
+  - [ ] 🔄 ocr_status カラム追加 [Issue #18 に含む]
+  - [ ] 🔄 ocr_metadata カラム追加 [Issue #18 に含む]
+  - [ ] 🔄 error_message カラム追加 [Issue #18 に含む]
 
 ### 4.6 レスポンシブUI設計
 - [ ] ⏳ モバイル対応レイアウト
@@ -440,7 +440,7 @@ OCR機能はLLM（Vision）を使用する。
 - [x] ✅ E2Eテスト実装（Playwright）
 - [ ] 🔄 単体テスト強化（目標: 80%）🎯
 - [ ] 🔄 統合テスト追加
-- [ ] 🔄 E2E テスト修正・追加
+- [ ] 🔄 E2E テスト修正・追加 [Issue #23 登録済み]
 - [ ] ⏳ 視覚回帰テスト
 - [ ] ⏳ パフォーマンステスト
 - [ ] ⏳ 負荷テスト実施
@@ -566,7 +566,7 @@ OCR機能はLLM（Vision）を使用する。
 | Phase 1: ユーザー管理 | 100% | ✅ 完了 | 組織アイコン・ロゴ設定含む |
 | Phase 2: 辞書管理 | 90% | 🔄 ほぼ完了 | CSV機能完了 |
 | Phase 3: テキストチェック | 90% | 🔄 ほぼ完了 | パフォーマンス改善残り |
-| Phase 4: 画像アップロード | 0% | 🚨 **緊急対応必要** | MVP必須・未着手 |
+| Phase 4: 画像アップロード | 0% | 🔄 **Issue登録・実装開始** | MVP必須・Claude実装中 (#17-21) |
 | Phase 5: 履歴・データ管理 | 100% | ✅ 完了 | 履歴管理・統計・エクスポート全機能実装 |
 | Phase 6: 課金・決済 | 5% | ⏳ 一部着手 | |
 | Phase 7: 性能・セキュリティ | 0% | ⏳ 未着手 | |
@@ -584,10 +584,11 @@ OCR機能はLLM（Vision）を使用する。
 
 ## 🎯 優先度別ロードマップ
 
-### 🚨 今週の緊急タスク
-1. **画像アップロード機能開始** (Phase 4.1) - ImageChecker コンポーネント作成
-2. **画像機能のデータベース設計** (Phase 4.5) - checks テーブル拡張
-3. **OCR システム設計** (Phase 4.3) - Tesseract.js 統合準備
+### 🚨 今週の緊急タスク (Issue登録済み・Claude実装中)
+1. **checksテーブル拡張** [Issue #18] - データベーススキーマ拡張
+2. **画像アップロードAPI実装** [Issue #19] - Supabase Storage統合
+3. **ImageCheckerコンポーネント** [Issue #20] - UI実装
+4. **LLMベースOCR実装** [Issue #21] - OCRシステム構築
 
 ### 🎯 今月の重点目標
 1. **Phase 4 完了**: 画像アップロード・OCR機能（MVP必須）
@@ -618,6 +619,6 @@ OCR機能はLLM（Vision）を使用する。
 ---
 
 **作成者**: 開発チーム  
-**最終更新**: 2025-08-18  
+**最終更新**: 2025-08-20  
 **次回更新予定**: 毎週月曜日  
 **対象リリース**: MVP（2025-09予定）
