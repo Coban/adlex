@@ -57,6 +57,7 @@ jobs:
             - Japanese UI/UX quality
 
             Be constructive and provide specific improvement suggestions with implementation examples.
+            
             重要: 全てのフィードバックは日本語で提供してください。
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
