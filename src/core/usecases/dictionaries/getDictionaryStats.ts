@@ -130,7 +130,10 @@ export class GetDictionaryStatsUseCase {
     const checks = await this.repositories.checks.findMany({
       where: {
         organization_id: organizationId,
-        created_at: sinceIso
+        created_at: {
+          operator: 'gte',
+          value: sinceIso
+        }
       }
     })
 

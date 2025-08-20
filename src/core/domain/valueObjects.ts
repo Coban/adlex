@@ -89,6 +89,11 @@ export class DictionaryPhrase extends ValueObject<string> {
 /**
  * ベクトル値オブジェクト
  */
+/**
+ * サポートされている埋め込みベクトルの次元数
+ */
+const SUPPORTED_EMBEDDING_DIMENSIONS = [512, 768, 1536, 3072] as const
+
 export class EmbeddingVector extends ValueObject<number[]> {
   private constructor(value: number[]) {
     super(value)
@@ -103,9 +108,12 @@ export class EmbeddingVector extends ValueObject<number[]> {
       throw new ValidationError('ベクトルの要素は全て数値である必要があります', 'vector')
     }
 
-    // 標準的な次元数チェック（OpenAIの場合1536次元など）
-    if (vector.length !== 1536 && vector.length !== 512 && vector.length !== 768) {
-      throw new ValidationError('サポートされていないベクトル次元です', 'vector')
+    // サポートされている次元数チェック
+    if (!SUPPORTED_EMBEDDING_DIMENSIONS.includes(vector.length as typeof SUPPORTED_EMBEDDING_DIMENSIONS[number])) {
+      throw new ValidationError(
+        `サポートされていないベクトル次元です。サポート次元: ${SUPPORTED_EMBEDDING_DIMENSIONS.join(', ')}`,
+        'vector'
+      )
     }
 
     return new EmbeddingVector([...vector]) // 配列のコピーを作成

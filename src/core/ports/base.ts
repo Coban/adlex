@@ -34,10 +34,35 @@ export interface BaseRepository<T, CreateT = Partial<T>, UpdateT = Partial<T>> {
 }
 
 /**
+ * 範囲クエリ演算子
+ */
+export type FilterOperator = 
+  | 'eq'       // 等価
+  | 'neq'      // 不等価  
+  | 'gt'       // より大きい
+  | 'gte'      // 以上
+  | 'lt'       // より小さい
+  | 'lte'      // 以下
+  | 'like'     // LIKE検索
+  | 'ilike'    // 大文字小文字を区別しないLIKE検索
+  | 'in'       // IN句
+  | 'is'       // IS (null判定など)
+
+/**
+ * フィルター条件の値
+ */
+export type FilterValue<T> = {
+  [K in keyof T]?: T[K] | {
+    operator: FilterOperator
+    value: T[K] | T[K][] | null
+  }
+}
+
+/**
  * Options for finding multiple records
  */
 export interface FindManyOptions<T> {
-  where?: Partial<T>
+  where?: FilterValue<T>
   orderBy?: { field: keyof T; direction: 'asc' | 'desc' }[]
   limit?: number
   offset?: number

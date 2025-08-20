@@ -15,6 +15,7 @@ export * from './dictionaries'
 export * from './violations'
 export * from './user-invitations'
 export * from './realtimeRepository'
+export * from './authRepository'
 
 // Repository container interface
 export interface RepositoryContainer {
@@ -25,6 +26,7 @@ export interface RepositoryContainer {
   violations: import('./violations').ViolationsRepository
   userInvitations: import('./user-invitations').UserInvitationsRepository
   realtime: import('./realtimeRepository').RealtimeRepository
+  auth: import('./authRepository').AuthRepository
 }
 
 /**

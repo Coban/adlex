@@ -1,6 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
-
-import type { Database } from '@/types/database.types'
+import { AuthRepository } from '@/core/ports/authRepository'
 
 /**
  * サインアウトのユースケース入力
@@ -28,47 +26,12 @@ export type SignOutResult =
  * サインアウトユースケース
  */
 export class SignOutUseCase {
-  private supabaseUrl: string
-  private supabaseAnonKey: string
+  constructor(private authRepository: AuthRepository) {}
 
-  constructor(supabaseUrl: string, supabaseAnonKey: string) {
-    this.supabaseUrl = supabaseUrl
-    this.supabaseAnonKey = supabaseAnonKey
-  }
-
-  async execute(
-    input: SignOutInput,
-    requestCookies: Array<{ name: string; value: string }>,
-    setCookieCallback: (name: string, value: string, options?: Record<string, unknown>) => void
-  ): Promise<SignOutResult> {
+  async execute(_input: SignOutInput): Promise<SignOutResult> {
     try {
-      // Supabaseクライアントの作成
-      const supabase = createServerClient<Database>(this.supabaseUrl, this.supabaseAnonKey, {
-        cookies: {
-          getAll() {
-            return requestCookies
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              setCookieCallback(name, value, options)
-            })
-          },
-        },
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-        },
-      })
-
-      // サインアウト実行
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        return {
-          success: false,
-          error: { code: 'SIGNOUT_ERROR', message: error.message }
-        }
-      }
+      // 認証リポジトリを使用してサインアウト
+      await this.authRepository.signOut()
 
       return {
         success: true,

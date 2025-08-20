@@ -7,7 +7,8 @@ import type {
   DictionariesRepository,
   ViolationsRepository,
   UserInvitationsRepository,
-  RealtimeRepository
+  RealtimeRepository,
+  AuthRepository
 } from '@/core/ports'
 
 /**
@@ -153,6 +154,13 @@ export function createMockRepositories() {
     getFinalCheckData: vi.fn(),
   }
 
+  // Auth Repository Mock
+  const authRepository: AuthRepository = {
+    signOut: vi.fn().mockResolvedValue(undefined),
+    getCurrentUser: vi.fn().mockResolvedValue(null),
+    isSessionValid: vi.fn().mockResolvedValue(false),
+  }
+
   return {
     users: usersRepository,
     organizations: organizationsRepository,
@@ -161,6 +169,7 @@ export function createMockRepositories() {
     violations: violationsRepository,
     userInvitations: userInvitationsRepository,
     realtime: realtimeRepository,
+    auth: authRepository,
   }
 }
 
@@ -287,6 +296,7 @@ const mockRepositoriesInstance = (() => {
     violations: addResetMethods(repositories.violations),
     userInvitations: addResetMethods(repositories.userInvitations),
     realtime: addResetMethods(repositories.realtime),
+    auth: addResetMethods(repositories.auth),
   };
 })();
 

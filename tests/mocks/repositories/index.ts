@@ -9,6 +9,7 @@ import { ViolationsRepository } from '@/core/ports/violations'
 import { MockChecksRepository } from './checks'
 import { MockDictionariesRepository } from './dictionaries'
 import { MockUsersRepository } from './users'
+import { MockAuthRepository } from './auth'
 
 /**
  * Simple mock implementations for repositories not fully implemented yet
@@ -61,6 +62,7 @@ export function createMockRepositories(): RepositoryContainer {
     violations: mockViolationsRepository as ViolationsRepository,
     userInvitations: {} as UserInvitationsRepository,
     realtime: mockRealtimeRepository as RealtimeRepository,
+    auth: new MockAuthRepository(),
   }
 }
 
@@ -68,6 +70,7 @@ export function createMockRepositories(): RepositoryContainer {
 export * from './users'
 export * from './checks'
 export * from './dictionaries'
+export * from './auth'
 
 /**
  * Global mock repository instance for tests

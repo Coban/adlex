@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
-import { BaseRepository, FindManyOptions, RepositoryError } from '@/core/ports/base'
+import { BaseRepository, FindManyOptions, RepositoryError, FilterOperator } from '@/core/ports/base'
 import { Database } from '@/types/database.types'
 
 
@@ -42,11 +42,7 @@ export abstract class SupabaseBaseRepository<
 
       // Apply filtering
       if (options?.where) {
-        Object.entries(options.where).forEach(([key, value]) => {
-          if (value !== undefined) {
-            query = query.eq(key, value)
-          }
-        })
+        query = this.applyFilters(query, options.where)
       }
 
       // Apply ordering
@@ -75,6 +71,63 @@ export abstract class SupabaseBaseRepository<
       if (error instanceof RepositoryError) throw error
       throw this.createRepositoryError('Unexpected error finding records', error as Error)
     }
+  }
+
+  /**
+   * フィルター条件をSupabaseクエリに適用
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private applyFilters(query: any, filters: Record<string, any>): any {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value === undefined) return
+
+      // 複雑なフィルター条件（演算子付き）
+      if (typeof value === 'object' && value !== null && 'operator' in value) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { operator, value: filterValue } = value as { operator: FilterOperator; value: any }
+        
+        switch (operator) {
+          case 'eq':
+            query = query.eq(key, filterValue)
+            break
+          case 'neq':
+            query = query.neq(key, filterValue)
+            break
+          case 'gt':
+            query = query.gt(key, filterValue)
+            break
+          case 'gte':
+            query = query.gte(key, filterValue)
+            break
+          case 'lt':
+            query = query.lt(key, filterValue)
+            break
+          case 'lte':
+            query = query.lte(key, filterValue)
+            break
+          case 'like':
+            query = query.like(key, filterValue)
+            break
+          case 'ilike':
+            query = query.ilike(key, filterValue)
+            break
+          case 'in':
+            query = query.in(key, filterValue)
+            break
+          case 'is':
+            query = query.is(key, filterValue)
+            break
+          default:
+            // 未知の演算子の場合は等価比較にフォールバック
+            query = query.eq(key, filterValue)
+        }
+      } else {
+        // 単純な等価比較（後方互換性）
+        query = query.eq(key, value)
+      }
+    })
+
+    return query
   }
 
   async create(data: CreateT): Promise<T> {

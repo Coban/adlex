@@ -312,9 +312,12 @@ export class StreamCheckUpdatesUseCase {
       clearInterval(this.heartbeatInterval)
     }
 
+    // 設定から最大ハートビート数を取得
+    const config = this.getStreamConfig(input.checkId?.toString())
+
     this.heartbeatInterval = setInterval(() => {
       this.heartbeatCount++
-      if (this.heartbeatCount > 4) {
+      if (this.heartbeatCount > config.maxHeartbeats) {
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval)
         return
       }

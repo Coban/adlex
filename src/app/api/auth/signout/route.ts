@@ -18,15 +18,20 @@ export async function POST(request: NextRequest) {
     // Supabaseレスポンスオブジェクトを準備（クッキー書き込み用）
     const supabaseResponse = NextResponse.json({ success: true })
 
-    // ユースケース実行
-    const signOutUseCase = new SignOutUseCase(supabaseUrl, supabaseAnonKey)
-    const result = await signOutUseCase.execute(
-      {}, // 入力パラメータなし
+    // 認証リポジトリを作成
+    const { SupabaseAuthRepository } = await import('@/lib/repositories/supabase/authRepository')
+    const authRepository = new SupabaseAuthRepository(
+      supabaseUrl,
+      supabaseAnonKey,
       request.cookies.getAll(),
       (name: string, value: string, options?: Record<string, unknown>) => {
         supabaseResponse.cookies.set(name, value, options)
       }
     )
+
+    // ユースケース実行
+    const signOutUseCase = new SignOutUseCase(authRepository)
+    const result = await signOutUseCase.execute({})
 
     // 結果の処理
     if (!result.success) {

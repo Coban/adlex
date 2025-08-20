@@ -12,16 +12,32 @@ vi.mock('@supabase/ssr', () => ({
   }))
 }))
 
+// Mock the auth repository
+vi.mock('@/lib/repositories/supabase/authRepository', () => ({
+  SupabaseAuthRepository: vi.fn().mockImplementation(() => ({
+    signOut: vi.fn()
+  }))
+}))
+
 describe('Auth Signout API Route', () => {
-  beforeEach(() => {
+  let mockAuthRepo: any
+
+  beforeEach(async () => {
     vi.clearAllMocks()
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+    
+    // Setup mock auth repository
+    const { SupabaseAuthRepository } = await import('@/lib/repositories/supabase/authRepository')
+    mockAuthRepo = {
+      signOut: vi.fn().mockResolvedValue(undefined)
+    }
+    vi.mocked(SupabaseAuthRepository).mockImplementation(() => mockAuthRepo)
   })
 
   describe('POST /api/auth/signout', () => {
     it('should successfully sign out user', async () => {
-      mockSupabaseAuth.signOut.mockResolvedValue({ error: null })
+      mockAuthRepo.signOut.mockResolvedValue(undefined)
 
       const request = new NextRequest('http://localhost:3000/api/auth/signout', {
         method: 'POST',
@@ -35,13 +51,11 @@ describe('Auth Signout API Route', () => {
       expect(response.status).toBe(200)
       const body = await response.json()
       expect(body.success).toBe(true)
-      expect(mockSupabaseAuth.signOut).toHaveBeenCalled()
+      expect(mockAuthRepo.signOut).toHaveBeenCalled()
     })
 
     it('should return 500 on signout error', async () => {
-      mockSupabaseAuth.signOut.mockResolvedValue({
-        error: { message: 'Failed to sign out' }
-      })
+      mockAuthRepo.signOut.mockRejectedValue(new Error('Failed to sign out'))
 
       const request = new NextRequest('http://localhost:3000/api/auth/signout', {
         method: 'POST'
@@ -52,14 +66,13 @@ describe('Auth Signout API Route', () => {
       expect(response.status).toBe(500)
       const body = await response.json()
       expect(body.error).toEqual({
-        code: 'SIGNOUT_ERROR',
-        message: 'Failed to sign out',
-        details: undefined
+        code: 'INTERNAL_ERROR',
+        message: '内部エラーが発生しました'
       })
     })
 
     it('should handle cookies correctly', async () => {
-      mockSupabaseAuth.signOut.mockResolvedValue({ error: null })
+      mockAuthRepo.signOut.mockResolvedValue(undefined)
 
       const request = new NextRequest('http://localhost:3000/api/auth/signout', {
         method: 'POST',
@@ -71,11 +84,11 @@ describe('Auth Signout API Route', () => {
       const response = await POST(request)
       
       expect(response.status).toBe(200)
-      expect(mockSupabaseAuth.signOut).toHaveBeenCalled()
+      expect(mockAuthRepo.signOut).toHaveBeenCalled()
     })
 
     it('should work without cookies', async () => {
-      mockSupabaseAuth.signOut.mockResolvedValue({ error: null })
+      mockAuthRepo.signOut.mockResolvedValue(undefined)
 
       const request = new NextRequest('http://localhost:3000/api/auth/signout', {
         method: 'POST'
