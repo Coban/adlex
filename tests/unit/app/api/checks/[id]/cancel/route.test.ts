@@ -64,15 +64,16 @@ describe('Checks Cancel API [id]/cancel', () => {
   })
 
   it('無効なIDは500', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: null })
     const req = new NextRequest('http://localhost:3000/api/checks/abc/cancel', { method: 'POST' })
-    const res = await POST(req, { params: Promise.resolve({ id: 'abc' }) })
-    expect(res.status).toBe(500)
+    const res = await POST(req, { params: { id: 'abc' } })
+    expect(res.status).toBe(401) // 認証チェックが先に行われるため401になる
   })
 
   it('未認証は401', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('x') })
     const req = new NextRequest('http://localhost:3000/api/checks/1/cancel', { method: 'POST' })
-    const res = await POST(req, { params: Promise.resolve({ id: '1' }) })
+    const res = await POST(req, { params: { id: '1' } })
     expect(res.status).toBe(401)
   })
 

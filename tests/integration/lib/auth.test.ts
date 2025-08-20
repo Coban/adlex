@@ -254,14 +254,18 @@ describe.skip('認証ユーティリティ', () => {
         role: 'user'
       }
 
-      const customEq = vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({
-          data: mockProfile,
-          error: null
-        })),
-        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      }))
-      mockSupabaseClient.from.mockReturnValue(createSelectMock(customEq))
+      const customOverrides = {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() => Promise.resolve({
+              data: mockProfile,
+              error: null
+            })),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
+          }))
+        }))
+      }
+      mockSupabaseClient.from.mockReturnValue(createSelectMock(customOverrides))
 
       const result = await getUserProfile('user-123')
 
@@ -270,14 +274,18 @@ describe.skip('認証ユーティリティ', () => {
     })
 
     it('プロフィールが見つからない場合nullを返すこと', async () => {
-      const customEq = vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({
-          data: null,
-          error: new Error('Profile not found')
-        })),
-        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      }))
-      mockSupabaseClient.from.mockReturnValue(createSelectMock(customEq))
+      const customOverrides = {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() => Promise.resolve({
+              data: null,
+              error: new Error('Profile not found')
+            })),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
+          }))
+        }))
+      }
+      mockSupabaseClient.from.mockReturnValue(createSelectMock(customOverrides))
 
       const result = await getUserProfile('nonexistent-user')
 
@@ -285,14 +293,18 @@ describe.skip('認証ユーティリティ', () => {
     })
 
     it('データベースエラーを適切に処理すること', async () => {
-      const customEq = vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({
-          data: null,
-          error: new Error('Database error')
-        })),
-        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
-      }))
-      mockSupabaseClient.from.mockReturnValue(createSelectMock(customEq))
+      const customOverrides = {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() => Promise.resolve({
+              data: null,
+              error: new Error('Database error')
+            })),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null }))
+          }))
+        }))
+      }
+      mockSupabaseClient.from.mockReturnValue(createSelectMock(customOverrides))
 
       await expect(getUserProfile('user-123')).rejects.toThrow('Database error')
     })
