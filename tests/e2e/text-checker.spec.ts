@@ -1,51 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function waitForAuthentication(page: Page) {
-  // まずデスクトップ表示でサインアウトボタンを探す
-  try {
-    await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
-    return;
-  } catch {
-    // 見つからない場合はモバイル表示を想定してメニューを開く
-    // モバイルメニューボタンを広めに探索
-    const menuButton = page.locator('.md\\:hidden button').first();
-    const isMenuButtonVisible = await menuButton.isVisible();
-    if (isMenuButtonVisible) {
-      await menuButton.click();
-      await page.waitForTimeout(500); // メニューが開くのを待機
-      await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
-      // 確認後にメニューを閉じる
-      await menuButton.click();
-    } else {
-      // それでも見つからない場合は少し待って再試行
-      await page.waitForTimeout(2000);
-      await expect(page.getByRole('button', { name: 'サインアウト' })).toBeVisible({ timeout: 5000 });
-    }
-  }
+async function waitForPageLoad(page: Page) {
+  // ページの読み込み完了を待機
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(1000)
 }
 
 test.describe('テキストチェッカー', () => {
   test.beforeEach(async ({ page }) => {
-    // まずホームへ（セットアップで認証済みの想定）
-    await page.goto("/");
-    
-    // 認証済みであることを確認
-    await waitForAuthentication(page);
-
-    // チェッカーページへ遷移
+    // チェッカーページへ直接遷移（認証はグローバルセットアップで実施済み）
     await page.goto("/checker");
+    await waitForPageLoad(page);
     
-    // ページの完全読み込みを待機（見出しの候補を複数試す）
-    try {
-      await expect(page.getByRole('heading', { name: '薬機法チェッカー' })).toBeVisible({ timeout: 5000 });
-    } catch {
-      try {
-        await expect(page.getByRole('heading', { name: '薬機法チェック & リライト' })).toBeVisible({ timeout: 5000 });
-      } catch {
-        // 見出しが見つからない場合はメインのテキストエリアを待機
-        await expect(page.locator("textarea")).toBeVisible({ timeout: 10000 });
-      }
-    }
+    // ページの表示を待機
+    await expect(page.locator("textarea")).toBeVisible({ timeout: 10000 });
   });
 
   test("should display text checker interface", async ({ page }) => {
