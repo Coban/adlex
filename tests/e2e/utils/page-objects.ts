@@ -184,7 +184,7 @@ export class AdminUsersPage extends BasePage {
     }
   }
 
-  async inviteUser(email: string, role: string = 'user') {
+  async inviteUser(email: string, role = 'user') {
     await this.inviteButton.click();
     await expect(this.inviteDialog).toBeVisible();
     

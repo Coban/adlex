@@ -66,7 +66,7 @@ export class TestDataFactory {
   /**
    * ユニークなIDを生成
    */
-  private static generateId(prefix: string = 'test'): string {
+  private static generateId(prefix = 'test'): string {
     this.counter++;
     return `${prefix}-${Date.now()}-${this.counter}`;
   }
@@ -74,7 +74,7 @@ export class TestDataFactory {
   /**
    * ユニークなメールアドレスを生成
    */
-  private static generateEmail(role: 'admin' | 'user' = 'user', domain: string = 'example.com'): string {
+  private static generateEmail(role: 'admin' | 'user' = 'user', domain = 'example.com'): string {
     return `test-${role}-${Date.now()}-${this.counter}@${domain}`;
   }
 
@@ -215,7 +215,7 @@ export class TestDataFactory {
   /**
    * 複数の辞書エントリーを作成
    */
-  static createMockDictionaries(ngCount: number = 10, allowCount: number = 5): TestDictionaryEntry[] {
+  static createMockDictionaries(ngCount = 10, allowCount = 5): TestDictionaryEntry[] {
     const ngEntries = Array.from({ length: ngCount }, () => 
       this.createMockDictionaryEntry('NG')
     );
@@ -264,7 +264,7 @@ export class TestDataFactory {
    * チェック結果データの作成
    */
   static createMockCheckResult(
-    violationCount: number = 2,
+    violationCount = 2,
     overrides: Partial<TestCheckResult> = {}
   ): TestCheckResult {
     const violations = Array.from({ length: violationCount }, (_, index) =>
@@ -305,8 +305,8 @@ export class TestDataFactory {
    */
   static createMockPaginatedResponse<T>(
     items: T[],
-    page: number = 1,
-    limit: number = 10
+    page = 1,
+    limit = 10
   ): {
     items: T[];
     pagination: {

@@ -1,16 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-import { TextCheckerPage, SignInPage } from './utils/page-objects';
+import { injectTestEnvironment, shouldSkipAuthTest, detectEnvironment } from './utils/environment-detector';
+import { TextCheckerPage } from './utils/page-objects';
 import { 
-  mockApiError, 
-  mockNetworkError,
+  mockApiError,
   VIOLATION_TEXTS,
   setupTestEnvironment,
-  expectErrorState,
-  expectLoadingState,
-  expectRetryBehavior
+  expectErrorState
 } from './utils/test-helpers';
-import { injectTestEnvironment, shouldSkipAuthTest, detectEnvironment } from './utils/environment-detector';
 
 test.describe('エラーハンドリング', () => {
   test.beforeEach(async ({ page }) => {
@@ -443,7 +440,7 @@ test.describe('エラーハンドリング', () => {
         test.skip(true, 'Supabase環境が利用できないため、認証エラーハンドリングテストをスキップ');
         return;
       }
-      const signInPage = new SignInPage(page);
+      // セッション期限切れテスト用の設定
       
       // 期限切れセッションをモック
       await page.addInitScript(() => {

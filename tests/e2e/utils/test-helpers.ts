@@ -192,7 +192,7 @@ export async function expectErrorState(page: Page, timeout = 5000) {
  * アクセス拒否エラーのテスト
  * T002の要件に基づく実装
  */
-export async function expectAccessDeniedError(page: Page, timeout = 10000) {
+export async function expectAccessDeniedError(page: Page) {
   const currentUrl = page.url();
   
   // アクセス拒否の指標
@@ -221,7 +221,7 @@ export async function expectAccessDeniedError(page: Page, timeout = 10000) {
  * リトライ動作のテスト
  * T005の要件に基づく実装
  */
-export async function expectRetryBehavior(page: Page, timeout = 15000) {
+export async function expectRetryBehavior(page: Page) {
   // リトライ動作の指標
   const retryIndicators = [
     // リトライメッセージ

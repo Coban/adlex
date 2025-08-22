@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+import { injectTestEnvironment } from './utils/environment-detector';
 import { TextCheckerPage } from './utils/page-objects';
+import { 
+  TestDataFactory
+} from './utils/test-data-factory';
 import { 
   mockApiResponse,
   setupTestEnvironment
 } from './utils/test-helpers';
-import { 
-  TestDataFactory
-} from './utils/test-data-factory';
-import { injectTestEnvironment } from './utils/environment-detector';
 
 /**
  * T009: レスポンス時間テストの実装
@@ -250,7 +250,7 @@ test.describe('パフォーマンステスト', () => {
     await textChecker.textarea.click();
     
     const inputStartTime = Date.now();
-    await textChecker.textarea.type('テスト', { delay: 50 });
+    await textChecker.textarea.fill('テスト');
     const inputTime = Date.now() - inputStartTime;
     
     console.log(`入力応答時間: ${inputTime}ms`);

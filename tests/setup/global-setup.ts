@@ -84,7 +84,8 @@ async function generateUserAuthState(
     const page = await context.newPage();
     
     // テスト専用ログインAPI呼び出し
-    const response = await page.request.post('http://localhost:3001/api/test/login-as', {
+    const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3001';
+    const response = await page.request.post(`${baseUrl}/api/test/login-as`, {
       data: {
         email: config.email,
         role: config.role
@@ -102,7 +103,7 @@ async function generateUserAuthState(
     }
 
     // 認証成功確認のため、保護されたページにアクセス
-    await page.goto('http://localhost:3001/checker');
+    await page.goto(`${baseUrl}/checker`);
     await page.waitForLoadState('networkidle');
 
     // 認証状態の検証
