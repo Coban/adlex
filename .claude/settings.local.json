@@ -90,7 +90,8 @@
       "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=json)",
       "Bash(dotenv -e .env.e2e.auth -- playwright test:*)",
       "Bash(SKIP_AUTH=true NEXT_PUBLIC_SKIP_AUTH=true npx playwright test error-handling.spec.ts --reporter=line --max-failures=1)",
-      "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=line)"
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=line)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium-no-auth text-checker-basic.spec.ts --max-failures=1)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

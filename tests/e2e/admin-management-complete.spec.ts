@@ -1,12 +1,18 @@
 import { test, expect } from '@playwright/test';
 
-import { injectTestEnvironment, shouldSkipAuthTest, setupAuthIfAvailable } from './utils/environment-detector';
+import { 
+  verifyAuthenticationState, 
+  verifyAdminPermissions,
+  setupTestAuthState 
+} from './utils/auth-verifier';
+import { injectTestEnvironment, shouldSkipAuthTest } from './utils/environment-detector';
 import { AdminUsersPage, DictionaryPage } from './utils/page-objects';
 import { 
   mockApiResponse,
   setupTestEnvironment,
   validatePageStructure,
-  testFormValidation
+  testFormValidation,
+  expectAccessDeniedError
 } from './utils/test-helpers';
 
 test.describe('管理機能（完全版）', () => {
@@ -30,20 +36,80 @@ test.describe('管理機能（完全版）', () => {
       adminUsersPage = new AdminUsersPage(page);
     });
 
-    test('管理者ページの基本インターフェースが表示される', async ({ page }) => {
+    test('管理者権限でのみアクセス可能な機能', async ({ page }) => {
       if (shouldSkipAuthTest()) {
         test.skip(true, 'Supabase環境が利用できないため、管理機能テストをスキップ');
         return;
       }
 
-      const authSetupSuccessful = await setupAuthIfAvailable(page);
-      if (!authSetupSuccessful) {
-        test.skip(true, '管理者認証セットアップに失敗しました');
+      // Step 1: 管理者として認証状態をセットアップ
+      await setupTestAuthState(page, {
+        isAuthenticated: true,
+        userRole: 'admin',
+        userId: 'admin-user-id'
+      });
+
+      await page.goto('/admin/users');
+      await page.waitForLoadState('networkidle');
+
+      // Step 2: 管理者権限の明示的確認
+      const authState = await verifyAuthenticationState(page);
+      expect(authState.isAuthenticated).toBe(true);
+      expect(authState.userRole).toBe('admin');
+      
+      const hasAdminPermissions = await verifyAdminPermissions(page);
+      expect(hasAdminPermissions).toBe(true);
+      
+      // Step 3: 管理画面アクセス確認
+      await expect(page.locator('[data-testid="admin-content"], .admin-content, main')).toBeVisible();
+      
+      // Step 4: 管理者専用機能の確認
+      const adminFeatures = [
+        '[data-testid="user-invite-button"]',
+        'button:has-text("招待")',
+        'button:has-text("追加")',
+        '[data-testid="admin-actions"]'
+      ];
+
+      let adminFeatureFound = false;
+      for (const selector of adminFeatures) {
+        if (await page.locator(selector).isVisible({ timeout: 5000 }).catch(() => false)) {
+          adminFeatureFound = true;
+          break;
+        }
+      }
+      
+      expect(adminFeatureFound).toBe(true);
+      await validatePageStructure(page);
+    });
+
+    test('一般ユーザーの管理画面アクセス拒否', async ({ page }) => {
+      if (shouldSkipAuthTest()) {
+        test.skip(true, 'Supabase環境が利用できないため、管理機能テストをスキップ');
         return;
       }
 
-      await adminUsersPage.expectAdminInterface();
-      await validatePageStructure(page);
+      // Step 1: 一般ユーザーとして認証状態をセットアップ
+      await setupTestAuthState(page, {
+        isAuthenticated: true,
+        userRole: 'user',
+        userId: 'regular-user-id'
+      });
+      
+      // Step 2: 管理画面アクセス試行
+      await page.goto('/admin/users');
+      await page.waitForLoadState('networkidle');
+      
+      // Step 3: 認証状態確認
+      const authState = await verifyAuthenticationState(page);
+      expect(authState.isAuthenticated).toBe(true);
+      expect(authState.userRole).toBe('user');
+      
+      const hasAdminPermissions = await verifyAdminPermissions(page);
+      expect(hasAdminPermissions).toBe(false);
+      
+      // Step 4: アクセス拒否の確認
+      await expectAccessDeniedError(page);
     });
 
     test('ユーザーリストが正しく表示される', async ({ page }) => {

@@ -37,6 +37,10 @@ Object.entries(envFromTestingFile).forEach(([key, value]) => {
  */
 export default defineConfig({
   testDir: "./tests/e2e",
+  
+  /* Global setup for database seeding and storageState generation */
+  globalSetup: './tests/setup/global-setup.ts',
+  
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -46,20 +50,25 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [['html', { open: 'never' }]],
+  reporter: [
+    ['html', { open: 'never', outputFolder: 'test-reports/html' }],
+    ['json', { outputFile: 'test-reports/results.json' }],
+    ['junit', { outputFile: 'test-reports/junit.xml' }],
+    ...(process.env.CI ? [['github'] as const] : [])
+  ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: "http://localhost:3001",
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    trace: 'retain-on-failure',
 
     /* Screenshot on failure */
     screenshot: "only-on-failure",
 
     /* Video recording */
-    video: "off",
+    video: process.env.CI ? 'retain-on-failure' : 'off',
     
     /* Timeout for individual actions - increased for stability */
     actionTimeout: 30000,
@@ -93,24 +102,78 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // Primary Chrome project - runs all tests with environment-adaptive authentication
+    // ゲストユーザー用プロジェクト（認証なし）
     {
-      name: "chromium",
+      name: "guest",
+      testDir: "./tests/e2e/guest",
       use: { 
         ...devices["Desktop Chrome"],
-        // Always start with clean state - tests will handle authentication dynamically
-        storageState: { cookies: [], origins: [] },
+        storageState: { cookies: [], origins: [] }, // 認証なし
       },
     },
 
-    // Mobile testing project
+    // 一般ユーザー用プロジェクト（認証済み）
     {
-      name: "mobile", 
-      testIgnore: [/.*admin-management.*\.spec\.ts/], // Mobile doesn't test admin features
+      name: "auth-user",
+      testDir: "./tests/e2e/auth",
+      testIgnore: ['**/admin-*.spec.ts'], // 管理者テストを除外
+      use: { 
+        ...devices["Desktop Chrome"],
+        storageState: './tests/.auth/user.json', // 一般ユーザーのstorageState
+      },
+    },
+
+    // 管理者用プロジェクト（管理者認証済み）
+    {
+      name: "auth-admin",
+      testDir: "./tests/e2e/auth",
+      testMatch: ['**/admin-*.spec.ts'], // 管理者テストのみ
+      use: { 
+        ...devices["Desktop Chrome"],
+        storageState: './tests/.auth/admin.json', // 管理者のstorageState
+      },
+    },
+
+    // モバイルテスト用プロジェクト（基本機能のみ）
+    {
+      name: "mobile-guest", 
+      testDir: "./tests/e2e/guest",
       use: { 
         ...devices["Pixel 5"],
         storageState: { cookies: [], origins: [] },
         hasTouch: true,
+      },
+    },
+
+    // エラーテスト専用プロジェクト
+    {
+      name: "error-tests",
+      testDir: "./tests/e2e",
+      testMatch: ['**/error-handling.spec.ts'],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
+        actionTimeout: 60000, // エラーシナリオ用の長いタイムアウト
+        navigationTimeout: 60000,
+      },
+      retries: 1, // エラーテストは少ない再試行
+    },
+
+    // レガシーテスト（移行中の既存テスト）
+    {
+      name: "legacy",
+      testDir: "./tests/e2e",
+      testMatch: [
+        '**/text-checker-basic.spec.ts',
+        '**/text-checker-complete.spec.ts', 
+        '**/essential-workflows.spec.ts',
+        '**/admin-simplified.spec.ts',
+        '**/session-management.spec.ts',
+        '**/performance.spec.ts'
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
       },
     },
     /* Test against branded browsers. */
@@ -134,16 +197,16 @@ export default defineConfig({
     env: {
       // Load from .env.e2e first
       ...envFromTestingFile,
-      // Explicit overrides for stability
+      // Explicit overrides for E2E testing
       NODE_ENV: 'test',
       OPENAI_API_KEY: 'mock',
       USE_LM_STUDIO: 'false',
       NEXT_PUBLIC_MSW_ENABLED: envFromTestingFile.NEXT_PUBLIC_MSW_ENABLED ?? 'false',
       NEXT_PUBLIC_APP_URL: envFromTestingFile.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001',
       ADLEX_MAX_CONCURRENT_CHECKS: envFromTestingFile.ADLEX_MAX_CONCURRENT_CHECKS ?? '3',
-      // 環境設定は .env.e2e ファイルから読み込み（デフォルトはSKIP_AUTH=true）
-      SKIP_AUTH: envFromTestingFile.SKIP_AUTH ?? 'true',
-      NEXT_PUBLIC_SKIP_AUTH: envFromTestingFile.NEXT_PUBLIC_SKIP_AUTH ?? 'true',
+      // 新しいE2E戦略では認証APIを使用するため、SKIP_AUTHは無効化
+      SKIP_AUTH: 'false',
+      NEXT_PUBLIC_SKIP_AUTH: 'false',
     },
   },
 });

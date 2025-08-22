@@ -189,6 +189,102 @@ export async function expectErrorState(page: Page, timeout = 5000) {
 }
 
 /**
+ * アクセス拒否エラーのテスト
+ * T002の要件に基づく実装
+ */
+export async function expectAccessDeniedError(page: Page, timeout = 10000) {
+  const currentUrl = page.url();
+  
+  // アクセス拒否の指標
+  const accessDeniedIndicators = [
+    // リダイレクト関連
+    currentUrl.includes('/auth/signin'),
+    currentUrl.includes('/auth/login'),
+    currentUrl.includes('/403'),
+    currentUrl.includes('/unauthorized'),
+    
+    // エラーメッセージ関連  
+    await page.locator('text=アクセス権限がありません').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('text=403').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('text=Forbidden').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('text=権限がありません').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('text=管理者権限が必要').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('[data-testid="access-denied"]').isVisible({ timeout: 3000 }).catch(() => false),
+    await page.locator('[role="alert"]').isVisible({ timeout: 3000 }).catch(() => false)
+  ];
+
+  const isAccessDenied = accessDeniedIndicators.some(indicator => indicator);
+  expect(isAccessDenied).toBe(true);
+}
+
+/**
+ * リトライ動作のテスト
+ * T005の要件に基づく実装
+ */
+export async function expectRetryBehavior(page: Page, timeout = 15000) {
+  // リトライ動作の指標
+  const retryIndicators = [
+    // リトライメッセージ
+    'text=再試行',
+    'text=リトライ',
+    'text=もう一度',
+    'text=再接続',
+    'text=接続中',
+    
+    // プログレス表示
+    '[data-testid="retry-progress"]',
+    '.retry-indicator',
+    
+    // ロード状態の継続
+    '[data-testid="loading"]',
+    '.animate-spin'
+  ];
+
+  let retryBehaviorFound = false;
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  while (!retryBehaviorFound && attempts < maxAttempts) {
+    attempts++;
+    
+    for (const selector of retryIndicators) {
+      if (await page.locator(selector).isVisible({ timeout: 3000 }).catch(() => false)) {
+        retryBehaviorFound = true;
+        console.log(`リトライ動作を検出: ${selector} (試行回数: ${attempts})`);
+        break;
+      }
+    }
+    
+    if (!retryBehaviorFound) {
+      await page.waitForTimeout(1000);
+    }
+  }
+
+  // リトライ動作が見つからない場合は、処理状態の変化を確認
+  if (!retryBehaviorFound) {
+    console.log('明示的なリトライ表示は見つからないが、処理状態の変化を確認');
+    
+    // ボタンの状態変化やロード状態の確認
+    const processingStates = [
+      () => page.locator('button').first().isDisabled().catch(() => false),
+      () => page.locator('text=処理中').isVisible({ timeout: 2000 }).catch(() => false),
+      () => page.locator('text=チェック中').isVisible({ timeout: 2000 }).catch(() => false)
+    ];
+    
+    const results = await Promise.allSettled(processingStates.map(state => state()));
+    const hasProcessingState = results.some(result => 
+      result.status === 'fulfilled' && result.value === true
+    );
+    
+    // 処理状態の変化があれば、リトライ動作と見なす
+    retryBehaviorFound = hasProcessingState;
+  }
+
+  // リトライ動作またはエラーハンドリングが適切に機能していることを確認
+  expect(retryBehaviorFound).toBe(true);
+}
+
+/**
  * テスト環境のセットアップ
  */
 export async function setupTestEnvironment(page: Page) {
