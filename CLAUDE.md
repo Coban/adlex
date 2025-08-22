@@ -88,6 +88,10 @@ npm run test:e2e:ui      # UI mode
 npm run test:e2e:headed  # Headed mode
 npm run test:e2e:debug   # Debug mode
 
+# Run specific E2E test files
+SKIP_AUTH=true npm run test:e2e -- --project=chromium text-checker-basic.spec.ts
+SKIP_AUTH=true npm run test:e2e -- --project=chromium essential-workflows.spec.ts
+
 # Run all tests
 npm run test:all
 ```
@@ -219,9 +223,18 @@ LM_STUDIO_BASE_URL=http://localhost:1234/v1
 ### E2E Tests (Playwright)
 
 * Configuration: `playwright.config.ts`
-* Tests: `e2e/*.spec.ts`
+* Tests: `tests/e2e/*.spec.ts` 
 * Base URL: `http://localhost:3001`
 * Runs against actual Supabase local instance
+* Environment Configuration: `.env.e2e` for test-specific settings
+* Projects: `chromium` (primary), `mobile` (responsive testing)
+* Authentication: Environment-adaptive (SKIP_AUTH configurable via .env.e2e)
+* Stability Features: Increased timeouts, reduced motion, screenshot on failure
+* Test Categories:
+  - Basic workflows: `text-checker-basic.spec.ts`, `essential-workflows.spec.ts`
+  - Complete features: `text-checker-complete.spec.ts`, `admin-management-complete.spec.ts`
+  - Error handling: `error-handling.spec.ts`
+  - Authentication: `auth-flow.spec.ts`
 
 ### Test Data
 
@@ -240,6 +253,16 @@ Use `npm run seed` to create test accounts:
 * Use Supabase client for database operations
 * Follow the established ESLint configuration
 * **Write comments in Japanese within the code**
+* Components: PascalCase.tsx; modules/utilities: kebab-case.ts
+* Use `@` alias for imports (e.g., `import { x } from '@/lib/utils'`)
+
+### Project Structure
+
+* `src/app`: Next.js App Router (routes, layout, pages)
+* `src/components`: UI components with colocated tests under `__tests__`
+* `src/lib`, `src/contexts`, `src/hooks`: Core logic, providers, and hooks
+* `tests/`: Organized by test type (unit, integration, e2e, mocks)
+* `tests/setup.ts`: Vitest setup with MSW configuration
 
 ### Authentication
 
@@ -281,7 +304,25 @@ Use `npm run seed` to create test accounts:
 
 * Real-time progress updates are delivered via Server-Sent Events
 
+## Additional Documentation
+
+* `AGENTS.md`: Repository guidelines including project structure, testing, commit guidelines, and security
+* `.github/copilot-instructions.md`: Copilot-specific development guidelines
+* `README.md`: Basic project setup and overview
+* `LM_STUDIO_GUIDE.md`: Local AI development setup guide
+
 ## Task Management
 
 * After completing an implementation, update `TODO.md` to reflect the changes
 * **After completing each task, you must run `npm run test` and `npm run check`, and fix any errors before committing or opening a PR.**
+
+## Session Management
+After each development session, update `docs/CHANGELOG.md` to document any changes, improvements, or fixes made during the session. This helps maintain a clear record of project evolution and assists in tracking development progress.
+
+## Branch and Commit Guidelines
+
+* Branch names: Use lowercase ASCII only (`^[0-9a-z._/-]+$`). Prefix with `feature/`, `bugfix/`, or `docs/`
+* Commits: Write concise, imperative summaries in English or Japanese
+* PRs: Include purpose, scope, testing steps, and linked issues
+* Always ensure `npm run check` passes before committing
+* If database schema changes, run `npm run supabase:types` and include notes
