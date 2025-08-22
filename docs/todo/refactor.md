@@ -173,11 +173,11 @@ export const RETRY_CONFIG = {
 } as const
 ```
 
-#### 🏆 受入条件
-- [ ] 全てのマジックナンバーが定数で置き換えられている
-- [ ] 定数ファイルが適切にカテゴリ分けされている
-- [ ] 型安全性が保たれている
-- [ ] 既存の動作に影響がない
+#### 🏆 受入条件 ✅ **達成**
+- [x] 全てのマジックナンバーが定数で置き換えられている
+- [x] 定数ファイルが適切にカテゴリ分けされている
+- [x] 型安全性が保たれている（`as const`使用）
+- [x] 既存の動作に影響がない
 
 ---
 
@@ -191,11 +191,11 @@ export const RETRY_CONFIG = {
 
 #### 📝 段階的分割計画
 
-##### Phase 1: Hook の分離 (4-6時間)
-- [ ] `useCheckState.ts` - チェック状態管理
-- [ ] `useStreamUpdates.ts` - リアルタイム更新
-- [ ] `useErrorHandling.ts` - エラー状態管理
-- [ ] `useClipboard.ts` - コピー機能
+##### Phase 1: Hook の分離 (4-6時間) ✅ **完了**
+- [x] `useCheckState.ts` - チェック状態管理
+- [x] `useStreamUpdates.ts` - リアルタイム更新
+- [x] `useErrorHandling.ts` - エラー状態管理
+- [x] `useClipboard.ts` - コピー機能
 
 ```typescript
 // src/components/TextChecker/hooks/useCheckState.ts
