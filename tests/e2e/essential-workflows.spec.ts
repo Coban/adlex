@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test'
 
+import { injectTestEnvironment } from './utils/environment-detector';
+
 test.describe('必須ワークフロー', () => {
   test.beforeEach(async ({ page }) => {
-    // SKIP_AUTH環境変数を設定
-    await page.addInitScript(() => {
-      (window as any).process = {
-        env: {
-          NEXT_PUBLIC_SKIP_AUTH: 'true',
-          SKIP_AUTH: 'true',
-          NODE_ENV: process.env.NODE_ENV || 'test',
-          TZ: process.env.TZ
-        }
-      };
-    });
+    await injectTestEnvironment(page);
   })
 
   test('should complete text check workflow basics', async ({ page }) => {

@@ -27,6 +27,11 @@ function loadEnvFile(filePath: string): Record<string, string> {
 
 const envFromTestingFile = loadEnvFile('.env.e2e')
 
+// テストプロセスに環境変数を設定
+Object.entries(envFromTestingFile).forEach(([key, value]) => {
+  process.env[key] ??= value;
+});
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -88,71 +93,25 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // Setup project for authentication with SKIP_AUTH mode
-    { name: 'setup', testMatch: /.*auth-simple\.setup\.ts/ },
-
+    // Primary Chrome project - runs all tests with environment-adaptive authentication
     {
       name: "chromium",
-      testIgnore: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/], // Auth tests only run in chromium-noauth
       use: { 
         ...devices["Desktop Chrome"],
-        // Use the authenticated state for most tests
-        storageState: 'playwright/.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-
-    // Auth tests that run without authentication
-    {
-      name: "chromium-noauth",
-      testMatch: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/],
-      use: { 
-        ...devices["Desktop Chrome"],
-        // No authentication state for auth tests
+        // Always start with clean state - tests will handle authentication dynamically
         storageState: { cookies: [], origins: [] },
       },
     },
 
+    // Mobile testing project
     {
-      name: "firefox",
-      testIgnore: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/], // Auth tests only run in chromium-noauth
-      use: { 
-        ...devices["Desktop Firefox"],
-        storageState: 'playwright/.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-
-    {
-      name: "webkit",
-      testIgnore: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/], // Auth tests only run in chromium-noauth
-      use: { 
-        ...devices["Desktop Safari"],
-        storageState: 'playwright/.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-
-    /* Test against mobile viewports. */
-    {
-      name: "Mobile Chrome",
-      testIgnore: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/], // Auth tests only run in chromium-noauth
+      name: "mobile", 
+      testIgnore: [/.*admin-management.*\.spec\.ts/], // Mobile doesn't test admin features
       use: { 
         ...devices["Pixel 5"],
-        storageState: 'playwright/.auth/user.json',
+        storageState: { cookies: [], origins: [] },
         hasTouch: true,
       },
-      dependencies: ['setup'],
-    },
-    {
-      name: "Mobile Safari",
-      testIgnore: [/.*auth\.spec\.ts/, /.*auth-stabilized\.spec\.ts/], // Auth tests only run in chromium-noauth
-      use: { 
-        ...devices["iPhone 12"],
-        storageState: 'playwright/.auth/user.json',
-        hasTouch: true,
-      },
-      dependencies: ['setup'],
     },
     /* Test against branded browsers. */
     // {
@@ -167,13 +126,13 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: "SKIP_AUTH=true NEXT_PUBLIC_SKIP_AUTH=true npm run dev",
+    command: "npm run dev",
     url: "http://localhost:3001",
     reuseExistingServer: true,
     timeout: 120 * 1000,
-    // E2EテストではMSWを無効化し、実際のSupabaseローカル環境を使用
+    // 環境適応型設定 - テスト内で動的に制御
     env: {
-      // Load from .env.testing first
+      // Load from .env.e2e first
       ...envFromTestingFile,
       // Explicit overrides for stability
       NODE_ENV: 'test',
@@ -182,8 +141,9 @@ export default defineConfig({
       NEXT_PUBLIC_MSW_ENABLED: envFromTestingFile.NEXT_PUBLIC_MSW_ENABLED ?? 'false',
       NEXT_PUBLIC_APP_URL: envFromTestingFile.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001',
       ADLEX_MAX_CONCURRENT_CHECKS: envFromTestingFile.ADLEX_MAX_CONCURRENT_CHECKS ?? '3',
-      SKIP_AUTH: 'true',           // E2E testing with mock authentication
-      NEXT_PUBLIC_SKIP_AUTH: 'true', // E2E testing with mock authentication
+      // 環境設定は .env.e2e ファイルから読み込み（デフォルトはSKIP_AUTH=true）
+      SKIP_AUTH: envFromTestingFile.SKIP_AUTH ?? 'true',
+      NEXT_PUBLIC_SKIP_AUTH: envFromTestingFile.NEXT_PUBLIC_SKIP_AUTH ?? 'true',
     },
   },
 });

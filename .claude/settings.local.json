@@ -80,7 +80,17 @@
       "Bash(yamllint:*)",
       "Bash(git log:*)",
       "Bash(xxd:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium text-checker-basic.spec.ts)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium text-checker-complete.spec.ts --max-failures=5)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium text-checker-complete.spec.ts --max-failures=3)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium admin-simplified.spec.ts)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium-error-tests error-handling.spec.ts --max-failures=2)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --project=chromium essential-workflows.spec.ts)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=json)",
+      "Bash(dotenv -e .env.e2e.auth -- playwright test:*)",
+      "Bash(SKIP_AUTH=true NEXT_PUBLIC_SKIP_AUTH=true npx playwright test error-handling.spec.ts --reporter=line --max-failures=1)",
+      "Bash(SKIP_AUTH=true npm run test:e2e -- --reporter=line)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

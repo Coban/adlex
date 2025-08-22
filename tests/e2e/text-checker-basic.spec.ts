@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+import { injectTestEnvironment } from './utils/environment-detector';
+
 test.describe('テキストチェッカー（基本版）', () => {
   test.beforeEach(async ({ page }) => {
+    await injectTestEnvironment(page);
     await page.goto("/checker");
     await page.waitForLoadState('networkidle');
   });
