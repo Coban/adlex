@@ -1,5 +1,6 @@
 import { createClient } from '@/infra/supabase/clientClient'
 import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
+import { logger } from '@/lib/logger'
 
 export interface AuthError {
   message: string;
@@ -606,12 +607,32 @@ export async function inviteUserToOrganization(email: string, organizationId: nu
   }
   
   const supabase = createClient();
+  
+  // 現在のユーザーIDを取得
+  let currentUserId = '';
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      logger.warn('Failed to get current user for invitation', {
+        operation: 'inviteUserToOrganization',
+        error: userError.message
+      });
+    } else if (user) {
+      currentUserId = user.id;
+    }
+  } catch (error) {
+    logger.error('Exception while getting current user for invitation', {
+      operation: 'inviteUserToOrganization',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+  
   const { data, error } = await supabase.from('user_invitations').insert({
     email,
     organization_id: organizationId,
     role,
     token: 'invite-token-' + Date.now(),
-    invited_by: '' // TODO: Get current user ID
+    invited_by: currentUserId || 'system'
   }).select().single();
   
   if (error) {

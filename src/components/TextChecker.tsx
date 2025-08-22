@@ -9,7 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/infra/supabase/clientClient'
+import { logger } from '@/lib/logger'
 import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
+import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constants/timeouts'
+import { APP_CONFIG } from '@/constants'
 
 /**
  * 薬機法チェッカーのメインコンポーネント
@@ -58,8 +61,12 @@ export default function TextChecker() {
       if (typeof maybeClose === 'function') {
         maybeClose.call(source)
       }
-    } catch {
-      // ignore errors in cleanup
+    } catch (error) {
+      logger.warn('EventSource cleanup failed', {
+        operation: 'safeCloseEventSource',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        readyState: source instanceof EventSource ? source.readyState : 'N/A'
+      })
     }
   }
   // キャンセル機能用のref
@@ -113,7 +120,7 @@ export default function TextChecker() {
         globalStreamRef.current = null
       }
     })
-    }, 100) // 100ms遅延でSSE接続を開始
+    }, TIMEOUTS.DEBOUNCE_INPUT) // 遅延でSSE接続を開始
 
     return () => {
       clearTimeout(timer)
@@ -185,7 +192,7 @@ export default function TextChecker() {
         // Show fallback message for manual copy
         setCopySuccess('手動でコピーしてください')
       }
-      setTimeout(() => setCopySuccess(null), 2000)
+      setTimeout(() => setCopySuccess(null), APP_CONFIG.UI.TOAST_DURATION)
     } catch (error) {
       console.error('Copy failed:', error)
       // In test environment, still show success to avoid test failures
@@ -194,7 +201,7 @@ export default function TextChecker() {
       } else {
         setCopySuccess('コピーに失敗しました')
       }
-      setTimeout(() => setCopySuccess(null), 2000)
+      setTimeout(() => setCopySuccess(null), APP_CONFIG.UI.TOAST_DURATION)
     }
   }
 
@@ -205,8 +212,8 @@ export default function TextChecker() {
   const handleCheck = async () => {
     if (!text.trim()) return
     
-    if (text.length > 10000) {
-      setErrorMessage('テキストは10,000文字以内で入力してください。')
+    if (text.length > APP_CONFIG.TEXT_LIMITS.MAX_LENGTH) {
+      setErrorMessage(`テキストは${APP_CONFIG.TEXT_LIMITS.MAX_LENGTH.toLocaleString()}文字以内で入力してください。`)
       return
     }
 
@@ -288,7 +295,7 @@ export default function TextChecker() {
               ? { ...check, result: mockResult, status: 'completed', statusMessage: 'チェック完了' }
               : check
           ))
-        }, 300)
+        }, TIMEOUTS.DEBOUNCE_INPUT)
 
         return
       }
@@ -302,7 +309,7 @@ export default function TextChecker() {
       const sessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 200)
+          setTimeout(() => resolve({ data: { session: null } }), TIMEOUTS.SESSION_CHECK)
         ),
       ])
       const session = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session
@@ -358,15 +365,23 @@ export default function TextChecker() {
       
       // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0
-      // デフォルトはテキスト処理用、画像処理は動的に調整
-      const maxPolls = 90 // 1.5分（テキスト処理）
-      const pollIntervalMs = 1000 // 1秒間隔
       
-      // TODO: 将来的には画像処理の場合はより長いタイムアウトを設定
-      // if (isImageCheck) {
-      //   maxPolls = 180 // 3分（画像処理）
-      //   pollIntervalMs = 2000 // 2秒間隔
-      // }
+      // 処理タイプの判定（リクエストボディから画像URLの有無で判断）
+      const isImageCheck = JSON.stringify({ text: newCheckItem.originalText }).includes('image_url')
+      
+      // 処理タイプに応じた動的タイムアウト設定
+      const timeoutConfig = getProcessingTimeouts(isImageCheck)
+      const { maxPolls, pollIntervalMs, totalTimeoutMs, description } = timeoutConfig
+      
+      logger.info('Check processing started', {
+        operation: 'handleCheck',
+        checkId,
+        isImageCheck,
+        maxPolls,
+        pollIntervalMs,
+        totalTimeoutMinutes: getTimeoutInMinutes(totalTimeoutMs),
+        processingType: description
+      })
       
       const pollingIntervalId = setInterval(async () => {
         pollCount++
@@ -506,7 +521,7 @@ export default function TextChecker() {
                 }
               : check
           ))
-          setErrorMessage('処理がタイムアウトしました。もう一度お試しください。')
+          setErrorMessage(`${description}がタイムアウトしました（${getTimeoutInMinutes(totalTimeoutMs)}分）。もう一度お試しください。`)
         }
       }, pollIntervalMs) // 最適化されたポーリング間隔
       
@@ -524,7 +539,7 @@ export default function TextChecker() {
               }
             : check
         ))
-        setErrorMessage(`処理がタイムアウトしました（${Math.round(timeoutMs/60000)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
+        setErrorMessage(`${description}がタイムアウトしました（${getTimeoutInMinutes(totalTimeoutMs)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
       }, timeoutMs)
 
       // キャンセル機能用のcontrollerを登録
@@ -917,7 +932,7 @@ export default function TextChecker() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="min-h-[400px] resize-none"
-              maxLength={10000}
+              maxLength={APP_CONFIG.TEXT_LIMITS.MAX_LENGTH}
               aria-label="薬機法チェック用テキスト入力"
             />
             <div className="flex justify-between items-center mt-2">
