@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 
 import { AuthRepository, AuthUser } from '@/core/ports/authRepository'
 import type { Database } from '@/types/database.types'
+import { ErrorFactory } from '@/lib/errors'
 
 /**
  * Supabase認証リポジトリの実装
@@ -47,7 +48,7 @@ export class SupabaseAuthRepository implements AuthRepository {
     const { error } = await supabase.auth.signOut()
     
     if (error) {
-      throw new Error(`サインアウトに失敗しました: ${error.message}`)
+      throw ErrorFactory.createInternalError(`サインアウトに失敗しました: ${error.message}`, error)
     }
   }
 

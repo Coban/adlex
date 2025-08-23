@@ -1,6 +1,7 @@
 import { createClient } from '@/infra/supabase/clientClient'
 import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
 import { logger } from '@/lib/logger'
+import { ErrorFactory } from '@/lib/errors'
 
 export interface AuthError {
   message: string;
@@ -41,11 +42,11 @@ export interface InviteUserData {
  */
 export async function signUp({ email, password, confirmPassword }: SignUpData) {
   if (password !== confirmPassword) {
-    throw new Error("パスワードが一致しません");
+    throw ErrorFactory.createValidationError('パスワードが一致しません');
   }
 
   if (password.length < 6) {
-    throw new Error("パスワードは6文字以上である必要があります");
+    throw ErrorFactory.createValidationError('パスワードは6文字以上である必要があります');
   }
 
   const supabase = createClient();
@@ -64,13 +65,13 @@ export async function signUp({ email, password, confirmPassword }: SignUpData) {
 
       // Handle specific error cases
       if (error.message.includes("already registered")) {
-        throw new Error("このメールアドレスは既に登録されています");
+        throw ErrorFactory.createValidationError('このメールアドレスは既に登録されています');
       } else if (error.message.includes("Invalid email")) {
-        throw new Error("有効なメールアドレスを入力してください");
+        throw ErrorFactory.createValidationError('有効なメールアドレスを入力してください');
       } else if (error.message.includes("Password should be")) {
-        throw new Error("パスワードは6文字以上である必要があります");
+        throw ErrorFactory.createValidationError('パスワードは6文字以上である必要があります');
       } else {
-        throw new Error(`アカウント作成エラー: ${error.message}`);
+        throw ErrorFactory.createInternalError(`アカウント作成エラー: ${error.message}`, error);
       }
     }
 
@@ -80,7 +81,7 @@ export async function signUp({ email, password, confirmPassword }: SignUpData) {
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -101,15 +102,15 @@ export async function signUpWithOrganization({
   organizationName,
 }: SignUpWithOrganizationData) {
   if (password !== confirmPassword) {
-    throw new Error("パスワードが一致しません");
+    throw ErrorFactory.createValidationError('パスワードが一致しません');
   }
 
   if (password.length < 6) {
-    throw new Error("パスワードは6文字以上である必要があります");
+    throw ErrorFactory.createValidationError('パスワードは6文字以上である必要があります');
   }
 
   if (!organizationName.trim()) {
-    throw new Error("組織名を入力してください");
+    throw ErrorFactory.createValidationError('組織名を入力してください');
   }
 
   const supabase = createClient();
@@ -133,11 +134,11 @@ export async function signUpWithOrganization({
 
       // Handle specific error cases
       if (error.message.includes("already registered")) {
-        throw new Error("このメールアドレスは既に登録されています");
+        throw ErrorFactory.createValidationError('このメールアドレスは既に登録されています');
       } else if (error.message.includes("Invalid email")) {
-        throw new Error("有効なメールアドレスを入力してください");
+        throw ErrorFactory.createValidationError('有効なメールアドレスを入力してください');
       } else if (error.message.includes("Password should be")) {
-        throw new Error("パスワードは6文字以上である必要があります");
+        throw ErrorFactory.createValidationError('パスワードは6文字以上である必要があります');
       } else {
         throw new Error(`組織アカウント作成エラー: ${error.message}`);
       }
@@ -149,7 +150,7 @@ export async function signUpWithOrganization({
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -165,7 +166,7 @@ export async function signUpWithOrganization({
  */
 export async function inviteUser({ email, role }: InviteUserData) {
   if (!email.trim()) {
-    throw new Error("メールアドレスを入力してください");
+    throw ErrorFactory.createValidationError('メールアドレスを入力してください');
   }
 
   try {
@@ -182,7 +183,7 @@ export async function inviteUser({ email, role }: InviteUserData) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error ?? "ユーザー招待に失敗しました");
+      throw ErrorFactory.createApiError(response.status, errorData.error ?? 'ユーザー招待に失敗しました');
     }
 
     return await response.json();
@@ -191,7 +192,7 @@ export async function inviteUser({ email, role }: InviteUserData) {
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -223,12 +224,12 @@ export async function fetchOrganizationUsers() {
 
     if (!response.ok) {
       if (response.status === 403) {
-        throw new Error('権限がありません')
+        throw ErrorFactory.createAuthorizationError('権限がありません');
       }
       const errorData = (await response
         .json()
         .catch(() => ({}))) as { error?: string };
-      throw new Error(errorData.error ?? "ユーザー一覧の取得に失敗しました");
+      throw ErrorFactory.createApiError(response.status, errorData.error ?? 'ユーザー一覧の取得に失敗しました');
     }
 
     return await response.json();
@@ -237,7 +238,7 @@ export async function fetchOrganizationUsers() {
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -267,7 +268,7 @@ export async function updateUserRole(userId: string, role: "admin" | "user") {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error ?? "ユーザー権限の変更に失敗しました");
+      throw ErrorFactory.createApiError(response.status, errorData.error ?? 'ユーザー権限の変更に失敗しました');
     }
 
     return await response.json();
@@ -276,7 +277,7 @@ export async function updateUserRole(userId: string, role: "admin" | "user") {
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -298,11 +299,11 @@ export async function signUpWithInvitation(
   confirmPassword: string,
 ) {
   if (password !== confirmPassword) {
-    throw new Error("パスワードが一致しません");
+    throw ErrorFactory.createValidationError('パスワードが一致しません');
   }
 
   if (password.length < 6) {
-    throw new Error("パスワードは6文字以上である必要があります");
+    throw ErrorFactory.createValidationError('パスワードは6文字以上である必要があります');
   }
 
   try {
@@ -316,7 +317,7 @@ export async function signUpWithInvitation(
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error ?? "招待の承認に失敗しました");
+      throw ErrorFactory.createApiError(response.status, errorData.error ?? '招待の承認に失敗しました');
     }
 
     return await response.json();
@@ -325,7 +326,7 @@ export async function signUpWithInvitation(
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -353,13 +354,13 @@ export async function signIn({ email, password }: SignInData) {
 
       // Handle specific error cases
       if (error.message.includes("Invalid login credentials")) {
-        throw new Error("メールアドレスまたはパスワードが正しくありません");
+        throw ErrorFactory.createAuthenticationError('メールアドレスまたはパスワードが正しくありません');
       } else if (error.message.includes("Email not confirmed")) {
         throw new Error(
-          "メールアドレスの確認が完了していません。メールをご確認ください。",
+          'メールアドレスの確認が完了していません。メールをご確認ください。',
         );
       } else {
-        throw new Error(`サインインエラー: ${error.message}`);
+        throw ErrorFactory.createAuthenticationError(`サインインエラー: ${error.message}`, error);
       }
     }
 
@@ -369,7 +370,7 @@ export async function signIn({ email, password }: SignInData) {
     if (err instanceof Error) {
       throw err;
     }
-    throw new Error("予期しないエラーが発生しました");
+    throw ErrorFactory.createInternalError('予期しないエラーが発生しました');
   }
 }
 
@@ -394,7 +395,7 @@ export async function signOut() {
         code: error.code,
         details: error
       });
-      throw new Error(`サインアウトエラー: ${error.message}`);
+      throw ErrorFactory.createInternalError(`サインアウトエラー: ${error.message}`, error);
     }
     // Navigation after sign out should be handled by the caller (e.g., components using useRouter)
     
@@ -418,11 +419,11 @@ export async function signOut() {
  */
 export async function signInWithEmailAndPassword(email: string, password: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('Invalid email format');
+    throw ErrorFactory.createValidationError('Invalid email format');
   }
   
   if (password.length < 8) {
-    throw new Error('Password must be at least 8 characters');
+    throw ErrorFactory.createValidationError('Password must be at least 8 characters');
   }
   
   const supabase = createClient();
@@ -445,11 +446,11 @@ export async function signInWithEmailAndPassword(email: string, password: string
  */
 export async function signUpWithEmailAndPassword(email: string, password: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('Invalid email format');
+    throw ErrorFactory.createValidationError('Invalid email format');
   }
   
   if (password.length < 8) {
-    throw new Error('Password must be at least 8 characters');
+    throw ErrorFactory.createValidationError('Password must be at least 8 characters');
   }
   
   const supabase = createClient();
@@ -511,11 +512,11 @@ export async function getUserProfile(userId: string) {
  */
 export async function createUserProfile(profile: UserProfileInsert) {
   if (!profile.id) {
-    throw new Error('User ID is required');
+    throw ErrorFactory.createValidationError('User ID is required');
   }
   
   if (!profile.email) {
-    throw new Error('Email is required');
+    throw ErrorFactory.createValidationError('Email is required');
   }
   
   const supabase = createClient();
@@ -538,7 +539,7 @@ export async function createUserProfile(profile: UserProfileInsert) {
  */
 export async function updateUserProfile(userId: string, updates: UserProfileUpdate) {
   if (!userId) {
-    throw new Error('User ID is required');
+    throw ErrorFactory.createValidationError('User ID is required');
   }
   
   const supabase = createClient();
@@ -579,7 +580,7 @@ export async function checkUserExists(email: string) {
  */
 export async function createOrganization(name: string, plan: OrganizationPlan) {
   if (!name) {
-    throw new Error('Organization name is required');
+    throw ErrorFactory.createValidationError('Organization name is required');
   }
   
   const supabase = createClient();
@@ -603,7 +604,7 @@ export async function createOrganization(name: string, plan: OrganizationPlan) {
  */
 export async function inviteUserToOrganization(email: string, organizationId: number, role: UserRole) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('Invalid email format');
+    throw ErrorFactory.createValidationError('Invalid email format');
   }
   
   const supabase = createClient();
@@ -651,7 +652,7 @@ export async function inviteUserToOrganization(email: string, organizationId: nu
  */
 export async function acceptInvitation(token: string) {
   if (!token) {
-    throw new Error('Token is required');
+    throw ErrorFactory.createValidationError('Token is required');
   }
   
   const supabase = createClient();
@@ -674,7 +675,7 @@ export async function acceptInvitation(token: string) {
  */
 export async function changeUserRole(userId: string, role: UserRole) {
   if (!['admin', 'user'].includes(role)) {
-    throw new Error('Invalid role');
+    throw ErrorFactory.createValidationError('Invalid role');
   }
   
   const supabase = createClient();

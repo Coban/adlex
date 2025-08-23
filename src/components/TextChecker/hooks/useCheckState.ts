@@ -34,9 +34,9 @@ export function useCheckState(): UseCheckStateReturn {
   const [text, setText] = useState('')
 
   // アクティブなチェック結果を取得
-  const activeCheck = useMemo(() => (
-    activeCheckId ? checks.find(check => check.id === activeCheckId) : null
-  ), [activeCheckId, checks])
+  const activeCheck = useMemo((): CheckItem | null => {
+    return activeCheckId ? checks.find(check => check.id === activeCheckId) || null : null
+  }, [activeCheckId, checks])
 
   const hasActiveCheck = useMemo(() => !!activeCheck?.result, [activeCheck?.result])
 

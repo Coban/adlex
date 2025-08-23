@@ -5,13 +5,14 @@
 AdLexコードベースのアンチパターン解消と品質向上のための段階的リファクタリング計画
 
 **調査結果**:
-- ✅ ~~God Component: TextChecker.tsx (1,337行)~~ → Hook分離完了
+- ✅ ~~God Component: TextChecker.tsx (1,337行)~~ → Hook分離・UI分離・統合完了
 - ✅ ~~未完成機能: ユーザー招待メール送信~~ → メール送信機能実装完了
 - ✅ ~~Empty Catch Blocks: 4ファイル~~ → 統一エラーハンドリング適用完了
 - ✅ ~~Magic Numbers: 多数のファイル~~ → 定数化完了
-- 🟡 大規模ファイル: 5ファイル以上 → 進行中
+- ✅ ~~大規模ファイル: 5ファイル以上~~ → ai-client.ts, admin/dictionaries/page.tsx, CheckHistoryDetail.tsx分割完了
+- ✅ ~~エラーハンドリング標準化~~ → AppError/ErrorFactory/ErrorHandler実装完了
 
-**目標**: 保守性・テスト容易性・開発効率の大幅改善 → **Week 2 Phase 1まで完了**
+**目標**: 保守性・テスト容易性・開発効率の大幅改善 → **Week 4 エラーハンドリング標準化まで完了**
 
 ---
 
@@ -265,10 +266,10 @@ export const CheckInput: React.FC<CheckInputProps> = ({
 }
 ```
 
-##### Phase 3: メインコンポーネント統合 (4-6時間) 🔄 **進行中**
-- [ ] 分割されたコンポーネントの統合
-- [ ] 状態管理の最適化
-- [ ] パフォーマンスの検証
+##### Phase 3: メインコンポーネント統合 (4-6時間) ✅ **完了**
+- [x] 分割されたコンポーネントの統合
+- [x] 状態管理の最適化
+- [x] パフォーマンスの検証
 
 ```typescript
 // src/components/TextChecker/index.tsx
@@ -305,12 +306,12 @@ export default function TextChecker() {
 }
 ```
 
-#### 🏆 受入条件
-- [ ] 元のTextCheckerが完全に分割されている
-- [ ] 各コンポーネントが300行以下になっている
-- [ ] 単体テストが各コンポーネントに追加されている
-- [ ] 既存機能が全て正常動作する
-- [ ] パフォーマンスが向上または維持されている
+#### 🏆 受入条件 ✅ **達成**
+- [x] 元のTextCheckerが完全に分割されている
+- [x] 各コンポーネントが300行以下になっている
+- [ ] 単体テストが各コンポーネントに追加されている *(Week 4予定)*
+- [x] 既存機能が全て正常動作する
+- [x] パフォーマンスが向上または維持されている
 
 ---
 
@@ -322,30 +323,52 @@ export default function TextChecker() {
 
 #### 📝 対象ファイルと分割戦略
 
-##### `src/lib/ai-client.ts` (1,251行)
-- [ ] `OpenAIClient.ts` - OpenAI実装
-- [ ] `LMStudioClient.ts` - LM Studio実装
-- [ ] `MockClient.ts` - モック実装
-- [ ] `ClientFactory.ts` - ファクトリパターン
-- [ ] `types.ts` - 共通型定義
+##### `src/lib/ai-client.ts` (1,251行) ✅ **完了**
+- [x] `src/lib/ai-client/openai-client.ts` - OpenAI実装
+- [x] `src/lib/ai-client/openrouter-client.ts` - OpenRouter実装
+- [x] `src/lib/ai-client/lmstudio-client.ts` - LM Studio実装
+- [x] `src/lib/ai-client/mock-client.ts` - モック実装
+- [x] `src/lib/ai-client/factory.ts` - ファクトリパターン
+- [x] `src/lib/ai-client/config.ts` - 設定管理
+- [x] `src/lib/ai-client/utils.ts` - ユーティリティ関数
+- [x] `src/lib/ai-client/types.ts` - 共通型定義
+- [x] `src/lib/ai-client/main.ts` - 統合関数（後方互換性）
 
-##### `src/app/admin/dictionaries/page.tsx` (1,146行)
-- [ ] `DictionaryList.tsx` - 辞書リスト表示
-- [ ] `DictionaryForm.tsx` - 辞書編集フォーム
-- [ ] `BulkOperations.tsx` - 一括操作
-- [ ] `DictionaryFilters.tsx` - フィルター機能
+##### `src/app/admin/dictionaries/page.tsx` (1,146行) ✅ **完了**
+- [x] `hooks/useDictionaries.ts` - 辞書データ管理
+- [x] `hooks/useDictionaryForm.ts` - フォーム管理
+- [x] `hooks/useBulkOperations.ts` - 一括操作
+- [x] `hooks/useEmbeddingOperations.ts` - Embedding操作
+- [x] `hooks/useDictionaryDelete.ts` - 削除処理
+- [x] `components/DictionaryList.tsx` - 辞書リスト表示
+- [x] `components/DictionaryForm.tsx` - 辞書編集フォーム
+- [x] `components/DictionaryFilters.tsx` - フィルター機能
+- [x] `components/DictionaryStats.tsx` - 統計表示
+- [x] `components/ActionButtons.tsx` - アクションボタン
+- [x] `components/StatusMessages.tsx` - ステータス表示
+- [x] `components/ConfirmationDialogs.tsx` - 確認ダイアログ
+- [x] `utils/search.ts` - 検索ユーティリティ
+- [x] `utils/validation.ts` - バリデーション
+- [x] `types.ts` - 型定義
 
-##### `src/components/CheckHistoryDetail.tsx` (704行)
-- [ ] `CheckMetadata.tsx` - チェック基本情報
-- [ ] `ViolationDetails.tsx` - 違反詳細
-- [ ] `DiffViewer.tsx` - 差分表示
-- [ ] `ExportOptions.tsx` - エクスポート機能
+##### `src/components/CheckHistoryDetail.tsx` (704行) ✅ **完了**
+- [x] `hooks/useCheckDetail.ts` - チェック詳細データ管理
+- [x] `hooks/useCheckActions.ts` - アクション処理
+- [x] `components/CheckHeader.tsx` - ヘッダー・ナビゲーション
+- [x] `components/CheckMetadata.tsx` - チェック基本情報
+- [x] `components/TextTabs.tsx` - テキスト表示タブ
+- [x] `components/ViolationsList.tsx` - 違反項目表示
+- [x] `components/LoadingStates.tsx` - ローディング・エラー状態
+- [x] `utils/violationHighlighting.ts` - 違反ハイライト処理
+- [x] `utils/diffFormat.ts` - 差分フォーマット
+- [x] `utils/textProcessing.ts` - テキスト処理
+- [x] `types.ts` - 型定義
 
-#### 🏆 受入条件
-- [ ] 各ファイルが500行以下になっている
-- [ ] 責任が明確に分離されている
-- [ ] インポート/エクスポートが整理されている
-- [ ] 既存機能が正常動作する
+#### 🏆 受入条件 ✅ **達成**
+- [x] 各ファイルが500行以下になっている（最大200行程度）
+- [x] 責任が明確に分離されている（Factory/Strategy/Hookパターン適用）
+- [x] インポート/エクスポートが整理されている
+- [x] 既存機能が正常動作する（後方互換性維持）
 
 ---
 
@@ -357,45 +380,45 @@ export default function TextChecker() {
 **工数**: 8-10時間  
 **担当者**: 開発チーム
 
-#### 📝 詳細タスク
-- [ ] 統一エラークラスの作成
-- [ ] エラーロガーの実装
-- [ ] ユーザー向けエラーメッセージの標準化
-- [ ] エラー境界コンポーネントの改善
+#### 📝 詳細タスク ✅ **完了**
+- [x] 統一エラークラスの作成（`src/lib/errors/types.ts`）
+- [x] エラーファクトリーの実装（`src/lib/errors/factory.ts`）
+- [x] エラーハンドラーの実装（`src/lib/errors/handler.ts`）
+- [x] 100+個の`throw new Error()`を標準化ErrorFactoryに置換
+- [x] 認証・AI・API・ファイル処理・データベース系エラーの統一
 
-#### 🎯 実装例
+#### 🎯 実装完了
 ```typescript
-// src/lib/errors/index.ts
+// src/lib/errors/types.ts - 標準化されたエラークラス
 export class AppError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public statusCode: number = 500,
-    public cause?: Error
-  ) {
-    super(message)
+  public readonly code: ErrorCode
+  public readonly userMessage: string
+  public readonly context?: Record<string, unknown>
+  public readonly cause?: Error
+
+  constructor(details: ErrorDetails) {
+    super(details.message)
     this.name = 'AppError'
+    this.code = details.code
+    this.userMessage = details.userMessage ?? details.message
+    this.context = details.context
+    this.cause = details.cause
   }
 }
 
-export class ValidationError extends AppError {
-  constructor(message: string, cause?: Error) {
-    super(message, 'VALIDATION_ERROR', 400, cause)
-  }
+// src/lib/errors/factory.ts - 統一エラー生成
+export class ErrorFactory {
+  static createAuthenticationError(message?: string, cause?: Error): AppError
+  static createValidationError(message: string, userMessage?: string): AppError
+  static createAIServiceError(provider: string, operation: string, message?: string): AppError
+  // 12種類のエラータイプをサポート
 }
 
-export class NetworkError extends AppError {
-  constructor(message: string, cause?: Error) {
-    super(message, 'NETWORK_ERROR', 503, cause)
-  }
-}
-
-// src/lib/logger.ts
-export const logger = {
-  error: (message: string, context?: Record<string, any>) => {
-    console.error(message, context)
-    // 本番環境では適切なログサービスに送信
-  }
+// src/lib/errors/handler.ts - API応答とエラー変換
+export class ErrorHandler {
+  static createApiErrorResponse(error: unknown): NextResponse
+  static getDisplayMessage(error: unknown): string
+  static logError(error: unknown, context?: Record<string, unknown>): void
 }
 ```
 
@@ -409,8 +432,9 @@ export const logger = {
 
 #### 📝 詳細タスク
 - [ ] 分割されたコンポーネントの単体テスト追加
-- [ ] 新しいhooksのテスト追加
-- [ ] エラーハンドリングのテスト追加
+- [ ] 新しいhooksのテスト追加（TextChecker, CheckHistoryDetail, Admin Dictionaries）
+- [ ] 標準化エラーハンドリングのテスト追加
+- [ ] AI Client モジュールのテスト追加
 - [ ] 統合テストの改善
 
 #### 🏆 目標カバレッジ
@@ -436,8 +460,8 @@ export const logger = {
 - **Day 3-5**: R005 (大規模ファイル分割)
 
 ### Week 4: 品質向上
-- **Day 1-3**: R006 (エラーハンドリング)
-- **Day 4-5**: R007 (テスト追加)
+- **Day 1-3**: R006 (エラーハンドリング) ✅ **完了**
+- **Day 4-5**: R007 (テスト追加) → **進行中**
 
 ---
 
@@ -448,10 +472,12 @@ export const logger = {
 | **最大ファイル行数** | 1,337行 | **<150行** | <500行 | 静的解析 | ✅ **達成** |
 | **空catch文数** | 4個 | **0個** | 0個 | ESLintルール | ✅ **達成** |
 | **TODO/FIXME数** | 3個 | **0個** | 0個 | grepサーチ | ✅ **達成** |
-| **統一エラーシステム** | なし | **実装済み** | 実装 | 手動確認 | ✅ **達成** |
+| **統一エラーシステム** | なし | **AppError/ErrorFactory/ErrorHandler** | 実装 | 手動確認 | ✅ **達成** |
+| **大規模ファイル分割** | 3ファイル | **35個モジュール** | 完了 | 静的解析 | ✅ **達成** |
+| **エラー標準化率** | 0% | **100個以上置換** | 完了 | 手動確認 | ✅ **達成** |
 | **定数化率** | 0% | **95%+** | 100% | 手動確認 | ✅ **達成** |
-| **コンポーネント分離** | 1個 | **7個モジュール** | 完了 | 手動確認 | ✅ **達成** |
-| **テストカバレッジ** | 未測定 | 未測定 | 90%+ | Vitest | ⏸️ 次フェーズ |
+| **コンポーネント分離** | 1個 | **35個モジュール** | 完了 | 手動確認 | ✅ **達成** |
+| **テストカバレッジ** | 未測定 | 進行中 | 90%+ | Vitest | 🟡 **進行中** |
 
 ---
 
@@ -485,14 +511,18 @@ export const logger = {
 ---
 
 **作成日**: 2025年8月22日  
-**更新日**: 2025年8月22日  
-**ステータス**: Week 2完了、Week 3 Phase 3統合進行中  
+**更新日**: 2025年8月23日  
+**ステータス**: Week 4 エラーハンドリング標準化完了、テストカバレッジ向上進行中  
 **責任者**: 開発チーム リード
 
 **達成実績**:
 - ✅ Week 1 緊急対応 100% 完了（Empty Catch, TODO解消, Magic Numbers）
-- ✅ Week 2 Phase 1 Hook分離 100% 完了（4つの専門Hook作成）
-- ✅ Week 2 Phase 2 UI分離 100% 完了（3つのUIコンポーネント + 2つのユーティリティ）
-- 🔄 Week 3 Phase 3 統合 進行中
+- ✅ Week 2 TextChecker分割 100% 完了（Hook分離 → UI分離 → 統合）
+- ✅ Week 3 大規模ファイル分割 100% 完了（ai-client.ts 9モジュール、admin/dictionaries 15モジュール、CheckHistoryDetail 11モジュール）
+- ✅ Week 4 エラーハンドリング標準化 100% 完了（AppError/ErrorFactory/ErrorHandler + 100+個のエラー置換）
 
-**次回レビュー予定**: 2025年8月29日
+**現在の取り組み**:
+- 🟡 Week 4 テストカバレッジ向上（分割されたモジュールのテスト拡充）
+
+**最終更新**: 2025年8月23日  
+**次回レビュー予定**: 2025年8月30日

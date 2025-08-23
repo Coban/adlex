@@ -131,7 +131,7 @@ export class InviteUserUseCase {
       if (!organization) {
         logger.error('Organization not found for invitation', {
           operation: 'inviteUser',
-          organizationId: inviterUser.organization_id,
+          organizationId: inviterUser.organization_id?.toString(),
           inviteeEmail: input.email
         })
         return {
@@ -146,7 +146,7 @@ export class InviteUserUseCase {
           to: invitation.email,
           invitationId: invitation.id.toString(),
           organizationName: organization.name,
-          inviterName: inviterUser.email, // プロフィール名があれば使用
+          inviterName: inviterUser.email || 'Unknown', // プロフィール名があれば使用
           role: invitation.role ?? 'user'
         })
 
@@ -165,7 +165,7 @@ export class InviteUserUseCase {
         
         // メール送信失敗時は招待レコードを削除（整合性保持）
         try {
-          await this.repositories.invitations.deleteById(invitation.id)
+          await this.repositories.userInvitations.delete(invitation.id)
         } catch (deleteError) {
           logger.error('Failed to cleanup invitation after email failure', {
             operation: 'inviteUser',

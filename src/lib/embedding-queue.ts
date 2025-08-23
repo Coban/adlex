@@ -1,5 +1,6 @@
 import { createClient } from '@/infra/supabase/serverClient'
 import { createEmbedding } from '@/lib/ai-client'
+import { ErrorFactory } from '@/lib/errors'
 
 type QueueItem = {
   id: number
@@ -280,7 +281,7 @@ class EmbeddingQueueManager {
         })
         .eq('id', item.id)
 
-      if (updateError) throw new Error(updateError.message)
+      if (updateError) throw ErrorFactory.createDatabaseError('embedding update', 'dictionaries', updateError)
       
       job.success++
       console.log(`[EmbeddingQueue] Successfully processed item ${item.id} in ${Date.now() - startTime}ms`)

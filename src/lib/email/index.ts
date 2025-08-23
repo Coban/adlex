@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@/lib/logger'
+import { ErrorFactory } from '@/lib/errors'
 
 interface InvitationEmailData {
   to: string
@@ -88,7 +89,7 @@ class ProductionEmailService implements EmailService {
         recipient: data.to,
         error: error instanceof Error ? error.message : 'Unknown error'
       })
-      throw new Error(`メール送信に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw ErrorFactory.createExternalServiceError('Email', 'send invitation', error instanceof Error ? error.message : 'Unknown error', error instanceof Error ? error : undefined)
     }
   }
 }

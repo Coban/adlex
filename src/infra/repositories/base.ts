@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 import { BaseRepository, FindManyOptions, RepositoryError, FilterOperator } from '@/core/ports/base'
 import { Database } from '@/types/database.types'
+import { ErrorFactory } from '@/lib/errors'
 
 
 /**
@@ -234,7 +235,7 @@ export abstract class SupabaseBaseRepository<
     try {
       // For now, this is a placeholder - actual RPC calls would need to be type-safe
       // const { data, error } = await this.supabase.rpc(functionName, params)
-      throw new Error('RPC calls not implemented in base repository')
+      throw ErrorFactory.createInternalError('RPC calls not implemented in base repository')
     } catch (error) {
       if (error instanceof RepositoryError) throw error
       throw this.createRepositoryError(`Unexpected error in RPC`, error as Error)

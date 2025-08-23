@@ -12,5 +12,5 @@ export * from './components'
 // Utils
 export * from './utils'
 
-// Main component (will be created in Phase 3)
-// export { default } from './TextChecker'
+// Main component
+export { default } from './TextChecker'

@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/
 import type { Database } from '@/types/database.types'
 
 import { createClient as createServerClient } from './serverClient'
+import { ErrorFactory } from '@/lib/errors'
 
 /**
  * 真のアドミンクライアント作成（Service Role Key使用）
@@ -13,7 +14,7 @@ export function createAdminClient(): SupabaseClient<Database> {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+    throw ErrorFactory.createValidationError('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
   }
 
   return createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
@@ -34,7 +35,7 @@ export async function getAdminClient(): Promise<SupabaseClient<Database>> {
   // 現在のユーザーが管理者かどうか確認
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) {
-    throw new Error('認証が必要です')
+    throw ErrorFactory.createAuthenticationError('認証が必要です')
   }
 
   // 管理者権限を確認
@@ -45,7 +46,7 @@ export async function getAdminClient(): Promise<SupabaseClient<Database>> {
     .single()
 
   if (profileError || userData?.role !== 'admin') {
-    throw new Error('管理者権限が必要です')
+    throw ErrorFactory.createAuthorizationError('管理者権限が必要です')
   }
 
   return supabase

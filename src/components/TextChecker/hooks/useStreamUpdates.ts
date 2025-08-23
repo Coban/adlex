@@ -25,7 +25,7 @@ export interface UseStreamUpdatesReturn {
   stopGlobalStream: () => void
   
   // 個別チェック用SSE接続管理
-  startCheckStream: (checkId: string, dbCheckId: string) => Promise<void>
+  startCheckStream: (checkId: string, dbCheckId: string) => Promise<EventSource>
   stopCheckStream: (checkId: string) => void
   
   // キャンセル機能

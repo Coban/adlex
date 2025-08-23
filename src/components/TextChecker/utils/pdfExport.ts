@@ -5,6 +5,7 @@
 
 import { CheckResult } from '@/types'
 import { logger } from '@/lib/logger'
+import { ErrorFactory } from '@/lib/errors'
 
 /**
  * チェック結果をPDF形式でエクスポート
@@ -14,7 +15,7 @@ import { logger } from '@/lib/logger'
 export async function exportCheckResultToPdf(checkResult: CheckResult): Promise<void> {
   try {
     if (!checkResult) {
-      throw new Error('エクスポートするデータがありません')
+      throw ErrorFactory.createValidationError('エクスポートするデータがありません')
     }
 
     // Create PDF content using browser's print functionality
@@ -120,7 +121,7 @@ ${index + 1}. 違反箇所: "${violationText}"
 export function printToPdf(content: string): void {
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
-    throw new Error('ポップアップがブロックされました。ポップアップを許可してください。')
+    throw ErrorFactory.createValidationError('ポップアップがブロックされました。ポップアップを許可してください。')
   }
 
   printWindow.document.write(`
