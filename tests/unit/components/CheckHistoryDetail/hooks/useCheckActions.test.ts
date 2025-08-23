@@ -4,9 +4,8 @@ import { useCheckActions } from '@/components/CheckHistoryDetail/hooks/useCheckA
 import { CheckDetail } from '@/components/CheckHistoryDetail/types'
 
 // toast のモック
-const mockToast = vi.fn()
 vi.mock('@/hooks/use-toast', () => ({
-  toast: mockToast
+  toast: vi.fn()
 }))
 
 // clipboard API のモック
@@ -42,6 +41,11 @@ const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 describe('useCheckActions', () => {
+  // モック関数の参照を取得
+  const { toast } = vi.hoisted(() => ({
+    toast: vi.fn()
+  }))
+
   const mockCheckDetail: CheckDetail = {
     id: 123,
     originalText: '元のテキスト',
@@ -98,7 +102,7 @@ describe('useCheckActions', () => {
       })
 
       expect(mockWriteText).toHaveBeenCalledWith('テストテキスト')
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: 'コピーしました',
         description: '元テキストをクリップボードにコピーしました'
       })
@@ -113,7 +117,7 @@ describe('useCheckActions', () => {
         await result.current.copyToClipboard('テストテキスト', '元テキスト')
       })
 
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: 'コピーに失敗しました',
         description: 'クリップボードへのアクセスに失敗しました',
         variant: 'destructive'
@@ -132,7 +136,7 @@ describe('useCheckActions', () => {
       })
 
       expect(mockWriteText).toHaveBeenCalled()
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: 'コピーしました',
         description: 'diff形式をクリップボードにコピーしました'
       })
@@ -235,7 +239,7 @@ describe('useCheckActions', () => {
         await result.current.handleRerun()
       })
 
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: '再実行エラー',
         description: '再実行に失敗しました',
         variant: 'destructive'
@@ -284,7 +288,7 @@ describe('useCheckActions', () => {
         await result.current.handlePdfDownload()
       })
 
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: 'PDF出力エラー',
         description: expect.stringContaining('ファイル処理でエラーが発生しました'),
         variant: 'destructive'
@@ -309,7 +313,7 @@ describe('useCheckActions', () => {
       expect(mockFetch).toHaveBeenCalledWith('/api/checks/123', {
         method: 'DELETE'
       })
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: '削除完了',
         description: 'チェック履歴を削除しました'
       })
@@ -341,7 +345,7 @@ describe('useCheckActions', () => {
         await result.current.handleDelete()
       })
 
-      expect(mockToast).toHaveBeenCalledWith({
+      expect(toast).toHaveBeenCalledWith({
         title: '削除エラー',
         description: expect.stringContaining('削除に失敗しました'),
         variant: 'destructive'

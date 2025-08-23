@@ -4,9 +4,8 @@ import { useDictionaryForm } from '@/app/admin/dictionaries/hooks/useDictionaryF
 import { Dictionary, Organization } from '@/app/admin/dictionaries/types'
 
 // authFetch のモック
-const mockAuthFetch = vi.fn()
 vi.mock('@/lib/api-client', () => ({
-  authFetch: mockAuthFetch
+  authFetch: vi.fn()
 }))
 
 // alert のモック
@@ -14,6 +13,11 @@ const mockAlert = vi.fn()
 Object.assign(window, { alert: mockAlert })
 
 describe('useDictionaryForm', () => {
+  // モック関数の参照を取得
+  const { authFetch } = vi.hoisted(() => ({
+    authFetch: vi.fn()
+  }))
+
   const mockOrganization: Organization = {
     id: 1,
     name: 'テスト組織',
@@ -140,7 +144,7 @@ describe('useDictionaryForm', () => {
 
   describe('handleCreate', () => {
     it('新規作成が成功すること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ id: 2 })
       })
@@ -167,7 +171,7 @@ describe('useDictionaryForm', () => {
       })
 
       expect(mockEvent.preventDefault).toHaveBeenCalled()
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,7 +186,7 @@ describe('useDictionaryForm', () => {
     })
 
     it('空白の備考がnullとして送信されること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ id: 2 })
       })
@@ -205,7 +209,7 @@ describe('useDictionaryForm', () => {
         await result.current.handleCreate(mockEvent)
       })
 
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries', 
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries', 
         expect.objectContaining({
           body: JSON.stringify({
             phrase: 'テスト表現',
@@ -227,11 +231,11 @@ describe('useDictionaryForm', () => {
         await result.current.handleCreate(mockEvent)
       })
 
-      expect(mockAuthFetch).not.toHaveBeenCalled()
+      expect(authFetch).not.toHaveBeenCalled()
     })
 
     it('API エラーが発生した場合適切に処理されること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: false,
         json: () => Promise.resolve({ error: 'Duplicate entry' })
       })
@@ -259,7 +263,7 @@ describe('useDictionaryForm', () => {
     })
 
     it('警告メッセージがある場合アラートが表示されること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ 
           id: 2, 
@@ -292,7 +296,7 @@ describe('useDictionaryForm', () => {
 
   describe('handleUpdate', () => {
     it('更新が成功すること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true })
       })
@@ -317,7 +321,7 @@ describe('useDictionaryForm', () => {
         await result.current.handleUpdate(mockEvent)
       })
 
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/1', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/1', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -342,13 +346,13 @@ describe('useDictionaryForm', () => {
         await result.current.handleUpdate(mockEvent)
       })
 
-      expect(mockAuthFetch).not.toHaveBeenCalled()
+      expect(authFetch).not.toHaveBeenCalled()
     })
   })
 
   describe('メッセージ表示', () => {
     it('メッセージが指定時間後にクリアされること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ id: 2 })
       })

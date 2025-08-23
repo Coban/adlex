@@ -83,7 +83,10 @@ describe('useCheckDetail', () => {
     it('404エラーの場合適切なエラーメッセージが設定されること', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 404
+        status: 404,
+        clone: vi.fn().mockReturnThis(),
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve('')
       })
 
       const { result } = renderHook(() => useCheckDetail(123))
@@ -99,7 +102,10 @@ describe('useCheckDetail', () => {
     it('403エラーの場合適切なエラーメッセージが設定されること', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 403
+        status: 403,
+        clone: vi.fn().mockReturnThis(),
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve('')
       })
 
       const { result } = renderHook(() => useCheckDetail(123))
@@ -114,7 +120,10 @@ describe('useCheckDetail', () => {
     it('その他のAPIエラーの場合適切なエラーメッセージが設定されること', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 500
+        status: 500,
+        clone: vi.fn().mockReturnThis(),
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve('')
       })
 
       const { result } = renderHook(() => useCheckDetail(123))

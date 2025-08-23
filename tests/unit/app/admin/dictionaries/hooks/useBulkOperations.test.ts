@@ -3,9 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useBulkOperations } from '@/app/admin/dictionaries/hooks/useBulkOperations'
 
 // authFetch のモック
-const mockAuthFetch = vi.fn()
 vi.mock('@/lib/api-client', () => ({
-  authFetch: mockAuthFetch
+  authFetch: vi.fn()
 }))
 
 // DOM API のモック
@@ -30,6 +29,11 @@ Object.assign(URL, {
 })
 
 describe('useBulkOperations', () => {
+  // モック関数の参照を取得
+  const { authFetch } = vi.hoisted(() => ({
+    authFetch: vi.fn()
+  }))
+
   const mockOnSuccess = vi.fn()
 
   beforeEach(() => {
@@ -68,7 +72,7 @@ describe('useBulkOperations', () => {
         { phrase: 'テスト', count: 2, entries: [] }
       ]
       
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ duplicates: mockDuplicates })
       })
@@ -81,11 +85,11 @@ describe('useBulkOperations', () => {
 
       expect(result.current.showDuplicatesDialog).toBe(true)
       expect(result.current.duplicates).toEqual(mockDuplicates)
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/duplicates', { method: 'GET' })
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/duplicates', { method: 'GET' })
     })
 
     it('重複検出でAPIエラーが発生した場合', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
         json: () => Promise.resolve({ error: 'Server error' })
@@ -111,12 +115,12 @@ describe('useBulkOperations', () => {
       })
 
       expect(mockAlert).toHaveBeenCalledWith('項目を選択してください')
-      expect(mockAuthFetch).not.toHaveBeenCalled()
+      expect(authFetch).not.toHaveBeenCalled()
     })
 
     it('有効なカテゴリで一括更新が成功すること', async () => {
       mockPrompt.mockReturnValue('NG')
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: 2, failure: 0 })
       })
@@ -133,7 +137,7 @@ describe('useBulkOperations', () => {
       })
 
       expect(mockPrompt).toHaveBeenCalledWith('一括カテゴリ変更: NG または ALLOW を入力', 'NG')
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +165,7 @@ describe('useBulkOperations', () => {
       })
 
       expect(mockAlert).toHaveBeenCalledWith('NG/ALLOW のいずれかを指定してください')
-      expect(mockAuthFetch).not.toHaveBeenCalled()
+      expect(authFetch).not.toHaveBeenCalled()
     })
 
     it('プロンプトがキャンセルされた場合何も実行されないこと', async () => {
@@ -177,14 +181,14 @@ describe('useBulkOperations', () => {
         await result.current.handleBulkCategoryUpdate()
       })
 
-      expect(mockAuthFetch).not.toHaveBeenCalled()
+      expect(authFetch).not.toHaveBeenCalled()
     })
   })
 
   describe('handleBulkNotesUpdate', () => {
     it('備考の一括更新が成功すること', async () => {
       mockPrompt.mockReturnValue('テスト備考')
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: 1, failure: 0 })
       })
@@ -199,7 +203,7 @@ describe('useBulkOperations', () => {
         await result.current.handleBulkNotesUpdate()
       })
 
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -210,7 +214,7 @@ describe('useBulkOperations', () => {
 
     it('空の備考でnullクリアできること', async () => {
       mockPrompt.mockReturnValue('  ')
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: 1, failure: 0 })
       })
@@ -225,7 +229,7 @@ describe('useBulkOperations', () => {
         await result.current.handleBulkNotesUpdate()
       })
 
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/bulk-update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -238,7 +242,7 @@ describe('useBulkOperations', () => {
   describe('handleExportCSV', () => {
     it('CSVエクスポートが成功すること', async () => {
       const mockBlob = new Blob(['csv,data'], { type: 'text/csv' })
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         blob: () => Promise.resolve(mockBlob)
       })
@@ -258,7 +262,7 @@ describe('useBulkOperations', () => {
         await result.current.handleExportCSV()
       })
 
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/export', { method: 'GET' })
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/export', { method: 'GET' })
       expect(mockCreateObjectURL).toHaveBeenCalledWith(mockBlob)
       expect(mockElement.download).toBe('dictionaries.csv')
       expect(mockElement.click).toHaveBeenCalled()
@@ -266,7 +270,7 @@ describe('useBulkOperations', () => {
     })
 
     it('エクスポートでエラーが発生した場合アラートが表示されること', async () => {
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
         json: () => Promise.resolve({ error: 'Export failed' })
@@ -287,7 +291,7 @@ describe('useBulkOperations', () => {
       const mockFile = new File(['test,csv,data'], 'test.csv', { type: 'text/csv' })
       mockFile.text = vi.fn().mockResolvedValue('test,csv,data')
 
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ inserted: 3, skipped: [] })
       })
@@ -299,7 +303,7 @@ describe('useBulkOperations', () => {
       })
 
       expect(result.current.importing).toBe(false)
-      expect(mockAuthFetch).toHaveBeenCalledWith('/api/dictionaries/import', {
+      expect(authFetch).toHaveBeenCalledWith('/api/dictionaries/import', {
         method: 'POST',
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
@@ -319,7 +323,7 @@ describe('useBulkOperations', () => {
         resolveResponse = resolve
       })
       
-      mockAuthFetch.mockReturnValue(responsePromise)
+      authFetch.mockReturnValue(responsePromise)
 
       const { result } = renderHook(() => useBulkOperations(mockOnSuccess))
 
@@ -348,7 +352,7 @@ describe('useBulkOperations', () => {
       const mockFile = new File(['invalid,csv'], 'test.csv', { type: 'text/csv' })
       mockFile.text = vi.fn().mockResolvedValue('invalid,csv')
 
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
         json: () => Promise.resolve({ error: 'Invalid CSV format' })
@@ -404,7 +408,7 @@ describe('useBulkOperations', () => {
       vi.useFakeTimers()
       
       mockPrompt.mockReturnValue('NG')
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: 2, failure: 1 })
       })
@@ -437,7 +441,7 @@ describe('useBulkOperations', () => {
       const mockFile = new File(['test,data'], 'test.csv', { type: 'text/csv' })
       mockFile.text = vi.fn().mockResolvedValue('test,data')
 
-      mockAuthFetch.mockResolvedValueOnce({
+      authFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ inserted: 5, skipped: ['duplicate1'] })
       })

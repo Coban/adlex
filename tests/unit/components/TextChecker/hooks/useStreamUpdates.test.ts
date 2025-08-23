@@ -19,7 +19,7 @@ vi.mock('@/lib/logger', () => ({
 }))
 
 // EventSource のモック
-const mockEventSource = {
+const createMockEventSource = () => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   close: vi.fn(),
@@ -33,9 +33,15 @@ const mockEventSource = {
   CONNECTING: 0,
   OPEN: 1,
   CLOSED: 2
-}
+})
 
-const EventSourceConstructor = vi.fn(() => mockEventSource) as unknown as {
+let mockEventSource = createMockEventSource()
+
+const EventSourceConstructor = vi.fn((url: string) => {
+  mockEventSource = createMockEventSource()
+  mockEventSource.url = url
+  return mockEventSource
+}) as unknown as {
   new (url: string | URL, eventSourceInitDict?: EventSourceInit): EventSource
   readonly CONNECTING: 0
   readonly OPEN: 1
@@ -72,6 +78,7 @@ describe('useStreamUpdates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
+    mockEventSource = createMockEventSource()
   })
 
   afterEach(() => {
