@@ -45,10 +45,10 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* 決定論的再試行戦略 - 100%成功率を目指す */
+  retries: 0, // 再試行に依存せず、一発で成功するテストを目標
+  /* 並行実行制御 - 競合状態を排除 */
+  workers: 1, // 完全にシーケンシャル実行で決定論化
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
     ['html', { open: 'never', outputFolder: 'test-reports/html' }],
@@ -135,7 +135,7 @@ export default defineConfig({
         actionTimeout: 60000, // エラーシナリオ用の長いタイムアウト
         navigationTimeout: 60000,
       },
-      retries: 1, // エラーテストは少ない再試行
+      retries: 0, // 決定論的実行 - 再試行なし
     },
     /* Test against branded browsers. */
     // {
@@ -154,20 +154,40 @@ export default defineConfig({
     url: "http://localhost:3001",
     reuseExistingServer: true,
     timeout: 120 * 1000,
-    // 環境適応型設定 - テスト内で動的に制御
+    // 決定論的な静的設定 - 100%再現可能な環境
     env: {
-      // Load from .env.e2e first
-      ...envFromTestingFile,
-      // Explicit overrides for E2E testing
+      // 基本環境設定
       NODE_ENV: 'test',
-      OPENAI_API_KEY: 'mock',
+      TZ: 'UTC', // タイムゾーンを固定
+      
+      // AI設定（モック使用で決定論化）
+      AI_PROVIDER: 'mock',
+      OPENAI_API_KEY: 'test-mock-key-deterministic',
       USE_LM_STUDIO: 'false',
-      NEXT_PUBLIC_MSW_ENABLED: envFromTestingFile.NEXT_PUBLIC_MSW_ENABLED ?? 'false',
-      NEXT_PUBLIC_APP_URL: envFromTestingFile.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001',
-      ADLEX_MAX_CONCURRENT_CHECKS: envFromTestingFile.ADLEX_MAX_CONCURRENT_CHECKS ?? '3',
-      // グローバルセットアップによる認証状態生成のため、SKIP_AUTHは無効化
+      
+      // アプリケーション設定（固定値）
+      NEXT_PUBLIC_APP_URL: 'http://localhost:3001',
+      ADLEX_MAX_CONCURRENT_CHECKS: '1', // 並行処理を無効化して決定論化
+      
+      // Supabase設定（テスト用固定値）
+      NEXT_PUBLIC_SUPABASE_URL: 'http://localhost:54321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'test-deterministic-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-deterministic-service-key',
+      
+      // MSW設定
+      NEXT_PUBLIC_MSW_ENABLED: 'false', // E2Eテストでは無効
+      
+      // 認証設定（静的）
       SKIP_AUTH: 'false',
       NEXT_PUBLIC_SKIP_AUTH: 'false',
+      
+      // デバッグ・ログ設定
+      DEBUG: '',
+      LOG_LEVEL: 'error', // ログノイズを削減
+      
+      // ランダム性排除
+      NODE_OPTIONS: '--max-old-space-size=4096',
+      FORCE_COLOR: '0', // カラー出力を無効化
     },
   },
 });

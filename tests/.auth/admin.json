@@ -2,30 +2,30 @@
   "cookies": [
     {
       "name": "sb-access-token",
-      "value": "test-token-test-admin-1-1755976897390",
+      "value": "test-token-test-admin-1-1755976939226",
       "domain": "localhost",
       "path": "/",
-      "expires": 1755980497.392,
+      "expires": 1755980539.229,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "sb-refresh-token",
-      "value": "test-refresh-test-admin-1-1755976897390",
+      "value": "test-refresh-test-admin-1-1755976939226",
       "domain": "localhost",
       "path": "/",
-      "expires": 1756581697.392,
+      "expires": 1756581739.229,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "sb-session",
-      "value": "%7B%22access_token%22%3A%22test-token-test-admin-1-1755976897390%22%2C%22refresh_token%22%3A%22test-refresh-test-admin-1-1755976897390%22%2C%22expires_at%22%3A1755980497%2C%22user%22%3A%7B%22id%22%3A%22test-admin-1%22%2C%22email%22%3A%22admin%40test.com%22%2C%22role%22%3A%22admin%22%7D%7D",
+      "value": "%7B%22access_token%22%3A%22test-token-test-admin-1-1755976939226%22%2C%22refresh_token%22%3A%22test-refresh-test-admin-1-1755976939226%22%2C%22expires_at%22%3A1755980539%2C%22user%22%3A%7B%22id%22%3A%22test-admin-1%22%2C%22email%22%3A%22admin%40test.com%22%2C%22role%22%3A%22admin%22%7D%7D",
       "domain": "localhost",
       "path": "/",
-      "expires": 1755980497.392,
+      "expires": 1755980539.229,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"

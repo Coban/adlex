@@ -52,11 +52,8 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('429 Rate Limit Error の処理', async ({ page }) => {
-      const env = detectEnvironment();
-      if (env.skipAuth) {
-        test.skip(true, 'SKIP_AUTHモードのため、APIエラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       await mockApiError(page, 'checks', 429, 'リクエスト制限に達しました。しばらく待ってから再試行してください。');
       
@@ -82,11 +79,8 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('401 Unauthorized Error の処理', async ({ page }) => {
-      const env = detectEnvironment();
-      if (env.skipAuth) {
-        test.skip(true, 'SKIP_AUTHモードのため、APIエラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       await mockApiError(page, 'checks', 401, '認証が必要です');
       
@@ -115,11 +109,8 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('403 Forbidden Error の処理', async ({ page }) => {
-      const env = detectEnvironment();
-      if (env.skipAuth) {
-        test.skip(true, 'SKIP_AUTHモードのため、APIエラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       await mockApiError(page, 'admin/users', 403, 'アクセス権限がありません');
       
@@ -146,11 +137,8 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('422 Validation Error の処理', async ({ page }) => {
-      const env = detectEnvironment();
-      if (env.skipAuth) {
-        test.skip(true, 'SKIP_AUTHモードのため、APIエラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       const validationError = {
         error: 'バリデーションエラー',
@@ -429,10 +417,8 @@ test.describe('エラーハンドリング', () => {
     test.use({ storageState: { cookies: [], origins: [] } }); // 認証状態をクリア
 
     test('セッション期限切れの処理', async ({ page }) => {
-      if (shouldSkipAuthTest()) {
-        test.skip(true, 'Supabase環境が利用できないため、認証エラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       // セッション期限切れテスト用の設定
       
       // 期限切れセッションをモック
@@ -456,10 +442,8 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('無効なトークンの処理', async ({ page }) => {
-      if (shouldSkipAuthTest()) {
-        test.skip(true, 'Supabase環境が利用できないため、認証エラーハンドリングテストをスキップ');
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       // 無効なトークンでAPIアクセスを試行
       await mockApiError(page, 'checks', 401, '無効なトークンです');
@@ -587,12 +571,8 @@ test.describe('エラーハンドリング', () => {
 
   test.describe('エラーリカバリ機能', () => {
     test('エラー後のリトライボタン', async ({ page }) => {
-      const env = detectEnvironment();
-      
-      if (shouldSkipAuthTest()) {
-        test.skip(true, `リトライボタンテストをスキップ: Supabase環境=${env.hasSupabase}, SKIP_AUTH=${env.skipAuth}`);
-        return;
-      }
+      // 決定論的実行のため条件スキップを除去
+      // すべてのテストケースを確実に実行
       
       await mockApiError(page, 'checks', 500, 'サーバーエラー');
       

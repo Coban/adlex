@@ -1,4 +1,11 @@
 import { Page, expect } from '@playwright/test';
+import { 
+  waitForElementStable, 
+  waitForApiCallComplete, 
+  assertErrorState,
+  assertSuccessState,
+  waitForPageFullyLoaded 
+} from './deterministic-helpers';
 
 /**
  * 薬機法違反のサンプルテキスト
@@ -172,20 +179,10 @@ export async function expectLoadingState(page: Page, timeout = 5000) {
 }
 
 /**
- * エラー状態のテスト
+ * エラー状態のテスト（決定論的版）
  */
-export async function expectErrorState(page: Page, timeout = 5000) {
-  const errorIndicators = [
-    '[data-testid="error-message"]',
-    '[role="alert"]',
-    '.error-message',
-    '.text-red-500',
-    '.text-destructive',
-    'text=エラー'
-  ];
-
-  const foundError = await waitForAnyElement(page, errorIndicators, timeout);
-  expect(foundError).toBe(true);
+export async function expectErrorState(page: Page, timeout = 10000) {
+  await assertErrorState(page, { timeout });
 }
 
 /**
@@ -285,16 +282,37 @@ export async function expectRetryBehavior(page: Page) {
 }
 
 /**
- * テスト環境のセットアップ
+ * テスト環境のセットアップ（決定論的版）
  */
 export async function setupTestEnvironment(page: Page) {
   await page.addInitScript(() => {
-    // テスト環境用の環境変数設定
+    // 決定論的な環境変数設定
     (window as any).process = {
       env: {
         NODE_ENV: 'test',
-        TZ: process.env.TZ || 'Asia/Tokyo'
+        TZ: 'UTC' // タイムゾーンを UTC に固定
       }
+    };
+
+    // 時間を固定（テスト開始時点）
+    const FIXED_TIME = new Date('2024-01-01T00:00:00.000Z').getTime();
+    const OriginalDate = window.Date;
+    (window as any).Date = class extends OriginalDate {
+      constructor(...args: any[]) {
+        if (args.length === 0) {
+          super(FIXED_TIME);
+        } else {
+          super(...args);
+        }
+      }
+      static now() { return FIXED_TIME; }
+    };
+
+    // Math.random を決定論的に固定
+    let seedValue = 0.5;
+    Math.random = () => {
+      seedValue = (seedValue * 9301 + 49297) % 233280;
+      return seedValue / 233280;
     };
 
     // コンソールエラーを収集
@@ -304,7 +322,23 @@ export async function setupTestEnvironment(page: Page) {
       (window as any).testConsoleErrors.push(args);
       originalConsoleError.apply(console, args);
     };
+
+    // アニメーション無効化
+    const style = document.createElement('style');
+    style.textContent = `
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
+      }
+    `;
+    document.head.appendChild(style);
   });
+  
+  // ページの完全初期化を待機
+  await waitForPageFullyLoaded(page);
 }
 
 /**

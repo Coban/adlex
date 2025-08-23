@@ -13,6 +13,20 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     globals: true,
     css: true,
+    // 決定論的テスト実行設定
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: true, // 単一スレッドで決定論化
+      },
+    },
+    // 環境変数を決定論的に設定
+    env: {
+      NODE_ENV: 'test',
+      TZ: 'UTC',
+      VITEST: 'true',
+      FORCE_COLOR: '0',
+    },
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: [
       "node_modules/",
