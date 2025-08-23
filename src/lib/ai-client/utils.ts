@@ -4,6 +4,7 @@
  */
 
 import OpenAI from 'openai'
+
 import { LegacyViolationData, ModelConfiguration } from './types'
 
 /**

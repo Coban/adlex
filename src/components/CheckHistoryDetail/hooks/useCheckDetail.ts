@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { CheckDetail } from '../types'
+
 import { ErrorFactory } from '@/lib/errors'
+
+import { CheckDetail } from '../types'
 
 /**
  * チェック詳細データ取得用のカスタムフック

@@ -1,9 +1,9 @@
 import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js'
 
+import { ErrorFactory } from '@/lib/errors'
 import type { Database } from '@/types/database.types'
 
 import { createClient as createServerClient } from './serverClient'
-import { ErrorFactory } from '@/lib/errors'
 
 /**
  * 真のアドミンクライアント作成（Service Role Key使用）

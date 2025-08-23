@@ -1,7 +1,7 @@
 import { createClient } from '@/infra/supabase/clientClient'
-import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
-import { logger } from '@/lib/logger'
 import { ErrorFactory } from '@/lib/errors'
+import { logger } from '@/lib/logger'
+import { UserProfileInsert, UserProfileUpdate, OrganizationPlan, UserRole } from '@/types'
 
 export interface AuthError {
   message: string;

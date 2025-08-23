@@ -4,6 +4,7 @@
  */
 
 import OpenAI from 'openai'
+
 import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
 
 /**
@@ -61,7 +62,7 @@ export class MockProvider implements AIProvider {
   private chatModel: string
   private embeddingModel: string
 
-  constructor(chatModel: string = 'mock-chat-model', embeddingModel: string = 'mock-embedding-model') {
+  constructor(chatModel = 'mock-chat-model', embeddingModel = 'mock-embedding-model') {
     this.chatModel = chatModel
     this.embeddingModel = embeddingModel
   }

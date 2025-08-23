@@ -4,10 +4,13 @@
  */
 
 import OpenAI from 'openai'
-import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel } from './config'
-import { generateJSONFromPlainText, extractCompleteJSON } from './utils'
+
 import { ErrorFactory } from '@/lib/errors'
+
+import { aiProvider, getApiKey, getChatModel, getEmbeddingModel } from './config'
+import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
+import { generateJSONFromPlainText, extractCompleteJSON } from './utils'
+
 
 /**
  * LM Studio クライアント
@@ -61,7 +64,7 @@ export class LMStudioProvider implements AIProvider {
 
   constructor(
     baseURL: string = process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234/v1',
-    apiKey: string = 'lm-studio',
+    apiKey = 'lm-studio',
     chatModel: string = getChatModel,
     embeddingModel: string = getEmbeddingModel
   ) {

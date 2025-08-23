@@ -1,35 +1,36 @@
 'use client'
 
 import { useState } from 'react'
+
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/AuthContext'
 
 // モジュール化されたフック群
-import { useDictionaries } from './hooks/useDictionaries'
-import { useDictionaryForm } from './hooks/useDictionaryForm'
-import { useDictionaryDelete } from './hooks/useDictionaryDelete'
-import { useEmbeddingOperations } from './hooks/useEmbeddingOperations'
-import { useBulkOperations } from './hooks/useBulkOperations'
-
-// モジュール化されたコンポーネント群
-import { EmbeddingStatsCard, DictionaryStatsCard } from './components/DictionaryStats'
-import { DictionaryForm } from './components/DictionaryForm'
-import { DictionaryFilters } from './components/DictionaryFilters'
-import { DictionaryList } from './components/DictionaryList'
 import { ActionButtons } from './components/ActionButtons'
-import { StatusMessages } from './components/StatusMessages'
 import {
   DeleteConfirmationDialog,
   RegenerateEmbeddingsDialog,
   DuplicatesDialog,
 } from './components/ConfirmationDialogs'
+import { DictionaryFilters } from './components/DictionaryFilters'
+import { DictionaryForm } from './components/DictionaryForm'
+import { DictionaryList } from './components/DictionaryList'
+import { EmbeddingStatsCard, DictionaryStatsCard } from './components/DictionaryStats'
+import { StatusMessages } from './components/StatusMessages'
+import { useBulkOperations } from './hooks/useBulkOperations'
+import { useDictionaries } from './hooks/useDictionaries'
+import { useDictionaryDelete } from './hooks/useDictionaryDelete'
+import { useDictionaryForm } from './hooks/useDictionaryForm'
+import { useEmbeddingOperations } from './hooks/useEmbeddingOperations'
+
+// モジュール化されたコンポーネント群
 
 // ユーティリティ関数
+import { CategoryFilter, SortOption } from './types'
 import { matchesAdvancedQuery } from './utils/search'
 import { sortDictionaries } from './utils/sorting'
-import { CategoryFilter, SortOption } from './types'
 
 export default function DictionariesPage() {
   const { userProfile, loading: authLoading } = useAuth()

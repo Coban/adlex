@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/infra/supabase/clientClient'
 import { authFetch } from '@/lib/api-client'
+
 import { Dictionary, Organization, EmbeddingStats, DictionaryStats } from '../types'
 
 /**

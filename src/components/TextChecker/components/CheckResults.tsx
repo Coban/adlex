@@ -3,8 +3,9 @@
  * チェック結果の表示、コピー、エクスポート機能を管理
  */
 
-import React, { useRef, useEffect } from 'react'
 import { Copy, Download } from 'lucide-react'
+import React, { useRef, useEffect } from 'react'
+
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CheckItem } from '@/types'

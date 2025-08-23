@@ -42,7 +42,7 @@ export const TIMEOUTS = {
 /**
  * 処理タイプに応じたタイムアウト設定を取得
  */
-export function getProcessingTimeouts(isImageCheck: boolean = false) {
+export function getProcessingTimeouts(isImageCheck = false) {
   if (isImageCheck) {
     return {
       maxPolls: TIMEOUTS.MAX_POLLS.IMAGE_CHECK,

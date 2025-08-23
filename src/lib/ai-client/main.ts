@@ -4,13 +4,15 @@
  */
 
 import OpenAI from 'openai'
-import { createAIProvider, aiClient } from './factory'
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider, AI_MODELS, USE_MOCK, getAIClientInfo } from './config'
-import { ensureOpenAIEmbeddingClient, createOpenAIEmbedding } from './openai-client'
-import { createLMStudioEmbedding } from './lmstudio-client'
-import { extractCompleteJSON, generateJSONFromPlainText, sanitizePlainText, estimateOcrConfidence, validateModelConfiguration } from './utils'
-import { LegacyDictionaryEntry, LegacyViolationData } from './types'
+
 import { ErrorFactory } from '@/lib/errors'
+
+import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider, AI_MODELS, USE_MOCK, getAIClientInfo } from './config'
+import { createAIProvider, aiClient } from './factory'
+import { createLMStudioEmbedding } from './lmstudio-client'
+import { ensureOpenAIEmbeddingClient, createOpenAIEmbedding } from './openai-client'
+import { LegacyDictionaryEntry, LegacyViolationData } from './types'
+import { extractCompleteJSON, generateJSONFromPlainText, sanitizePlainText, estimateOcrConfidence, validateModelConfiguration } from './utils'
 
 /**
  * AIクライアントを使用してチャット完了を作成する
@@ -343,7 +345,7 @@ export function getEmbeddingDimension(model: string = getEmbeddingModel): number
  */
 export async function extractTextFromImageWithLLM(
   imageBuffer: Buffer, 
-  prompt: string = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
+  prompt = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
 ): Promise<string> {
   if (USE_MOCK) {
     return '模擬的に抽出されたテキストです。このサプリメントはがんに効果があります。'

@@ -1,5 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
 import { CheckDetail } from '../types'
+
 import { TextDisplay } from './TextDisplay'
 
 interface TextTabsProps {

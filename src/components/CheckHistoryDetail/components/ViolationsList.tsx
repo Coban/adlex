@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { CheckDetail, Violation } from '../types'
 import { extractViolationText } from '../utils/violationHighlighting'
 

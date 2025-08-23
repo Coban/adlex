@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 
 import { AuthRepository, AuthUser } from '@/core/ports/authRepository'
-import type { Database } from '@/types/database.types'
 import { ErrorFactory } from '@/lib/errors'
+import type { Database } from '@/types/database.types'
 
 /**
  * Supabase認証リポジトリの実装

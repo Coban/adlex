@@ -1,7 +1,9 @@
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Image from 'next/image'
+
 import { Card, CardContent } from '@/components/ui/card'
+
 import { CheckDetail } from '../types'
 
 interface CheckMetadataProps {

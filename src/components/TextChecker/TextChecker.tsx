@@ -5,19 +5,19 @@
 
 'use client'
 
-import React, { useState, useCallback } from 'react'
 import { AlertCircle, Clock, CheckCircle, XCircle } from 'lucide-react'
+import React, { useState, useCallback } from 'react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { logger } from '@/lib/logger'
 import { CheckItem } from '@/types'
 
+import { CheckHistory } from './components/CheckHistory'
 import { CheckInput } from './components/CheckInput'
 import { CheckResults } from './components/CheckResults'
-import { CheckHistory } from './components/CheckHistory'
 import { useCheckState } from './hooks/useCheckState'
-import { useErrorHandling } from './hooks/useErrorHandling'
 import { useClipboard } from './hooks/useClipboard'
+import { useErrorHandling } from './hooks/useErrorHandling'
 import { useStreamUpdates } from './hooks/useStreamUpdates'
 
 export interface TextCheckerProps {

@@ -4,9 +4,11 @@
  */
 
 import OpenAI from 'openai'
-import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, legacyOpenAIKey } from './config'
+
 import { ErrorFactory } from '@/lib/errors'
+
+import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, legacyOpenAIKey } from './config'
+import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
 
 /**
  * OpenAI クライアント（チャット用）

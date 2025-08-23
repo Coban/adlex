@@ -4,8 +4,9 @@
  */
 
 import { useState, useCallback } from 'react'
-import { logger } from '@/lib/logger'
+
 import { APP_CONFIG } from '@/constants'
+import { logger } from '@/lib/logger'
 
 export interface UseClipboardReturn {
   // State

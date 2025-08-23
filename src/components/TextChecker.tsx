@@ -6,13 +6,13 @@ import { useState, useEffect, useId, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { APP_CONFIG } from '@/constants'
+import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constants/timeouts'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/infra/supabase/clientClient'
 import { logger } from '@/lib/logger'
 import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
-import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constants/timeouts'
-import { APP_CONFIG } from '@/constants'
 
 /**
  * 薬機法チェッカーのメインコンポーネント

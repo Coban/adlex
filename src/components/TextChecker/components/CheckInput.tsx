@@ -3,8 +3,9 @@
  * テキスト入力、文字数表示、チェック開始ボタンを管理
  */
 
-import React from 'react'
 import { Loader2 } from 'lucide-react'
+import React from 'react'
+
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { APP_CONFIG } from '@/constants'

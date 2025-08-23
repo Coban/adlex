@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { APP_CONFIG, TIMEOUTS } from '@/constants'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/infra/supabase/clientClient'
 import { logger } from '@/lib/logger'
-import { APP_CONFIG, TIMEOUTS } from '@/constants'
 
 type UploadState = 'idle' | 'ready' | 'validating' | 'uploading' | 'uploaded' | 'starting_check' | 'processing' | 'completed' | 'failed'
 

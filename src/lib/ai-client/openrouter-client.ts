@@ -4,10 +4,13 @@
  */
 
 import OpenAI from 'openai'
-import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider } from './config'
-import { getSanitizedReferer } from './utils'
+
 import { ErrorFactory } from '@/lib/errors'
+
+import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider } from './config'
+import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
+import { getSanitizedReferer } from './utils'
+
 
 /**
  * OpenRouter クライアント

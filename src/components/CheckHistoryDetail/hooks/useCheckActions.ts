@@ -1,7 +1,8 @@
 import { toast } from '@/hooks/use-toast'
+import { ErrorFactory } from '@/lib/errors'
+
 import { CheckDetail } from '../types'
 import { generateDiffFormat } from '../utils/diffFormat'
-import { ErrorFactory } from '@/lib/errors'
 
 /**
  * チェック詳細でのアクション操作用のカスタムフック

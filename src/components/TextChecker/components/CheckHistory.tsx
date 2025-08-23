@@ -4,6 +4,7 @@
  */
 
 import React from 'react'
+
 import { CheckItem } from '@/types'
 
 export interface CheckHistoryProps {

@@ -1,8 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 import { BaseRepository, FindManyOptions, RepositoryError, FilterOperator } from '@/core/ports/base'
-import { Database } from '@/types/database.types'
 import { ErrorFactory } from '@/lib/errors'
+import { Database } from '@/types/database.types'
 
 
 /**

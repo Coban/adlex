@@ -4,10 +4,12 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+
+import { TIMEOUTS } from '@/constants/timeouts'
 import { createClient } from '@/infra/supabase/clientClient'
 import { logger } from '@/lib/logger'
 import { CheckStreamData, QueueStatus, OrganizationStatus, SystemStatus } from '@/types'
-import { TIMEOUTS } from '@/constants/timeouts'
+
 import type { UseCheckStateReturn } from './useCheckState'
 
 interface UseStreamUpdatesProps {

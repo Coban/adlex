@@ -3,15 +3,15 @@
 import { useState } from 'react'
 
 // モジュール化されたフック群
-import { useCheckDetail } from './CheckHistoryDetail/hooks/useCheckDetail'
-import { useCheckActions } from './CheckHistoryDetail/hooks/useCheckActions'
 
 // モジュール化されたコンポーネント群
 import { CheckHeader } from './CheckHistoryDetail/components/CheckHeader'
 import { CheckMetadata } from './CheckHistoryDetail/components/CheckMetadata'
+import { LoadingState, ErrorState, NotFoundState } from './CheckHistoryDetail/components/LoadingStates'
 import { TextTabs } from './CheckHistoryDetail/components/TextTabs'
 import { ViolationsList } from './CheckHistoryDetail/components/ViolationsList'
-import { LoadingState, ErrorState, NotFoundState } from './CheckHistoryDetail/components/LoadingStates'
+import { useCheckActions } from './CheckHistoryDetail/hooks/useCheckActions'
+import { useCheckDetail } from './CheckHistoryDetail/hooks/useCheckDetail'
 
 // 型定義
 import { CheckHistoryDetailProps } from './CheckHistoryDetail/types'

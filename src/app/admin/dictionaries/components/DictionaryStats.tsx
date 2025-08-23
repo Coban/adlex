@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { EmbeddingStats, DictionaryStats as DictionaryStatsType } from '../types'
 
 interface EmbeddingStatsCardProps {

@@ -1,7 +1,7 @@
 import { createClient } from '@/infra/supabase/serverClient'
 import { cache, CacheUtils } from '@/lib/cache'
-import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 import { ErrorFactory } from '@/lib/errors'
+import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**
  * チェック処理を完了し結果をデータベースへ反映する。

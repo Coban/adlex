@@ -1,7 +1,9 @@
-import Link from 'next/link'
 import { ArrowLeft, Copy, Download, Eye, EyeOff, RefreshCw, Trash2, ImageIcon, FileText } from 'lucide-react'
+import Link from 'next/link'
+
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+
 import { CheckDetail, statusLabels } from '../types'
 
 interface CheckHeaderProps {
