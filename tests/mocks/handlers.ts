@@ -58,8 +58,16 @@ export const handlers = [
     // E2Eテスト用の予測可能なレスポンス
     // const _hasViolation = body.text.includes("がんが治る") || body.text.includes("血圧が下がる");
     
+    const checkId = Date.now(); // ユニークなID
+    
     return HttpResponse.json({
-      id: Date.now(), // ユニークなID
+      check: {
+        id: checkId,
+        status: "queued",
+        original_text: body.text,
+      },
+      // Legacy format for backward compatibility
+      id: checkId,
       status: "queued",
       original_text: body.text,
     });
@@ -131,6 +139,95 @@ export const handlers = [
       ],
     });
   }),
+
+  // Mock check PDF download endpoint
+  http.get("/api/checks/:id/pdf", ({ params }) => {
+    const checkId = params.id;
+    
+    // Return a mock PDF blob
+    const pdfContent = `%PDF-1.4 Mock PDF for check ${checkId}`;
+    return HttpResponse.text(pdfContent, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="check_${checkId}.pdf"`
+      }
+    });
+  }),
+
+  // Mock check delete endpoint
+  http.delete("/api/checks/:id", ({ params }) => {
+    const checkId = params.id;
+    
+    return HttpResponse.json({
+      success: true,
+      message: `Check ${checkId} deleted successfully`
+    });
+  }),
+
+  // Mock check cancel endpoint
+  http.post("/api/checks/:id/cancel", ({ params }) => {
+    const checkId = params.id;
+    
+    return HttpResponse.json({
+      success: true,
+      message: `Check ${checkId} cancelled successfully`,
+      status: 'cancelled'
+    });
+  }),
+
+  // Mock individual check get endpoint
+  http.get("/api/checks/:id", ({ params, request }) => {
+    const checkId = params.id;
+    const url = new URL(request.url);
+    
+    // Test scenarios based on URL parameters or headers
+    const errorType = url.searchParams.get('error');
+    const testScenario = request.headers.get('x-test-scenario');
+    
+    // Handle different error scenarios
+    if (errorType === '404' || testScenario === '404' || checkId === 'not-found' || checkId === '9999') {
+      return new HttpResponse(null, { status: 404 });
+    }
+    
+    if (errorType === '403' || testScenario === '403' || checkId === 'forbidden' || checkId === '9998') {
+      return new HttpResponse(null, { status: 403 });
+    }
+    
+    if (errorType === '500' || testScenario === '500' || checkId === 'server-error' || checkId === '9997') {
+      return new HttpResponse(null, { status: 500 });
+    }
+    
+    if (errorType === 'network' || testScenario === 'network' || checkId === 'network-error' || checkId === '9996') {
+      return HttpResponse.error();
+    }
+    
+    return HttpResponse.json({
+      check: {
+        id: parseInt(checkId as string),
+        original_text: "がんが治る奇跡のサプリメント！血圧が下がる効果があります。",
+        modified_text: "健康をサポートする栄養補助食品！体調管理に役立つ可能性があります。",
+        status: "completed",
+        created_at: "2024-01-01T00:00:00Z",
+        violations: [
+          {
+            id: 1,
+            start_pos: 0,
+            end_pos: 5,
+            reason: "重篤な疾患の治療効果を標榜する表現",
+            dictionary_id: 1,
+          },
+          {
+            id: 2,
+            start_pos: 15,
+            end_pos: 20,
+            reason: "医薬品的効果を標榜する表現", 
+            dictionary_id: 2,
+          }
+        ],
+      }
+    });
+  }),
+
 
   http.post("/api/dictionaries", () => {
     return HttpResponse.json({

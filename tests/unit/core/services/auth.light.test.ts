@@ -44,7 +44,11 @@ describe('lib/auth light validations', () => {
   })
 
   it('signIn: 誤った資格情報はエラー文言に変換', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     await expect(signIn({ email: 'bad@example.com', password: 'xxxxxx' })).rejects.toThrow('メールアドレスまたはパスワードが正しくありません')
+    
+    consoleErrorSpy.mockRestore()
   })
 
   it('signOut: 成功で例外なし', async () => {

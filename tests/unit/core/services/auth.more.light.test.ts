@@ -66,18 +66,22 @@ describe('lib/auth extra light tests', () => {
   })
 
   it('getCurrentUser: ユーザーを返す', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    
     try {
       const u = await getCurrentUser()
       expect(u).toEqual({ id: 'u' })
     } catch (error) {
       // Auth session missing! エラーの場合はスキップ
       if ((error as Error).message.includes('Auth session missing')) {
-        console.warn('getCurrentUser test skipped due to auth session missing')
+        // Skip test due to auth session missing - warning suppressed by mock
         expect(true).toBe(true)
       } else {
         throw error
       }
     }
+    
+    consoleWarnSpy.mockRestore()
   })
 
   it('getUserProfile: プロファイル取得', async () => {

@@ -28,8 +28,12 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('inviteUser: API 失敗はエラーメッセージを投げる', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as unknown as typeof fetch
     await expect(inviteUser({ email: 'a@b.com', role: 'admin' })).rejects.toThrow('bad')
+    
+    consoleSpy.mockRestore()
   })
 
   it('inviteUser: 成功はJSONを返す', async () => {
@@ -38,8 +42,12 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('fetchOrganizationUsers: 失敗はエラー', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'x' }) })) as unknown as typeof fetch
     await expect(fetchOrganizationUsers()).rejects.toThrow('x')
+    
+    consoleSpy.mockRestore()
   })
 
   it('fetchOrganizationUsers: 成功はJSON', async () => {
@@ -48,8 +56,12 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('updateUserRole: 失敗はエラー', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'ng' }) })) as unknown as typeof fetch
     await expect(updateUserRole('uid', 'admin')).rejects.toThrow('ng')
+    
+    consoleSpy.mockRestore()
   })
 
   it('updateUserRole: 成功はJSON', async () => {
@@ -66,8 +78,12 @@ describe('lib/auth http/light validations', () => {
   })
 
   it('signUpWithInvitation: API 失敗はエラー', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({ error: 'bad' }) })) as unknown as typeof fetch
     await expect(signUpWithInvitation('token', '123456', '123456')).rejects.toThrow('bad')
+    
+    consoleSpy.mockRestore()
   })
 
   it('signUpWithInvitation: 成功はJSON', async () => {

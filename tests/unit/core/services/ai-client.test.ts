@@ -24,7 +24,9 @@ const actualAIClient = await vi.importActual('@/lib/ai-client') as typeof import
 describe('AIクライアント', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Set test environment to avoid mock mode
+    // Set test environment with mock provider
+    vi.stubEnv('AI_PROVIDER', 'mock')
+    vi.stubEnv('NODE_ENV', 'test')
     vi.stubEnv('OPENAI_API_KEY', 'test-openai-key')
     vi.stubEnv('USE_LM_STUDIO', 'false')
     vi.stubEnv('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1')

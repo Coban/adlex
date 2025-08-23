@@ -55,6 +55,8 @@ describe('Auth Signout API Route', () => {
     })
 
     it('should return 500 on signout error', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       mockAuthRepo.signOut.mockRejectedValue(new Error('Failed to sign out'))
 
       const request = new NextRequest('http://localhost:3000/api/auth/signout', {
@@ -69,6 +71,8 @@ describe('Auth Signout API Route', () => {
         code: 'INTERNAL_ERROR',
         message: '内部エラーが発生しました'
       })
+      
+      consoleSpy.mockRestore()
     })
 
     it('should handle cookies correctly', async () => {

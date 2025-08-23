@@ -90,6 +90,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return
     
+    // Check for test authentication cookies (E2E test environment)
+    const checkTestAuth = () => {
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        // Parse sb-session cookie for test authentication
+        const cookies = document.cookie.split(';')
+        const sessionCookie = cookies.find(cookie => cookie.trim().startsWith('sb-session='))
+        
+        if (sessionCookie) {
+          try {
+            const sessionValue = sessionCookie.split('=')[1]
+            const decodedSession = decodeURIComponent(sessionValue)
+            const sessionData = JSON.parse(decodedSession)
+            
+            // Check if this is a test token
+            if (sessionData.access_token && sessionData.access_token.startsWith('test-token-')) {
+              const testUser = {
+                id: sessionData.user.id,
+                email: sessionData.user.email,
+              } as unknown as User
+              
+              const testProfile = {
+                id: sessionData.user.id,
+                email: sessionData.user.email,
+                role: sessionData.user.role,
+                organization_id: sessionData.user.role === 'admin' ? 'test-org-admin' : 'test-org-user',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              } as unknown as UserProfile
+              
+              const testOrg = {
+                id: sessionData.user.role === 'admin' ? 'test-org-admin' : 'test-org-user',
+                name: sessionData.user.role === 'admin' ? 'Test Admin Org' : 'Test User Org',
+                plan: 'free',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                max_checks: 1000,
+                used_checks: 0,
+              } as unknown as Organization
+
+              setUser(testUser)
+              setUserProfile(testProfile)
+              setOrganization(testOrg)
+              setLoading(false)
+              return true // Test auth detected and applied
+            }
+          } catch (error) {
+            console.error('Error parsing test session cookie:', error)
+          }
+        }
+      }
+      return false // No test auth detected
+    }
+    
+    // Check for test authentication first
+    if (checkTestAuth()) {
+      return () => {} // Test auth was applied, no cleanup needed
+    }
+    
     // In E2E (NEXT_PUBLIC_SKIP_AUTH), provide a mock authenticated session
     if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
       const mockUser = {

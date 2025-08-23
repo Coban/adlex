@@ -70,15 +70,19 @@ describe('Checks Detail API [id]', () => {
   })
 
   it('無効なIDは500', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     const req = new NextRequest('http://localhost:3000/api/checks/abc')
-    const res = await GET(req, { params: Promise.resolve({ id: 'abc' }) })
+    const res = await GET(req, { params: { id: 'abc' } })
     expect(res.status).toBe(500)
+    
+    consoleSpy.mockRestore()
   })
 
   it('未認証は401', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('x') })
     const req = new NextRequest('http://localhost:3000/api/checks/1')
-    const res = await GET(req, { params: Promise.resolve({ id: '1' }) })
+    const res = await GET(req, { params: { id: '1' } })
     expect(res.status).toBe(401)
   })
 })

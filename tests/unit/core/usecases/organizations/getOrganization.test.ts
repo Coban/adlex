@@ -287,6 +287,8 @@ describe('GetOrganizationUseCase', () => {
     })
 
     it('AuthenticationErrorが投げられた場合適切にハンドルすること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       vi.mocked(mockRepositories.users.findById).mockRejectedValue(
         new AuthenticationError('認証エラーテスト')
       )
@@ -298,9 +300,13 @@ describe('GetOrganizationUseCase', () => {
         expect(result.error.code).toBe('AUTHENTICATION_ERROR')
         expect(result.error.message).toBe('認証エラーテスト')
       }
+
+      consoleSpy.mockRestore()
     })
 
     it('AuthorizationErrorが投げられた場合適切にハンドルすること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       vi.mocked(mockRepositories.organizations.findById).mockRejectedValue(
         new AuthorizationError('認可エラーテスト')
       )
@@ -312,9 +318,13 @@ describe('GetOrganizationUseCase', () => {
         expect(result.error.code).toBe('AUTHORIZATION_ERROR')
         expect(result.error.message).toBe('認可エラーテスト')
       }
+
+      consoleSpy.mockRestore()
     })
 
     it('予期しないエラーの場合INTERNAL_ERRORになること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       vi.mocked(mockRepositories.organizations.findById).mockRejectedValue(
         new Error('予期しないエラー')
       )
@@ -326,6 +336,8 @@ describe('GetOrganizationUseCase', () => {
         expect(result.error.code).toBe('INTERNAL_ERROR')
         expect(result.error.message).toBe('内部エラーが発生しました')
       }
+
+      consoleSpy.mockRestore()
     })
   })
 

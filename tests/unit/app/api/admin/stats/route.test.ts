@@ -155,6 +155,8 @@ describe('/api/admin/stats', () => {
   }, 10000)
 
   it('データベースエラー時には500エラーを返す', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     mockSupabaseClient.auth.getUser.mockResolvedValue({
       data: { user: { id: 'admin-1' } },
       error: null
@@ -168,6 +170,8 @@ describe('/api/admin/stats', () => {
 
     expect(response.status).toBe(500)
     expect(body.error).toBe('Internal server error') // Match the actual catch block error message
+
+    consoleSpy.mockRestore()
   })
 
   it('空のデータベースでも適切にレスポンスを返す', async () => {

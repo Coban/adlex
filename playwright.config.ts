@@ -39,7 +39,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   
   /* Global setup for database seeding and storageState generation */
-  // globalSetup: './tests/setup/global-setup.ts', // 一時的に無効化
+  globalSetup: './tests/setup/global-setup.ts',
   
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -104,77 +104,38 @@ export default defineConfig({
   projects: [
     // ゲストユーザー用プロジェクト（認証なし）
     {
-      name: "guest",
-      testDir: "./tests/e2e/guest",
-      use: { 
-        ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] }, // 認証なし
-      },
-    },
-
-    // 一般ユーザー用プロジェクト（認証済み）- 一時的に認証なしで実行
-    {
-      name: "auth-user",
-      testDir: "./tests/e2e/auth",
+      name: "chromium",
+      testDir: "./tests/e2e",
       testIgnore: ['**/admin-*.spec.ts'], // 管理者テストを除外
       use: { 
         ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] }, // 一時的に認証なし
+        storageState: './tests/.auth/user.json', // 一般ユーザー認証状態
       },
     },
 
-    // 管理者用プロジェクト（管理者認証済み）- 一時的に認証なしで実行
+    // 管理者用プロジェクト（管理者認証済み）
     {
-      name: "auth-admin",
-      testDir: "./tests/e2e/auth",
+      name: "chromium-admin",
+      testDir: "./tests/e2e",
       testMatch: ['**/admin-*.spec.ts'], // 管理者テストのみ
       use: { 
         ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] }, // 一時的に認証なし
+        storageState: './tests/.auth/admin.json', // 管理者認証状態
       },
     },
 
-    // モバイルテスト用プロジェクト（基本機能のみ）
+    // 認証なしプロジェクト（エラーハンドリングテスト等）
     {
-      name: "mobile-guest", 
-      testDir: "./tests/e2e/guest",
-      use: { 
-        ...devices["Pixel 5"],
-        storageState: { cookies: [], origins: [] },
-        hasTouch: true,
-      },
-    },
-
-    // エラーテスト専用プロジェクト
-    {
-      name: "error-tests",
+      name: "chromium-no-auth",
       testDir: "./tests/e2e",
       testMatch: ['**/error-handling.spec.ts'],
       use: {
         ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] },
+        storageState: { cookies: [], origins: [] }, // 認証なし
         actionTimeout: 60000, // エラーシナリオ用の長いタイムアウト
         navigationTimeout: 60000,
       },
       retries: 1, // エラーテストは少ない再試行
-    },
-
-    // レガシーテスト（移行中の既存テスト）
-    {
-      name: "legacy",
-      testDir: "./tests/e2e",
-      testMatch: [
-        '**/text-checker-basic.spec.ts',
-        '**/text-checker-complete.spec.ts', 
-        '**/essential-workflows.spec.ts',
-        '**/admin-simplified.spec.ts',
-        '**/session-management.spec.ts',
-        '**/performance.spec.ts'
-      ],
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] },
-      },
     },
     /* Test against branded browsers. */
     // {
@@ -204,7 +165,7 @@ export default defineConfig({
       NEXT_PUBLIC_MSW_ENABLED: envFromTestingFile.NEXT_PUBLIC_MSW_ENABLED ?? 'false',
       NEXT_PUBLIC_APP_URL: envFromTestingFile.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001',
       ADLEX_MAX_CONCURRENT_CHECKS: envFromTestingFile.ADLEX_MAX_CONCURRENT_CHECKS ?? '3',
-      // 新しいE2E戦略では認証APIを使用するため、SKIP_AUTHは無効化
+      // グローバルセットアップによる認証状態生成のため、SKIP_AUTHは無効化
       SKIP_AUTH: 'false',
       NEXT_PUBLIC_SKIP_AUTH: 'false',
     },

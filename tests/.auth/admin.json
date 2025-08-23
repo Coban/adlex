@@ -1,0 +1,35 @@
+{
+  "cookies": [
+    {
+      "name": "sb-access-token",
+      "value": "test-token-test-admin-1-1755976614620",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1755980214.622,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sb-refresh-token",
+      "value": "test-refresh-test-admin-1-1755976614620",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1756581414.622,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sb-session",
+      "value": "%7B%22access_token%22%3A%22test-token-test-admin-1-1755976614620%22%2C%22refresh_token%22%3A%22test-refresh-test-admin-1-1755976614620%22%2C%22expires_at%22%3A1755980214%2C%22user%22%3A%7B%22id%22%3A%22test-admin-1%22%2C%22email%22%3A%22admin%40test.com%22%2C%22role%22%3A%22admin%22%7D%7D",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1755980214.622,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

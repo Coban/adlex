@@ -106,6 +106,8 @@ describe('TextChecker (stream + polling)', () => {
   })
 
   it('未認証時はエラーを表示する（セッションなし）', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     // Mock no authenticated user
     const { useAuth } = await import('@/contexts/AuthContext')
     vi.mocked(useAuth).mockReturnValue({
@@ -125,6 +127,8 @@ describe('TextChecker (stream + polling)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('error-message')).toBeInTheDocument()
     })
+    
+    consoleSpy.mockRestore()
   })
 })
 

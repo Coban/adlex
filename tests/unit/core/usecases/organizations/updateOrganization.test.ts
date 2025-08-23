@@ -327,6 +327,8 @@ describe('UpdateOrganizationUseCase', () => {
     })
 
     it('ValidationErrorが投げられた場合適切にハンドルすること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       vi.mocked(mockRepositories.organizations.update).mockRejectedValue(
         new ValidationError('バリデーションエラーテスト')
       )
@@ -338,9 +340,13 @@ describe('UpdateOrganizationUseCase', () => {
         expect(result.error.code).toBe('VALIDATION_ERROR')
         expect(result.error.message).toBe('バリデーションエラーテスト')
       }
+      
+      consoleSpy.mockRestore()
     })
 
     it('予期しないエラーの場合INTERNAL_ERRORになること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       vi.mocked(mockRepositories.organizations.update).mockRejectedValue(
         new Error('予期しないエラー')
       )
@@ -352,6 +358,8 @@ describe('UpdateOrganizationUseCase', () => {
         expect(result.error.code).toBe('INTERNAL_ERROR')
         expect(result.error.message).toBe('内部エラーが発生しました')
       }
+      
+      consoleSpy.mockRestore()
     })
   })
 

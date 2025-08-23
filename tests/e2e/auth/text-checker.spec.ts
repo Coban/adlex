@@ -30,8 +30,8 @@ test.describe('テキストチェッカー（認証済み）', () => {
     const textarea = page.locator('textarea');
     await textarea.fill('テストテキスト');
     
-    // 文字数カウンターの表示確認
-    const characterCount = page.locator('text=/[0-9]+/');
+    // より具体的な文字数カウンターの表示確認
+    const characterCount = page.locator('text=/7 \/ 10,000文字/');
     await expect(characterCount).toBeVisible();
     
     // 正確な文字数の確認
@@ -143,10 +143,11 @@ test.describe('テキストチェッカー（認証済み）', () => {
 
     await textarea.fill(longText);
     
-    // 文字数の確認
-    const characterCount = page.locator('text=/[0-9]+/');
-    const countText = await characterCount.textContent();
-    const count = parseInt(countText?.match(/\d+/)?.[0] || '0');
+    // 文字数の確認 - より具体的なセレクターを使用
+    const characterCountSpan = page.locator('span.text-gray-500').filter({ hasText: /文字$/ });
+    await expect(characterCountSpan).toBeVisible();
+    const countText = await characterCountSpan.textContent();
+    const count = parseInt(countText?.match(/(\d+) \/ 10,000文字/)?.[1] || '0');
     expect(count).toBeGreaterThan(100);
 
     // チェック実行

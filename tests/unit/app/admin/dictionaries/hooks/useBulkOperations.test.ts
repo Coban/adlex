@@ -3,14 +3,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useBulkOperations } from '@/app/admin/dictionaries/hooks/useBulkOperations'
 
 // authFetch のモック
-vi.mock('@/lib/api-client', () => ({
+const { authFetch } = vi.hoisted(() => ({
   authFetch: vi.fn()
+}))
+
+vi.mock('@/lib/api-client', () => ({
+  authFetch
 }))
 
 // DOM API のモック
 const mockAlert = vi.fn()
 const mockPrompt = vi.fn()
-const mockCreateElement = vi.fn()
 const mockCreateObjectURL = vi.fn()
 const mockRevokeObjectURL = vi.fn()
 
@@ -19,39 +22,22 @@ Object.assign(window, {
   prompt: mockPrompt
 })
 
-Object.assign(document, {
-  createElement: mockCreateElement
-})
-
 Object.assign(URL, {
   createObjectURL: mockCreateObjectURL,
   revokeObjectURL: mockRevokeObjectURL
 })
 
 describe('useBulkOperations', () => {
-  // モック関数の参照を取得
-  const { authFetch } = vi.hoisted(() => ({
-    authFetch: vi.fn()
-  }))
-
   const mockOnSuccess = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    
-    // デフォルトのDOM要素モック
-    const mockElement = {
-      href: '',
-      download: '',
-      click: vi.fn(),
-      remove: vi.fn()
-    }
-    mockCreateElement.mockReturnValue(mockElement)
     mockCreateObjectURL.mockReturnValue('blob:mock-url')
   })
 
   afterEach(() => {
     vi.resetAllMocks()
+    vi.restoreAllMocks()
   })
 
   describe('初期状態', () => {
@@ -89,6 +75,8 @@ describe('useBulkOperations', () => {
     })
 
     it('重複検出でAPIエラーが発生した場合', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       authFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -103,6 +91,8 @@ describe('useBulkOperations', () => {
 
       expect(result.current.showDuplicatesDialog).toBe(true)
       expect(result.current.duplicates).toEqual([])
+
+      consoleSpy.mockRestore()
     })
   })
 
@@ -247,16 +237,18 @@ describe('useBulkOperations', () => {
         blob: () => Promise.resolve(mockBlob)
       })
 
+      const { result } = renderHook(() => useBulkOperations(mockOnSuccess))
+
       const mockElement = {
         href: '',
         download: '',
         click: vi.fn(),
         remove: vi.fn()
       }
-      mockCreateElement.mockReturnValue(mockElement)
-      document.body.appendChild = vi.fn()
-
-      const { result } = renderHook(() => useBulkOperations(mockOnSuccess))
+      
+      // DOM操作をモック
+      vi.spyOn(document, 'createElement').mockReturnValue(mockElement as any)
+      vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockElement as any)
 
       await act(async () => {
         await result.current.handleExportCSV()
@@ -349,6 +341,8 @@ describe('useBulkOperations', () => {
     })
 
     it('インポートでエラーが発生した場合適切に処理されること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       const mockFile = new File(['invalid,csv'], 'test.csv', { type: 'text/csv' })
       mockFile.text = vi.fn().mockResolvedValue('invalid,csv')
 
@@ -367,6 +361,8 @@ describe('useBulkOperations', () => {
       expect(result.current.importing).toBe(false)
       expect(mockAlert).toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
     })
   })
 

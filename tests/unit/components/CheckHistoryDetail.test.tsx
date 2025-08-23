@@ -68,11 +68,11 @@ describe('CheckHistoryDetail', () => {
   })
 
   it('エラー系: 404 をユーザー向けメッセージに変換して表示', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 }) as typeof fetch
+    // MSWが404エラーを返すテストID 9999を使用
+    render(<CheckHistoryDetail checkId={9999} />)
 
-    render(<CheckHistoryDetail checkId={999} />)
-
-    expect(await screen.findByText('指定されたチェック履歴が見つかりません')).toBeInTheDocument()
+    // 404エラーの場合、ErrorStateコンポーネントが実際のエラーメッセージを表示する
+    expect(await screen.findByText('チェック履歴 (ID: 9999) が見つかりません')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '履歴一覧に戻る' })).toBeInTheDocument()
   })
 

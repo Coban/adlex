@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { injectTestEnvironment, shouldSkipAuthTest, detectEnvironment } from './utils/environment-detector';
+// 環境依存ユーティリティを削除し、統一された実行環境を前提とする
 import { TextCheckerPage } from './utils/page-objects';
 import { 
   mockApiError,
@@ -11,7 +11,6 @@ import {
 
 test.describe('エラーハンドリング', () => {
   test.beforeEach(async ({ page }) => {
-    await injectTestEnvironment(page);
     await setupTestEnvironment(page);
   });
 
@@ -23,12 +22,6 @@ test.describe('エラーハンドリング', () => {
     });
 
     test('500 Internal Server Error の処理', async ({ page }) => {
-      const env = detectEnvironment();
-      if (env.skipAuth) {
-        test.skip(true, 'SKIP_AUTHモードのため、APIエラーハンドリングテストをスキップ');
-        return;
-      }
-      
       await mockApiError(page, 'checks', 500, 'サーバー内部エラーが発生しました');
       
       await textChecker.startCheck(VIOLATION_TEXTS.SAFE_TEXT);

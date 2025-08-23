@@ -125,6 +125,16 @@ export function useStreamUpdates({
   const startCheckStream = useCallback(async (checkId: string, dbCheckId: string) => {
     const eventSource = new EventSource(`/api/checks/${dbCheckId}/stream`)
     
+    // コントローラーを登録（ポーリングとタイムアウトのダミー値を設定）
+    const pollInterval = setInterval(() => {}, 1000)
+    const timeout = setTimeout(() => {}, 30000)
+    
+    cancelControllers.current.set(checkId, {
+      eventSource,
+      pollInterval,
+      timeout
+    })
+    
     // progress イベントリスナー
     eventSource.addEventListener('progress', (event) => {
       try {
@@ -220,18 +230,13 @@ export function useStreamUpdates({
   // チェックをキャンセル
   const cancelCheck = useCallback(async (checkId: string) => {
     const controllers = cancelControllers.current.get(checkId)
+    
     if (controllers) {
       // EventSource とポーリングを停止
       safeCloseEventSource(controllers.eventSource)
       clearInterval(controllers.pollInterval)
       clearTimeout(controllers.timeout)
       cancelControllers.current.delete(checkId)
-
-      // 状態を更新
-      updateCheck(checkId, {
-        status: 'cancelled',
-        statusMessage: 'チェックがキャンセルされました'
-      })
 
       // サーバーサイドでのキャンセル処理
       try {
@@ -246,6 +251,12 @@ export function useStreamUpdates({
         console.error('Failed to cancel on server:', error)
       }
     }
+
+    // 常に状態を更新（コントローラーの有無に関わらず）
+    updateCheck(checkId, {
+      status: 'cancelled',
+      statusMessage: 'チェックがキャンセルされました'
+    })
   }, [updateCheck, safeCloseEventSource])
 
   // 個別チェック用SSE接続を停止

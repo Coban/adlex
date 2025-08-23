@@ -83,6 +83,8 @@ describe("/api/dictionaries/import", () => {
   })
 
   it("handles CSV import errors (500)", async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     const csv = `\ufeffphrase,category,notes\nA,NG,alpha\nB,ALLOW,`;
     const req = new NextRequest("http://localhost/api/dictionaries/import", { method: 'POST', headers: { 'content-type': 'text/csv' }, body: csv })
     const res = await POST(req)
@@ -90,6 +92,8 @@ describe("/api/dictionaries/import", () => {
     expect(res.status).toBe(500)
     // Repository mock の問題でエラーとなるが、実際の動作では正常に動作する
     expect(json.error).toBeDefined()
+    
+    consoleSpy.mockRestore()
   })
 
   it("rejects when unauthenticated", async () => {

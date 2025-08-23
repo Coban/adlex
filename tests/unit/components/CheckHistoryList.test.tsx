@@ -39,7 +39,6 @@ describe('CheckHistoryList (smoke)', () => {
     expect(await screen.findByText('履歴の取得に失敗しました')).toBeInTheDocument()
   })
 
-  it.skip('履歴がある場合の1件描画', async () => {})
 })
 
 afterAll(() => {

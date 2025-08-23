@@ -320,6 +320,8 @@ describe('Check History API Route (Repository Pattern)', () => {
   })
 
   it('リポジトリエラー時には500エラーを返す', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     mockAuth.getUser.mockResolvedValue({
       data: { user: { id: 'admin-user' } },
       error: null
@@ -334,5 +336,7 @@ describe('Check History API Route (Repository Pattern)', () => {
       { error: 'Internal server error' },
       { status: 500 }
     )
+
+    consoleSpy.mockRestore()
   })
 })

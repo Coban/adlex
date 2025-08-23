@@ -188,6 +188,10 @@ describe('/api/admin/stats (Repository Pattern)', () => {
   })
 
   it('リポジトリエラー時には500エラーを返す', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    
     mockAuth.getUser.mockResolvedValue({
       data: { user: { id: 'admin-1' } },
       error: null
@@ -223,6 +227,10 @@ describe('/api/admin/stats (Repository Pattern)', () => {
         dailyChecks: expect.any(Array)
       })
     )
+    
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+    consoleLogSpy.mockRestore()
   })
 
   it('空のデータでも適切にレスポンスを返す', async () => {

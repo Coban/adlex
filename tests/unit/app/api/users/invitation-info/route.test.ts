@@ -49,6 +49,9 @@ type SupabaseClient = {
 const mockRepositories = {
   organizations: {
     findById: vi.fn()
+  },
+  userInvitations: {
+    findByToken: vi.fn()
   }
 }
 
@@ -93,7 +96,7 @@ describe('Invitation Info API Route', () => {
     url.searchParams.set('token', 't')
     const req = new NextRequest(url, { method: 'GET' })
     const res = await GET(req)
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400) // 期限切れ/無効トークンは400が正しいステータス
   })
 
   it.skip('正常系（組織名含むレスポンス）', async () => {

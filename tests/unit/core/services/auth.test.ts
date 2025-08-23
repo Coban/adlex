@@ -140,6 +140,8 @@ describe('認証ユーティリティ', () => {
     })
 
     it('サインアップエラーを適切に処理すること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       const signupError = {
         message: 'User already registered',
         status: 422
@@ -155,6 +157,8 @@ describe('認証ユーティリティ', () => {
         password: 'password123',
         confirmPassword: 'password123'
       })).rejects.toThrow('このメールアドレスは既に登録されています')
+      
+      consoleSpy.mockRestore()
     })
 
     it('パスワード一致を検証すること', async () => {
@@ -186,6 +190,8 @@ describe('認証ユーティリティ', () => {
     })
 
     it('サインアウトエラーを適切に処理すること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       const signoutError = {
         message: 'Signout failed',
         status: 500
@@ -196,6 +202,8 @@ describe('認証ユーティリティ', () => {
       })
 
       await expect(signOut()).rejects.toThrow('サインアウトエラー: Signout failed')
+      
+      consoleSpy.mockRestore()
     })
   })
 })

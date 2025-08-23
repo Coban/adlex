@@ -4,8 +4,12 @@ import { useDictionaryForm } from '@/app/admin/dictionaries/hooks/useDictionaryF
 import { Dictionary, Organization } from '@/app/admin/dictionaries/types'
 
 // authFetch のモック
-vi.mock('@/lib/api-client', () => ({
+const { authFetch } = vi.hoisted(() => ({
   authFetch: vi.fn()
+}))
+
+vi.mock('@/lib/api-client', () => ({
+  authFetch
 }))
 
 // alert のモック
@@ -13,11 +17,6 @@ const mockAlert = vi.fn()
 Object.assign(window, { alert: mockAlert })
 
 describe('useDictionaryForm', () => {
-  // モック関数の参照を取得
-  const { authFetch } = vi.hoisted(() => ({
-    authFetch: vi.fn()
-  }))
-
   const mockOrganization: Organization = {
     id: 1,
     name: 'テスト組織',
@@ -235,6 +234,8 @@ describe('useDictionaryForm', () => {
     })
 
     it('API エラーが発生した場合適切に処理されること', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       authFetch.mockResolvedValueOnce({
         ok: false,
         json: () => Promise.resolve({ error: 'Duplicate entry' })
@@ -260,6 +261,8 @@ describe('useDictionaryForm', () => {
 
       expect(mockAlert).toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
     })
 
     it('警告メッセージがある場合アラートが表示されること', async () => {

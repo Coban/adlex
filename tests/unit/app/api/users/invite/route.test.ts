@@ -387,6 +387,8 @@ describe('Users Invite API Route', () => {
     })
 
     it('should default to user role when role is not specified', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin1' } },
         error: null
@@ -423,9 +425,13 @@ describe('Users Invite API Route', () => {
           role: 'user'
         })
       )
+
+      consoleSpy.mockRestore()
     })
 
     it('should return 500 on invitation creation error', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin1' } },
         error: null
@@ -457,6 +463,8 @@ describe('Users Invite API Route', () => {
           message: expect.stringContaining('エラー')
         })
       )
+
+      consoleSpy.mockRestore()
     })
   })
 })

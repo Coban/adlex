@@ -58,11 +58,15 @@ describe('Invitations List API Route', () => {
   })
 
   it('取得失敗は500', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'u' } }, error: null })
     mockRepositories.users.findById.mockResolvedValue({ role: 'admin', organization_id: 'o1' })
     mockRepositories.userInvitations.findByOrganizationId.mockRejectedValue(new Error('db error'))
     const res = await GET()
     expect(res.status).toBe(500)
+    
+    consoleErrorSpy.mockRestore()
   })
 })
 

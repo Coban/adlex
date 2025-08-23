@@ -94,6 +94,8 @@ describe('Images Upload API Route', () => {
   })
 
   it('予期しないエラーは500を返す', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
     // 認証で予期しないエラーが発生
     mockSupabaseClient.auth.getUser.mockRejectedValue(new Error('Network error'))
     
@@ -109,6 +111,8 @@ describe('Images Upload API Route', () => {
     const body = await res.json()
     expect(body.error.code).toBe('INTERNAL_ERROR')
     expect(body.error.message).toBe('サーバーエラーが発生しました')
+    
+    consoleSpy.mockRestore()
   })
 
   describe('APIレスポンス仕様', () => {

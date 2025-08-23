@@ -60,6 +60,37 @@ export async function createChatCompletion(params: {
           total_tokens: 150
         }
       }
+    } else {
+      // ツールなしの通常のチャット完了 - システムのレスポンス形式に合わせる
+      return {
+        id: 'mock-chat-completion',
+        object: 'chat.completion' as const,
+        created: Date.now(),
+        model: 'mock-model',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant' as const,
+            content: JSON.stringify({
+              modified: "このサプリメントは健康維持にお役立ていただけます。血圧の健康維持をサポートします。",
+              violations: [
+                {
+                  start: 0,
+                  end: 4,
+                  reason: "「がん」は医薬品的効能効果表現のため「健康状態」に修正",
+                  dictionaryId: 1
+                }
+              ]
+            }),
+          },
+          finish_reason: 'stop' as const
+        }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150
+        }
+      }
     }
   }
 

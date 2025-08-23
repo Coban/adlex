@@ -453,6 +453,8 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
     })
 
     it('リポジトリエラー時には500エラーを返す', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'admin-user' } },
         error: null
@@ -471,6 +473,8 @@ describe('Dictionaries API Route (Repository Pattern)', () => {
         { error: { code: 'INTERNAL_ERROR', message: 'サーバーエラーが発生しました', details: undefined } },
         { status: 500 }
       )
+
+      consoleSpy.mockRestore()
     })
   })
 })

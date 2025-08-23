@@ -265,6 +265,8 @@ describe('Check History API Route', () => {
     })
 
     it('should return 500 on database error', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user1' } },
         error: null
@@ -286,6 +288,8 @@ describe('Check History API Route', () => {
       expect(response.status).toBe(500)
       const body = await response.json()
       expect(body.error).toBe('Internal server error') // Match actual catch block error
+      
+      consoleSpy.mockRestore()
     })
   })
 })
