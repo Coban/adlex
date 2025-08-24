@@ -54,6 +54,7 @@ export const CheckInput: React.FC<CheckInputProps> = ({
           className="min-h-[400px] resize-none"
           maxLength={APP_CONFIG.TEXT_LIMITS.MAX_LENGTH}
           aria-label="薬機法チェック用テキスト入力"
+          data-testid="check-input"
           disabled={isChecking}
         />
         
@@ -96,7 +97,11 @@ export const CheckInput: React.FC<CheckInputProps> = ({
 
       {/* エラーメッセージ表示 */}
       {errorMessage && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+        <div 
+          className="p-3 bg-red-50 border border-red-200 rounded-md"
+          role="alert"
+          data-testid="error-message"
+        >
           <p className="text-red-800 text-sm">{errorMessage}</p>
         </div>
       )}

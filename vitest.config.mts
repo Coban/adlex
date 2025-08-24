@@ -18,8 +18,11 @@ export default defineConfig({
     poolOptions: {
       threads: {
         singleThread: true, // 単一スレッドで決定論化
+        isolate: true, // テスト間の分離を強化
       },
     },
+    // テスト間の分離を強化
+    isolate: true,
     // 環境変数を決定論的に設定
     env: {
       NODE_ENV: 'test',
