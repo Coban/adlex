@@ -12,6 +12,8 @@ on:
 
 jobs:
   claude-review:
+    # トークンが設定されていない場合はスキップ
+    if: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
@@ -21,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write  # readからwriteに変更（コメント投稿のため）
+      issues: write        # readからwriteに変更（Issue操作のため）
       id-token: write
 
     steps:
@@ -31,12 +33,26 @@ jobs:
         with:
           fetch-depth: 1
 
+      # npm registry の問題を回避するための設定
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+          
+      # キャッシュをクリアして再試行
+      - name: Clear npm cache
+        run: npm cache clean --force || true
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude[bot]"
+          
+          # デバッグ用：エラーが発生した場合に詳細を表示
+          debug: true
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4.1)
           # model: "claude-opus-4-1-20250805"
