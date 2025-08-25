@@ -393,6 +393,7 @@ export function getEmbeddingDimension(model: string = getEmbeddingModel): number
 
 /**
  * 画像からテキストを抽出（LLM使用）
+ * 基本バージョン - 後方互換性のため維持
  */
 export async function extractTextFromImageWithLLM(
   imageBuffer: Buffer, 
@@ -437,6 +438,17 @@ export async function extractTextFromImageWithLLM(
     throw ErrorFactory.createAIServiceError(aiProvider, 'image text extraction', error instanceof Error ? error.message : 'Unknown error', error instanceof Error ? error : undefined)
   }
 }
+
+/**
+ * 拡張画像テキスト抽出（多機能版）
+ * 画像前処理、信頼度推定、メタデータ記録を含む高機能版
+ */
+export { enhancedExtractTextFromImageWithLLM, type EnhancedOcrOptions, type EnhancedOcrResult } from '@/lib/ocr/enhanced-ocr'
+
+/**
+ * OCR信頼度推定
+ */
+export { estimateOcrConfidence, type ConfidenceResult, type ConfidenceFactors } from '@/lib/ocr/confidence-estimation'
 
 // 既存関数のエクスポート（後方互換性）
 export { AI_MODELS, aiProvider, isUsingMock, hasValidApiKey } from './config'
