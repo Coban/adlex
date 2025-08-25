@@ -30,7 +30,7 @@ export default defineConfig({
       VITEST: 'true',
       FORCE_COLOR: '0',
     },
-    include: ["tests/**/*.{test,spec}.{ts,tsx}"],
+    include: ["tests/**/*.{test,spec}.{ts,tsx}", "src/**/*.{test,spec}.{ts,tsx}"],
     exclude: [
       "node_modules/",
       "tests/e2e/",
