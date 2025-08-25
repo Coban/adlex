@@ -43,14 +43,23 @@ jobs:
 
           # Direct prompt for automated review (no @claude mention needed)
           direct_prompt: |
-            Please review this pull request and provide feedback on:
+            Please review this pull request and provide feedback in Japanese on:
             - Code quality and best practices
-            - Potential bugs or issues
+            - Potential bugs or issues  
             - Performance considerations
             - Security concerns
             - Test coverage
 
-            Be constructive and helpful in your feedback.
+            AdLex-specific considerations:
+            - Pharmaceutical law (薬機法) compliance
+            - Japanese text processing accuracy
+            - AI model validation and reliability
+            - User data protection for pharmaceutical content
+            - Japanese UI/UX quality
+
+            Be constructive and provide specific improvement suggestions with implementation examples.
+            
+            重要: 全てのフィードバックは日本語で提供してください。
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           # use_sticky_comment: true
@@ -69,8 +78,8 @@ jobs:
           #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
           #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
 
-          # Optional: Add specific tools for running tests or linting
-          # allowed_tools: "Bash(npm run test),Bash(npm run lint),Bash(npm run typecheck)"
+          # AdLexプロジェクト固有のツール許可設定
+          allowed_tools: "Bash(npm run check),Bash(npm run test),Bash(npm run lint),Bash(npm run type-check)"
 
           # Optional: Skip review for certain conditions
           # if: |

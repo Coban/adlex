@@ -73,7 +73,12 @@
       "Bash(for file in tests/unit/app/auth/auth-code-error/page.test.tsx)",
       "mcp__ide__getDiagnostics",
       "WebFetch(domain:localhost)",
-      "Bash(gh pr list:*)"
+      "Bash(gh pr list:*)",
+      "Bash(gh issue create:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(yamllint:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import { RepositoryContainer } from '@/core/ports'
 import { OrganizationsRepository } from '@/core/ports/organizations'
 import { RealtimeRepository } from '@/core/ports/realtimeRepository'
+import { StorageRepository } from '@/core/ports/storage'
 import { UserInvitationsRepository } from '@/core/ports/user-invitations'
 import { ViolationsRepository } from '@/core/ports/violations'
 
@@ -50,6 +51,28 @@ const mockRealtimeRepository = {
   getFinalCheckData: vi.fn().mockResolvedValue(null),
 }
 
+const mockStorageRepository = {
+  uploadFile: vi.fn().mockResolvedValue({ 
+    data: { path: 'test/path.jpg' }, 
+    error: null 
+  }),
+  createSignedUrl: vi.fn().mockResolvedValue({ 
+    data: { signedUrl: 'http://mock-signed-url' }, 
+    error: null 
+  }),
+  deleteFile: vi.fn().mockResolvedValue({ 
+    data: { message: 'File deleted successfully' }, 
+    error: null 
+  }),
+  getPublicUrl: vi.fn().mockReturnValue({ 
+    data: { publicUrl: 'http://mock-public-url' } 
+  }),
+  listFiles: vi.fn().mockResolvedValue({ 
+    data: [], 
+    error: null 
+  })
+}
+
 /**
  * Create mock repository container for testing
  */
@@ -63,6 +86,7 @@ export function createMockRepositories(): RepositoryContainer {
     userInvitations: {} as UserInvitationsRepository,
     realtime: mockRealtimeRepository as RealtimeRepository,
     auth: new MockAuthRepository(),
+    storage: mockStorageRepository as StorageRepository,
   }
 }
 

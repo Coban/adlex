@@ -49,8 +49,31 @@ const mockSupabase = {
   rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 };
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => mockSupabase),
+}))
+
+vi.mock('@/core/ports', () => ({
+  getRepositories: vi.fn().mockResolvedValue({
+    checks: {
+      findById: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue(null),
+    },
+    users: {
+      findById: vi.fn().mockResolvedValue(null),
+    },
+    storage: {} // Add storage mock to prevent errors
+  }),
+}))
+
+vi.mock('@/core/usecases/checks/cancelCheck', () => ({
+  CancelCheckUseCase: vi.fn().mockImplementation(() => ({
+    execute: vi.fn().mockResolvedValue({
+      success: false,
+      code: 'NOT_FOUND_ERROR',
+      error: 'Check not found'
+    })
+  }))
 }))
 
 import { POST } from '@/app/api/checks/[id]/cancel/route'
@@ -63,17 +86,20 @@ describe('Checks Cancel API [id]/cancel', () => {
     mockSupabase.from.mockReturnValue(newMockQuery);
   })
 
-  it('無効なIDは500', async () => {
+  it('無効なIDでも認証チェックが先に実行される', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: null })
     const req = new NextRequest('http://localhost:3000/api/checks/abc/cancel', { method: 'POST' })
     const res = await POST(req, { params: { id: 'abc' } })
-    expect(res.status).toBe(401) // 認証チェックが先に行われるため401になる
+    // API実装では16-20行で認証チェックが最初に行われるため401が期待される
+    // 実際の結果が400になる場合、createClient()やgetUser()でエラーが発生している可能性
+    expect(res.status).toBe(401)
   })
 
   it('未認証は401', async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('x') })
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error('Unauthorized') })
     const req = new NextRequest('http://localhost:3000/api/checks/1/cancel', { method: 'POST' })
     const res = await POST(req, { params: { id: '1' } })
+    // authErrorがある場合またはuserがnullの場合、16-20行でstatus: 401が返される
     expect(res.status).toBe(401)
   })
 

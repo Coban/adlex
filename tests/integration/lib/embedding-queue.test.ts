@@ -50,7 +50,7 @@ const mockSupabase = {
   rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 }
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/infra/supabase/serverClient', () => ({
   createClient: vi.fn(async () => mockSupabase)
 }))
 
@@ -67,13 +67,16 @@ function setupSupabaseDicts(dicts: Array<{ id: number; phrase: string; vector?: 
   }
 
   const updateChain = {
-    update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+    update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null, count: 1 })) })),
   }
 
   mockSupabase.from.mockImplementation((table: string) => {
     if (table === 'dictionaries') {
       return {
-        select: vi.fn(() => selectChain),
+        select: vi.fn(() => ({
+          eq: vi.fn(() => Promise.resolve({ data: dicts, error: null })),
+          in: vi.fn(() => Promise.resolve({ data: dicts, error: null }))
+        })),
         update: updateChain.update,
       }
     }

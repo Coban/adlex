@@ -44,6 +44,21 @@ export const createMockQueryBuilder = () => ({
 export const createMockSupabaseClient = () => {
   const mockQuery = createMockQueryBuilder();
 
+  // Mock storage bucket operations
+  const mockStorageBucket = {
+    upload: vi.fn().mockResolvedValue({ data: null, error: null }),
+    download: vi.fn().mockResolvedValue({ data: null, error: null }),
+    createSignedUrl: vi.fn().mockResolvedValue({ 
+      data: { signedUrl: 'http://mock-signed-url' }, 
+      error: null 
+    }),
+    getPublicUrl: vi.fn().mockReturnValue({ 
+      data: { publicUrl: 'http://mock-public-url' } 
+    }),
+    remove: vi.fn().mockResolvedValue({ data: null, error: null }),
+    list: vi.fn().mockResolvedValue({ data: [], error: null }),
+  };
+
   const mockClient = {
     from: vi.fn().mockReturnValue(mockQuery),
     auth: {
@@ -57,10 +72,13 @@ export const createMockSupabaseClient = () => {
       }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
+    storage: {
+      from: vi.fn().mockReturnValue(mockStorageBucket),
+    },
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
   };
 
-  return { mockClient, mockQuery };
+  return { mockClient, mockQuery, mockStorageBucket };
 };
 
 // Export default mock
