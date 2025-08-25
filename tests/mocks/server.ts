@@ -1,5 +1,5 @@
-import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
 
 // MSWサーバーのハンドラー設定
 export const handlers = [
@@ -28,8 +28,7 @@ export const handlers = [
   }),
 
   // チェックストリーム API のモック
-  http.get('/api/checks/:id/stream', ({ params }) => {
-    const { id } = params
+  http.get('/api/checks/:id/stream', () => {
     return new HttpResponse(
       `data: {"type":"queue_status","queue":{"queueLength":0,"processingCount":0,"maxConcurrent":3}}\n\n`,
       {

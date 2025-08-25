@@ -1,6 +1,6 @@
-import { beforeAll, afterEach, afterAll, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom'
+import { beforeAll, afterEach, afterAll, vi } from 'vitest'
 
 // MSW のセットアップ
 import { server } from './mocks/server'
@@ -40,7 +40,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 }))
 
 // EventSource のモック（テスト用）
-global.EventSource = vi.fn().mockImplementation(() => ({
+const mockEventSource = vi.fn().mockImplementation(() => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   close: vi.fn(),
@@ -49,6 +49,13 @@ global.EventSource = vi.fn().mockImplementation(() => ({
   OPEN: 1,
   CLOSED: 2,
 }))
+// Static properties for EventSource
+Object.assign(mockEventSource, {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSED: 2,
+})
+global.EventSource = mockEventSource as any
 
 // URL のモック
 Object.defineProperty(window, 'URL', {
@@ -64,4 +71,11 @@ Object.defineProperty(navigator, 'clipboard', {
   value: {
     writeText: vi.fn().mockImplementation(() => Promise.resolve()),
   },
+})
+
+// Crypto API のモック
+Object.defineProperty(window, 'crypto', {
+  value: {
+    randomUUID: () => 'test-uuid-123'
+  }
 })

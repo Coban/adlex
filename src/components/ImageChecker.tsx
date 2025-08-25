@@ -4,7 +4,6 @@ import { Loader2, UploadCloud, Copy, Download, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useId } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { APP_CONFIG } from '@/constants'
 import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constants/timeouts'
@@ -101,18 +100,21 @@ export default function ImageChecker() {
   
   // クリーンアップ
   useEffect(() => {
+    const currentControllers = cancelControllers.current
+    const currentGlobalStream = globalStreamRef.current
+    
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
-      if (globalStreamRef.current) {
-        safeCloseEventSource(globalStreamRef.current)
+      if (currentGlobalStream) {
+        safeCloseEventSource(currentGlobalStream)
       }
       // 全てのアクティブなコントローラーをクリーンアップ
-      cancelControllers.current.forEach(({ eventSource, pollInterval, timeout }) => {
+      currentControllers.forEach(({ eventSource, pollInterval, timeout }) => {
         safeCloseEventSource(eventSource)
         clearInterval(pollInterval)
         clearTimeout(timeout)
       })
-      cancelControllers.current.clear()
+      currentControllers.clear()
     }
   }, [previewUrl])
   

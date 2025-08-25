@@ -126,7 +126,7 @@ export function useStreamUpdates({
       clearTimeout(timer)
       ssePool.unsubscribe(globalStreamUrl, hookId)
     }
-  }, [hookId, setQueueStatus, setOrganizationStatus, setSystemStatus])
+  }, [globalStreamUrl, hookId, setQueueStatus, setOrganizationStatus, setSystemStatus])
 
   // グローバルSSE接続を停止（プール管理版）
   const stopGlobalStream = useCallback(() => {
@@ -135,7 +135,7 @@ export function useStreamUpdates({
       hookId,
       url: globalStreamUrl
     })
-  }, [hookId])
+  }, [globalStreamUrl, hookId])
 
   // 個別チェック用SSE接続を開始（プール管理版）
   const startCheckStream = useCallback(async (checkId: string, dbCheckId: string) => {
@@ -270,7 +270,7 @@ export function useStreamUpdates({
     }
 
     return eventSource
-  }, [updateCheck, safeCloseEventSource])
+  }, [hookId, updateCheck, safeCloseEventSource])
 
   // チェックをキャンセル（プール管理版）
   const cancelCheck = useCallback(async (checkId: string) => {
