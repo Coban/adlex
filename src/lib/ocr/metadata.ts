@@ -59,7 +59,7 @@ export interface OcrMetadata {
     /** エラータイプ */
     type: 'network' | 'ai_provider' | 'image_processing' | 'validation' | 'timeout' | 'unknown'
     /** 技術的詳細 */
-    technicalDetails?: Record<string, any>
+    technicalDetails?: Record<string, unknown>
   }
   /** パフォーマンス指標 */
   performance: {
@@ -140,7 +140,7 @@ class InMemoryMetadataStorage extends MetadataStorage {
   }
 
   async load(id: string): Promise<OcrMetadata | null> {
-    return this.storage.get(id) || null
+    return this.storage.get(id) ?? null
   }
 
   async list(limit = 100, offset = 0): Promise<OcrMetadata[]> {
@@ -164,12 +164,12 @@ class InMemoryMetadataStorage extends MetadataStorage {
     // 成功したアイテムのみで平均値を計算
     const successfulItems = items.filter(item => !item.error && item.processingTimeMs)
     const averageProcessingTime = successfulItems.length > 0 
-      ? successfulItems.reduce((sum, item) => sum + (item.processingTimeMs || 0), 0) / successfulItems.length
+      ? successfulItems.reduce((sum, item) => sum + (item.processingTimeMs ?? 0), 0) / successfulItems.length
       : 0
 
     const itemsWithConfidence = items.filter(item => item.result?.confidence !== undefined)
     const averageConfidence = itemsWithConfidence.length > 0
-      ? itemsWithConfidence.reduce((sum, item) => sum + (item.result?.confidence || 0), 0) / itemsWithConfidence.length
+      ? itemsWithConfidence.reduce((sum, item) => sum + (item.result?.confidence ?? 0), 0) / itemsWithConfidence.length
       : 0
 
     // プロバイダー別統計
@@ -186,7 +186,7 @@ class InMemoryMetadataStorage extends MetadataStorage {
       const providerSuccessful = providerItems.filter(item => !item.error && item.processingTimeMs)
       
       data.averageTime = providerSuccessful.length > 0
-        ? providerSuccessful.reduce((sum, item) => sum + (item.processingTimeMs || 0), 0) / providerSuccessful.length
+        ? providerSuccessful.reduce((sum, item) => sum + (item.processingTimeMs ?? 0), 0) / providerSuccessful.length
         : 0
       data.successRate = providerItems.length > 0 
         ? providerItems.filter(item => !item.error).length / providerItems.length 
@@ -197,8 +197,8 @@ class InMemoryMetadataStorage extends MetadataStorage {
     const errorsByType: Record<string, number> = {}
     for (const item of items) {
       if (item.error) {
-        const errorType = item.error.type || 'unknown'
-        errorsByType[errorType] = (errorsByType[errorType] || 0) + 1
+        const errorType = item.error.type ?? 'unknown'
+        errorsByType[errorType] = (errorsByType[errorType] ?? 0) + 1
       }
     }
 
@@ -212,8 +212,8 @@ class InMemoryMetadataStorage extends MetadataStorage {
       byProvider,
       errorsByType,
       period: {
-        from: fromDate || new Date(Math.min(...items.map(i => i.startTime.getTime()))),
-        to: toDate || new Date(Math.max(...items.map(i => i.startTime.getTime())))
+        from: fromDate ?? new Date(Math.min(...items.map(i => i.startTime.getTime()))),
+        to: toDate ?? new Date(Math.max(...items.map(i => i.startTime.getTime())))
       }
     }
   }
@@ -243,8 +243,8 @@ export class OcrMetadataManager {
   private isDebugMode: boolean
 
   constructor(storage?: MetadataStorage, debugMode = false) {
-    this.storage = storage || new InMemoryMetadataStorage()
-    this.isDebugMode = debugMode || process.env.NODE_ENV === 'development'
+    this.storage = storage ?? new InMemoryMetadataStorage()
+    this.isDebugMode = debugMode ?? process.env.NODE_ENV === 'development'
   }
 
   /**
@@ -438,13 +438,13 @@ export function getOcrStatistics() {
   const avgProcessingTime = totalTime / sessions.length
 
   const totalConfidence = sessions.reduce((sum, session) => {
-    return sum + (session.confidenceScore || 0)
+    return sum + (session.confidenceScore ?? 0)
   }, 0)
   const avgConfidenceScore = totalConfidence / sessions.length
 
   const providerDistribution = sessions.reduce((dist, session) => {
     const provider = session.provider
-    dist[provider] = (dist[provider] || 0) + 1
+    dist[provider] = (dist[provider] ?? 0) + 1
     return dist
   }, {} as Record<string, number>)
 

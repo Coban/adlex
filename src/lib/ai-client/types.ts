@@ -77,6 +77,7 @@ export interface LegacyDictionaryEntry {
   phrase: string
   category: 'NG' | 'ALLOW'
   notes?: string
+  reason?: string
 }
 
 export interface LegacyViolationData {
@@ -85,4 +86,5 @@ export interface LegacyViolationData {
   end_pos: number
   reason: string
   dictionary_id?: number
+  type?: string
 }

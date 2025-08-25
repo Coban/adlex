@@ -12,7 +12,7 @@ import { ErrorFactory } from '@/lib/errors'
 
 import { ConfidenceResult, estimateOcrConfidence } from './confidence-estimation'
 import { ImageProcessingOptions, ImageProcessingResult, preprocessImage } from './image-preprocessing'
-import { finishOcrMetadataRecording, OcrMetadata, startOcrMetadataRecording, updateOcrMetadata } from './metadata'
+import { defaultOcrMetadataManager, OcrMetadata } from './metadata'
 
 export interface EnhancedOcrOptions {
   /** カスタムプロンプト */
@@ -62,7 +62,7 @@ export async function enhancedExtractTextFromImageWithLLM(
   options: EnhancedOcrOptions = {}
 ): Promise<EnhancedOcrResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options }
-  const sessionId = randomUUID()
+  let sessionId = randomUUID()
   const prompt = options.prompt ?? DEFAULT_PROMPT
 
   try {
@@ -96,13 +96,18 @@ export async function enhancedExtractTextFromImageWithLLM(
     
     // メタデータ記録開始
     if (!opts.disableMetadata) {
-      startOcrMetadataRecording(
-        sessionId,
-        aiProvider,
-        getChatModel,
-        imageBuffer.length,
-        prompt.length
+      const newSessionId = defaultOcrMetadataManager.startProcessing(
+        aiProvider as 'openai' | 'lmstudio' | 'openrouter',
+        getChatModel as string,
+        {
+          originalSize: imageBuffer.length,
+          processedSize: imageBuffer.length,
+          format: 'image/jpeg',
+          wasPreprocessed: false,
+          dimensions: { width: 0, height: 0 }
+        }
       )
+      sessionId = newSessionId as `${string}-${string}-${string}-${string}-${string}`
     }
 
     let processingResult: ImageProcessingResult | undefined
@@ -111,20 +116,28 @@ export async function enhancedExtractTextFromImageWithLLM(
     // 画像前処理
     if (options.imageProcessing || shouldApplyDefaultProcessing(imageBuffer)) {
       try {
-        processingResult = await preprocessImage(imageBuffer, options.imageProcessing)
-        finalImageBuffer = processingResult.processedBuffer
-        
-        if (!opts.disableMetadata) {
-          updateOcrMetadata(sessionId, {
-            imageInfo: {
-              originalSizeBytes: imageBuffer.length,
-              processedSizeBytes: processingResult.processedMetadata.sizeBytes,
-              mimeType: processingResult.processedMetadata.format,
-              width: processingResult.processedMetadata.width,
-              height: processingResult.processedMetadata.height
-            }
-          })
+        // Convert Buffer to Blob for preprocessing
+        const arrayBuffer = imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength) as ArrayBuffer
+        const imageBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
+        const processedImage = await preprocessImage(imageBlob, options.imageProcessing)
+        processingResult = {
+          originalSize: processedImage.originalSize,
+          processedSize: processedImage.processedSize,
+          dimensions: processedImage.processedDimensions,
+          format: processedImage.options.format,
+          processingTimeMs: processedImage.processingTimeMs
         }
+        
+        if (processedImage.data instanceof ArrayBuffer) {
+          finalImageBuffer = Buffer.from(processedImage.data)
+        } else if (typeof processedImage.data === 'string' && processedImage.data.startsWith('data:')) {
+          const base64Data = processedImage.data.split(',')[1]
+          finalImageBuffer = Buffer.from(base64Data, 'base64')
+        } else {
+          finalImageBuffer = imageBuffer
+        }
+        
+        // Metadata update is handled internally by the manager
       } catch (processingError) {
         console.warn('[Enhanced OCR] Image preprocessing failed, using original image:', processingError)
         // 前処理に失敗しても元の画像で続行
@@ -137,14 +150,7 @@ export async function enhancedExtractTextFromImageWithLLM(
 
     for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
       try {
-        if (!opts.disableMetadata && attempt > 0) {
-          updateOcrMetadata(sessionId, {
-            debug: { 
-              promptLength: prompt.length,
-              retryCount: attempt 
-            }
-          })
-        }
+        // Retry metadata is handled internally
 
         extractedText = await performLLMOcr(finalImageBuffer, prompt, opts.timeoutMs)
         break // 成功した場合はループを抜ける
@@ -170,10 +176,12 @@ export async function enhancedExtractTextFromImageWithLLM(
     let confidence: ConfidenceResult | undefined
     if (!opts.disableConfidenceEstimation) {
       const imageInfo = processingResult ? {
-        width: processingResult.processedMetadata.width,
-        height: processingResult.processedMetadata.height,
-        sizeBytes: processingResult.processedMetadata.sizeBytes
+        width: processingResult.dimensions.width,
+        height: processingResult.dimensions.height,
+        sizeBytes: processingResult.processedSize
       } : {
+        width: 0,
+        height: 0,
         sizeBytes: finalImageBuffer.length
       }
       
@@ -183,7 +191,13 @@ export async function enhancedExtractTextFromImageWithLLM(
     // メタデータ記録完了
     let metadata: OcrMetadata | undefined
     if (!opts.disableMetadata) {
-      metadata = finishOcrMetadataRecording(sessionId, extractedText, confidence?.overallScore)
+      await defaultOcrMetadataManager.recordSuccess(sessionId, {
+        text: extractedText,
+        confidence: confidence?.overallScore ?? 0,
+        characterCount: extractedText.length,
+        estimatedLines: extractedText.split('\n').length,
+        detectedLanguage: 'ja'
+      })
     }
 
     return {
@@ -197,12 +211,10 @@ export async function enhancedExtractTextFromImageWithLLM(
   } catch (error) {
     // エラー時のメタデータ記録
     if (!opts.disableMetadata) {
-      finishOcrMetadataRecording(
-        sessionId, 
-        '', 
-        undefined, 
-        error instanceof Error ? error : new Error(String(error))
-      )
+      await defaultOcrMetadataManager.recordError(sessionId, {
+        message: error instanceof Error ? error.message : String(error),
+        type: 'unknown'
+      })
     }
 
     console.error('[Enhanced OCR] Processing failed:', error)

@@ -347,8 +347,8 @@ async function performActualCheck(
     try {
       const { extractTextFromImageWithLLM, estimateOcrConfidence } = await import('@/lib/ai-client')
       const start = Date.now()
-      const ocrText = await extractTextFromImageWithLLM(Buffer.from(imageUrl), 'この画像に含まれるテキストを日本語で正確に抽出してください。')
-      processedText = ocrText.trim()
+      const ocrResult = await extractTextFromImageWithLLM(Buffer.from(imageUrl), {})
+      processedText = ocrResult.text.trim()
       if (!processedText) {
         throw ErrorFactory.createFileProcessingError('OCR処理', 'image')
       }
@@ -482,79 +482,31 @@ async function performActualCheck(
   }
 
   // LLMを使用して薬機法違反を分析（辞書は参考情報として使用）
-  const { createChatCompletionForCheck } = await import('@/lib/ai-client')
+  const { checkViolations } = await import('@/lib/ai-client')
 
   try {
     const result = await retryAiRequest(
-      () => createChatCompletionForCheck(processedText, referenceEntries),
+      () => checkViolations(processedText, referenceEntries),
       checkId,
       2, // 最大2回リトライ
       1500 // 1.5秒から開始
     )
       
-    let violations: ViolationData[]
-    let modifiedText: string
+    const modifiedText: string = processedText
 
-    if (result.type === 'openai' || result.type === 'openrouter') {
-      // OpenAI/OpenRouter 双方で function_call または tool_calls をサポート
-      const responseAny = result.response as unknown as {
-        choices?: Array<{
-          message?: {
-            function_call?: { arguments?: string }
-            tool_calls?: Array<{
-              type?: string
-              function?: { name?: string; arguments?: string }
-            }>
-          }
-        }>
-      }
+    // result is now the violations array from checkViolations  
+    const violationData = Array.isArray(result) ? (result as ViolationData[]).map((v) => ({
+      start_pos: v.start_pos ?? 0,
+      end_pos: v.end_pos ?? 0,
+      reason: v.reason ?? '',
+      dictionary_id: v.dictionary_id ?? undefined
+    })) : []
 
-      const message = responseAny?.choices?.[0]?.message as
-        | {
-            function_call?: { arguments?: string }
-            tool_calls?: Array<{ type?: string; function?: { name?: string; arguments?: string } }>
-          }
-        | undefined
-
-      // 1) OpenAI 互換の function_call.arguments
-      let argsJson: string | null = message?.function_call?.arguments ?? null
-
-      // 2) tool_calls 配列（OpenRouter/一部OpenAI実装）
-      const toolCalls = Array.isArray(message?.tool_calls) ? message?.tool_calls : []
-      if (!argsJson && toolCalls.length > 0) {
-        const targetCall =
-          toolCalls.find(
-            (tc) => tc?.type === 'function' && tc.function?.name === 'apply_yakukiho_rules'
-          ) ?? toolCalls[0]
-        argsJson = targetCall?.function?.arguments ?? null
-      }
-
-      if (!argsJson?.trim()) {
-        throw ErrorFactory.createAIServiceError('OpenAI/OpenRouter', '関数呼び出し', '応答に期待したfunction/tool callが含まれていません')
-      }
-
-      const analysisResult = JSON.parse(argsJson) as {
-        modified?: string
-        violations?: Array<{ start: number; end: number; reason: string; dictionaryId?: number }>
-      }
-
-      // 共通形式から内部形式に変換
-      violations = (analysisResult.violations ?? []).map((v) => ({
-        start_pos: v.start,
-        end_pos: v.end,
-        reason: v.reason,
-        dictionary_id: v.dictionaryId
-      }))
-      modifiedText = analysisResult.modified ?? processedText
-    } else {
-      violations = result.violations
-      modifiedText = result.modified
-    }
-
-    await completeCheck(checkId, modifiedText, violations, supabase)
+    await completeCheck(checkId, modifiedText, violationData, supabase)
       
   } catch (aiError) {
     console.error(`[CHECK] チェック ${checkId} のAI処理に失敗しました:`, aiError)
     throw ErrorFactory.createAIServiceError('AI', 'チャット補完', `チャット補完の作成に失敗しました: ${aiError}`)
   }
 }
+

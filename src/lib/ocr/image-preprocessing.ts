@@ -75,7 +75,7 @@ const DEFAULT_OPTIONS: Required<ImageProcessingOptions> = {
 function calculateBase64Size(base64: string): number {
   // Base64文字列のサイズを正確に計算（パディング文字を考慮）
   const base64Data = base64.includes(',') ? base64.split(',')[1] : base64
-  const padding = base64Data.match(/=*$/)?.[0].length || 0
+  const padding = base64Data.match(/=*$/)?.[0].length ?? 0
   return Math.floor((base64Data.length * 3) / 4) - padding
 }
 
@@ -103,8 +103,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
       const mockImg = {
         naturalWidth: dimensions.width,
         naturalHeight: dimensions.height,
-        onload: null as ((this: HTMLImageElement, ev: Event) => any) | null,
-        onerror: null as ((this: HTMLImageElement, ev: string | Event) => any) | null,
+        onload: null as ((this: HTMLImageElement, ev: Event) => void) | null,
+        onerror: null as ((this: HTMLImageElement, ev: string | Event) => void) | null,
         src: ''
       } as HTMLImageElement
       
@@ -302,8 +302,6 @@ export async function preprocessImageNode(
   const startTime = Date.now()
 
   // Node.js環境では基本的な処理のみ
-  const base64 = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`
-  
   // モック処理（実際の画像処理はブラウザ環境で行う）
   return {
     originalSize: imageBuffer.length,
@@ -393,7 +391,7 @@ export function validateImageForProcessing(
   if (!format || !supportedFormats.includes(format.toLowerCase())) {
     return {
       isValid: false,
-      reason: `サポートされていない画像形式です: ${format || 'unknown'}`
+      reason: `サポートされていない画像形式です: ${format ?? 'unknown'}`
     }
   }
 

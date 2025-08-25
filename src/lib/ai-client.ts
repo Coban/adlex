@@ -22,12 +22,12 @@ export * from './ai-client/index'
 // メイン関数をデフォルトエクスポートとして提供
 export { 
   createChatCompletion, 
-  createChatCompletionForCheck, 
   createEmbedding,
   extractTextFromImageWithLLM,
   extractTextFromImage,
   getEmbeddingDimensions,
-  estimateOcrConfidence
+  estimateOcrConfidence,
+  checkViolations
 } from './ai-client/main'
 
 // OCR関連の型と機能もエクスポート

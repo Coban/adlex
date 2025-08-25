@@ -6,11 +6,12 @@
 import OpenAI from 'openai'
 
 import { ErrorFactory } from '@/lib/errors'
+
 import { preprocessImage, ImageProcessingOptions, validateImageForProcessing } from '../ocr/image-preprocessing'
 import { defaultOcrMetadataManager, type OcrMetadata } from '../ocr/metadata'
 
 import { aiProvider as configAiProvider, getChatModel, getEmbeddingModel, getEmbeddingProvider } from './config'
-import { createAIProvider, aiClient } from './factory'
+import { aiClient } from './factory'
 import { createLMStudioEmbedding } from './lmstudio-client'
 import { createOpenAIEmbedding } from './openai-client'
 import { LegacyDictionaryEntry, LegacyViolationData } from './types'
@@ -167,18 +168,17 @@ export async function createChatCompletion(params: {
     }
   }
 
-  const provider = createAIProvider()
-  if (!provider) {
+  if (!aiClient) {
     throw ErrorFactory.createExternalServiceError(
       aiProvider, 
       'chat completion',
-      'AI provider not available'
+      'AI client not available'
     )
   }
 
   try {
-    const response = await provider.chat.completions.create({
-      model: params.model || getChatModel,
+    const response = await aiClient.chat.completions.create({
+      model: params.model ?? getChatModel,
       messages: params.messages,
       tools: params.tools,
       tool_choice: params.tool_choice,
@@ -210,13 +210,12 @@ export async function checkViolations(
     // Mock response for testing  
     return [
       {
-        type: 'ng_word',
-        phrase: 'がんに効く',
-        start_position: text.indexOf('がんに効く'),
-        end_position: text.indexOf('がんに効く') + 'がんに効く'.length,
-        severity: 'high',
-        reason: 'Mock violation for testing',
-        suggestions: ['効果を期待できる', '健康をサポートする']
+        id: 1,
+        start_pos: text.indexOf('がんに効く'),
+        end_pos: text.indexOf('がんに効く') + 'がんに効く'.length,
+        reason: 'Mock violation for testing - がんに効くは薬機法違反です',
+        dictionary_id: 1,
+        type: 'ng_word'
       }
     ]
   }
@@ -284,21 +283,22 @@ ${dictContext}
     })
 
     const toolCall = response.choices[0]?.message?.tool_calls?.[0]
-    if (toolCall?.function?.name === 'find_violations') {
+    if (toolCall && 'function' in toolCall && toolCall.function?.name === 'find_violations') {
       const result = JSON.parse(toolCall.function.arguments)
-      return result.violations || []
+      return result.violations ?? []
     }
 
     // Fallback: try to extract JSON from content
-    const content = response.choices[0]?.message?.content || ''
+    const content = response.choices[0]?.message?.content ?? ''
     const extractedJson = extractCompleteJSON(content)
-    if (extractedJson) {
-      return extractedJson.violations || []
+    if (extractedJson && typeof extractedJson === 'object' && 'violations' in extractedJson) {
+      const violations = (extractedJson as Record<string, unknown>).violations
+      return Array.isArray(violations) ? violations : []
     }
 
     // Final fallback: generate JSON from plain text
     const generatedJson = generateJSONFromPlainText(content, text)
-    return generatedJson
+    return Array.isArray(generatedJson) ? generatedJson : []
 
   } catch (error) {
     console.error('[AI] Violation check failed:', error)
@@ -325,15 +325,18 @@ export async function createEmbedding(text: string): Promise<number[]> {
     const embeddingProvider = getEmbeddingProvider()
     
     if (embeddingProvider === 'lmstudio') {
-      return await createLMStudioEmbedding(text)
+      const result = await createLMStudioEmbedding(text)
+      return Array.isArray(result) ? result : result.data?.[0]?.embedding || []
     } else {
       // Default to OpenAI
-      return await createOpenAIEmbedding(text)
+      const result = await createOpenAIEmbedding(text)
+      return Array.isArray(result) ? result : result.data?.[0]?.embedding || []
     }
   } catch (error) {
     console.error('[AI] Embedding creation failed:', error)
+    const currentProvider = getEmbeddingProvider()
     throw ErrorFactory.createAIServiceError(
-      embeddingProvider,
+      currentProvider,
       'embedding creation',
       error instanceof Error ? error.message : 'Unknown error',
       error instanceof Error ? error : undefined
@@ -346,13 +349,15 @@ export async function createEmbedding(text: string): Promise<number[]> {
  * 使用しているモデルに応じた適切な次元数を返す
  */
 export function getEmbeddingDimensions(): number {
-  const model = getEmbeddingModel()
+  const model = getEmbeddingModel
   
   // モデルに応じた次元数を返す
-  if (model.includes('text-embedding-3-small')) return 1536
-  if (model.includes('text-embedding-3-large')) return 3072
-  if (model.includes('text-embedding-ada-002')) return 1536
-  if (model.includes('nomic-embed')) return 768
+  if (typeof model === 'string') {
+    if (model.includes('text-embedding-3-small')) return 1536
+    if (model.includes('text-embedding-3-large')) return 3072
+    if (model.includes('text-embedding-ada-002')) return 1536
+    if (model.includes('nomic-embed')) return 768
+  }
   
   // デフォルト
   return 1536
@@ -364,7 +369,7 @@ export function getEmbeddingDimensions(): number {
 async function executeOcrWithTimeout(
   imageUrl: string, 
   timeout: number
-): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: any }> {
+): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: Record<string, unknown> }> {
   
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error(`OCR処理がタイムアウトしました (${timeout}ms)`)), timeout)
@@ -380,7 +385,7 @@ async function executeOcrWithTimeout(
  */
 async function executeOcrRequest(
   imageUrl: string
-): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: any }> {
+): Promise<{ text: string; provider: 'openai' | 'lmstudio' | 'openrouter'; model: string; performance?: Record<string, unknown> }> {
   
   // マルチモーダル用のユーザーコンテンツを構築（OpenAI Vision 仕様に準拠）
   const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
@@ -540,7 +545,9 @@ export async function extractTextFromImageWithLLM(
     // Buffer対応
     let inputForValidation: File | Blob | string = imageInput as string | File | Blob
     if (Buffer.isBuffer(imageInput)) {
-      inputForValidation = new Blob([imageInput], { type: 'image/jpeg' })
+      // Convert Buffer to ArrayBuffer for Blob compatibility
+      const arrayBuffer = imageInput.buffer.slice(imageInput.byteOffset, imageInput.byteOffset + imageInput.byteLength) as ArrayBuffer
+      inputForValidation = new Blob([arrayBuffer], { type: 'image/jpeg' })
     }
 
     if (typeof inputForValidation !== 'string') {
@@ -567,7 +574,9 @@ export async function extractTextFromImageWithLLM(
         
         let imageForPreprocessing: File | Blob | string
         if (Buffer.isBuffer(imageInput)) {
-          imageForPreprocessing = new Blob([imageInput], { type: 'image/jpeg' })
+          // Convert Buffer to ArrayBuffer for Blob compatibility
+          const arrayBuffer = imageInput.buffer.slice(imageInput.byteOffset, imageInput.byteOffset + imageInput.byteLength) as ArrayBuffer
+          imageForPreprocessing = new Blob([arrayBuffer], { type: 'image/jpeg' })
         } else {
           imageForPreprocessing = imageInput
         }
@@ -647,7 +656,7 @@ export async function extractTextFromImageWithLLM(
       metadataId = defaultOcrMetadataManager.startProcessing(validProvider, getChatModel, {
         originalSize: imageInfo.originalSize,
         processedSize: imageInfo.processedSize,
-        dimensions: imageInfo.dimensions || { width: 0, height: 0 },
+        dimensions: imageInfo.dimensions ?? { width: 0, height: 0 },
         format: Buffer.isBuffer(imageInput) ? 'image/jpeg' : typeof imageInput !== 'string' ? imageInput.type : 'unknown',
         wasPreprocessed: imageInfo.wasPreprocessed
       })
@@ -737,7 +746,7 @@ export async function extractTextFromImageWithLLM(
     }
 
     if (!result) {
-      throw lastError || new Error('OCR処理が完了しませんでした')
+      throw lastError ?? new Error('OCR処理が完了しませんでした')
     }
 
     return result
@@ -755,7 +764,7 @@ export async function extractTextFromImageWithLLM(
  */
 export async function extractTextFromImage(
   imageBuffer: Buffer, 
-  prompt = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
+  _prompt = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
 ): Promise<string> {
   if (USE_MOCK) {
     return '模擬的に抽出されたテキストです。このサプリメントはがんに効果があります。'

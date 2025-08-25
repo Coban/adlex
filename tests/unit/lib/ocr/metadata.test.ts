@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+
 import { OcrMetadataManager, defaultOcrMetadataManager } from '@/lib/ocr/metadata'
 
 describe('OCRメタデータ管理', () => {
