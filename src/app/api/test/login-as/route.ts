@@ -21,20 +21,24 @@ function productionHandler() {
   );
 }
 
-// セキュリティチェック: 複数の環境変数で二重確認
+// セキュリティチェック: fail-secure原則に基づく厳格な環境確認
 function isTestEnvironmentSafe() {
-  // 本番環境では絶対に無効
-  if (process.env.NODE_ENV === 'production') {
-    return false;
-  }
+  // 本番環境の複数指標をチェック（どれか一つでも本番なら拒否）
+  const isProduction = process.env.NODE_ENV === 'production' ||
+                      process.env.VERCEL_ENV === 'production' ||
+                      process.env.NODE_ENV === undefined ||
+                      process.env.VERCEL === '1' && process.env.VERCEL_ENV !== 'development' &&
+                      process.env.VERCEL_ENV !== 'preview';
   
-  // Vercel本番環境での追加チェック
-  if (process.env.VERCEL_ENV === 'production') {
-    return false;
-  }
+  // テスト機能の明示的な有効化が必要
+  const isTestingExplicitlyEnabled = process.env.ENABLE_TEST_ENDPOINTS === 'true';
   
-  // 明示的にテストエンドポイントが有効化されている場合のみ許可
-  return process.env.ENABLE_TEST_ENDPOINTS === 'true';
+  // 開発環境の確認（NODE_ENVが明示的にdevelopmentまたはtest）
+  const isDevelopmentEnvironment = process.env.NODE_ENV === 'development' || 
+                                  process.env.NODE_ENV === 'test';
+  
+  // fail-secure: 本番環境の疑いがある場合、または明示的な許可がない場合は拒否
+  return !isProduction && isTestingExplicitlyEnabled && isDevelopmentEnvironment;
 }
 
 /**

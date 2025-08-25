@@ -8,6 +8,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { TIMEOUTS } from '@/constants/timeouts'
 import { authFetch } from '@/lib/api-client'
 import { logger } from '@/lib/logger'
+import { ssePool } from '@/lib/sse-pool'
 import { CheckStreamData, QueueStatus, OrganizationStatus, SystemStatus } from '@/types'
 
 import type { UseCheckStateReturn } from './useCheckState'
@@ -42,8 +43,9 @@ export function useStreamUpdates({
   setSystemStatus,
   setDictionaryInfo: _setDictionaryInfo
 }: UseStreamUpdatesProps): UseStreamUpdatesReturn {
-  // const _supabase = createClient() // Removed: not used in this hook
-  const globalStreamRef = useRef<EventSource | null>(null)
+  // 一意なHook識別子（接続プール管理用）
+  const hookId = useRef(`textchecker-${Date.now()}-${Math.random()}`).current
+  const globalStreamUrl = useRef<string>('/api/checks/stream').current
   const cancelControllers = useRef<Map<string, { 
     eventSource: EventSource
     pollInterval: NodeJS.Timeout
@@ -66,16 +68,21 @@ export function useStreamUpdates({
     }
   }, [])
 
-  // グローバルSSE接続を開始（キューステータス監視用）
+  // グローバルSSE接続を開始（キューステータス監視用・プール管理版）
   const startGlobalStream = useCallback(() => {
-    if (globalStreamRef.current) {
-      safeCloseEventSource(globalStreamRef.current)
-    }
+    // 既存の接続を解除
+    ssePool.unsubscribe(globalStreamUrl, hookId)
 
     const timer = setTimeout(() => {
-      const connectGlobalSSE = async () => new EventSource('/api/checks/stream')
-      connectGlobalSSE().then((eventSource) => {
-        globalStreamRef.current = eventSource
+      try {
+        // プール管理されたEventSourceを取得
+        const eventSource = ssePool.getConnection(globalStreamUrl, hookId)
+        
+        // 既存のイベントリスナーをクリーンアップ（重複登録を防止）
+        const existingHandler = eventSource.onmessage
+        if (existingHandler) {
+          eventSource.removeEventListener('message', existingHandler)
+        }
         
         eventSource.onmessage = (event) => {
           try {
@@ -93,47 +100,76 @@ export function useStreamUpdates({
               setSystemStatus(data.system)
             }
           } catch (error) {
-            console.error('Failed to parse global SSE data:', error)
+            logger.error('Failed to parse global SSE data', {
+              hookId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              eventData: event.data
+            })
           }
         }
 
-        eventSource.onerror = (error) => {
-          console.error('Global SSE connection error:', error)
-          globalStreamRef.current = null
-        }
-      })
+        logger.debug('Global SSE stream started', {
+          hookId,
+          url: globalStreamUrl,
+          poolStats: ssePool.getStats()
+        })
+        
+      } catch (error) {
+        logger.error('Failed to start global SSE stream', {
+          hookId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
     }, TIMEOUTS.DEBOUNCE_INPUT)
 
     return () => {
       clearTimeout(timer)
-      if (globalStreamRef.current) {
-        safeCloseEventSource(globalStreamRef.current)
-      }
-      globalStreamRef.current = null
+      ssePool.unsubscribe(globalStreamUrl, hookId)
     }
-  }, [safeCloseEventSource, setQueueStatus, setOrganizationStatus, setSystemStatus])
+  }, [hookId, setQueueStatus, setOrganizationStatus, setSystemStatus])
 
-  // グローバルSSE接続を停止
+  // グローバルSSE接続を停止（プール管理版）
   const stopGlobalStream = useCallback(() => {
-    if (globalStreamRef.current) {
-      safeCloseEventSource(globalStreamRef.current)
-      globalStreamRef.current = null
-    }
-  }, [safeCloseEventSource])
-
-  // 個別チェック用SSE接続を開始
-  const startCheckStream = useCallback(async (checkId: string, dbCheckId: string) => {
-    const eventSource = new EventSource(`/api/checks/${dbCheckId}/stream`)
-    
-    // コントローラーを登録（ポーリングとタイムアウトのダミー値を設定）
-    const pollInterval = setInterval(() => {}, 1000)
-    const timeout = setTimeout(() => {}, 30000)
-    
-    cancelControllers.current.set(checkId, {
-      eventSource,
-      pollInterval,
-      timeout
+    ssePool.unsubscribe(globalStreamUrl, hookId)
+    logger.debug('Global SSE stream stopped', {
+      hookId,
+      url: globalStreamUrl
     })
+  }, [hookId])
+
+  // 個別チェック用SSE接続を開始（プール管理版）
+  const startCheckStream = useCallback(async (checkId: string, dbCheckId: string) => {
+    const checkStreamUrl = `/api/checks/${dbCheckId}/stream`
+    const checkSubscriberId = `${hookId}-check-${checkId}`
+    
+    const eventSource = ssePool.getConnection(checkStreamUrl, checkSubscriberId)
+    
+    try {
+      // コントローラーを登録（ポーリングとタイムアウトのダミー値を設定）
+      const pollInterval = setInterval(() => {}, 1000)
+      const timeout = setTimeout(() => {}, 30000)
+      
+      cancelControllers.current.set(checkId, {
+        eventSource,
+        pollInterval,
+        timeout
+      })
+      
+      logger.debug('Check SSE stream started', {
+        checkId,
+        dbCheckId,
+        hookId,
+        url: checkStreamUrl
+      })
+    } catch (error) {
+      logger.error('Failed to start check SSE stream', {
+        checkId,
+        dbCheckId,
+        hookId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
+      throw error
+    }
     
     // progress イベントリスナー
     eventSource.addEventListener('progress', (event) => {
@@ -163,6 +199,11 @@ export function useStreamUpdates({
           cancelControllers.current.delete(checkId)
         }
         
+        // プール管理された接続から購読を解除
+        const checkStreamUrl = `/api/checks/${data.id}/stream`
+        const checkSubscriberId = `${hookId}-check-${checkId}`
+        ssePool.unsubscribe(checkStreamUrl, checkSubscriberId)
+        
         // 違反情報をマップ
         const mappedViolations = data.violations?.map((v) => ({
           id: v.id,
@@ -186,7 +227,11 @@ export function useStreamUpdates({
           statusMessage: 'チェック完了'
         })
         
-        safeCloseEventSource(eventSource)
+        logger.debug('Check completed via SSE', {
+          checkId,
+          hookId,
+          violationsCount: mappedViolations.length
+        })
       } catch (error) {
         console.error('Failed to parse complete event:', error)
       }
@@ -227,28 +272,37 @@ export function useStreamUpdates({
     return eventSource
   }, [updateCheck, safeCloseEventSource])
 
-  // チェックをキャンセル
+  // チェックをキャンセル（プール管理版）
   const cancelCheck = useCallback(async (checkId: string) => {
     const controllers = cancelControllers.current.get(checkId)
     
     if (controllers) {
-      // EventSource とポーリングを停止
-      safeCloseEventSource(controllers.eventSource)
+      // ポーリングとタイムアウトを停止
       clearInterval(controllers.pollInterval)
       clearTimeout(controllers.timeout)
       cancelControllers.current.delete(checkId)
 
-      // サーバーサイドでのキャンセル処理
-      try {
-        const dbCheckId = checkId.split('-').pop()
-        if (dbCheckId && !isNaN(Number(dbCheckId))) {
+      // プール管理された接続から購読を解除
+      const dbCheckId = checkId.split('-').pop()
+      if (dbCheckId && !isNaN(Number(dbCheckId))) {
+        const checkStreamUrl = `/api/checks/${dbCheckId}/stream`
+        const checkSubscriberId = `${hookId}-check-${checkId}`
+        ssePool.unsubscribe(checkStreamUrl, checkSubscriberId)
+        
+        // サーバーサイドでのキャンセル処理
+        try {
           await authFetch(`/api/checks/${dbCheckId}/cancel`, {
             method: 'POST',
             credentials: 'same-origin'
           })
+        } catch (error) {
+          logger.error('Failed to cancel check on server', {
+            checkId,
+            dbCheckId,
+            hookId,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
         }
-      } catch (error) {
-        console.error('Failed to cancel on server:', error)
       }
     }
 
@@ -257,7 +311,12 @@ export function useStreamUpdates({
       status: 'cancelled',
       statusMessage: 'チェックがキャンセルされました'
     })
-  }, [updateCheck, safeCloseEventSource])
+    
+    logger.debug('Check cancelled', {
+      checkId,
+      hookId
+    })
+  }, [updateCheck, hookId])
 
   // 個別チェック用SSE接続を停止
   const stopCheckStream = useCallback((checkId: string) => {

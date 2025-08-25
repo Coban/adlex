@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const mockProfile = {
           id: userId,
           email: user?.email ?? 'unknown@test.com',
-          role: 'user', // セキュリティ: デフォルトは一般ユーザー
+          role: 'user', // セキュリティ: エラー時は必ず一般ユーザー権限
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const mockProfile = {
           id: userId,
           email: user?.email ?? 'unknown@test.com',
-          role: 'user', // セキュリティ: デフォルトは一般ユーザー
+          role: 'user', // セキュリティ: データベースエラー時は必ず一般ユーザー権限
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fallbackProfile = {
           id: userId,
           email: user?.email ?? 'dev@test.com',
-          role: 'user', // セキュリティ: エラー時は最小権限
+          role: 'user', // セキュリティ: 例外発生時は必ず一般ユーザー権限
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -244,12 +244,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
       const mockUser = {
         id: '00000000-0000-0000-0000-000000000001',
-        email: 'admin@test.com'
+        email: 'test@test.com' // セキュリティ: admin@test.comではなく一般的なテストアドレス
       } as unknown as User
       const mockProfile = {
         id: mockUser.id,
         email: mockUser.email,
-        role: 'admin', // E2Eテスト用の明示的な管理者権限
+        role: 'user', // セキュリティ: E2Eテストでも最小権限からスタート
         organization_id: 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -278,18 +278,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true)
         
-        // 開発環境では直接管理者セッションを作成
+        // 開発環境では直接セッションを作成（最小権限の原則に従う）
         if (process.env.NODE_ENV === 'development') {
           
           const mockUser = {
             id: '11111111-1111-1111-1111-111111111111',
-            email: 'admin@test.com'
+            email: 'dev@test.com'
           } as unknown as User
           
           const mockProfile = {
             id: '11111111-1111-1111-1111-111111111111',
-            email: 'admin@test.com',
-            role: 'admin', // 開発環境での明示的な管理者権限
+            email: 'dev@test.com',
+            role: 'user', // セキュリティ: 開発環境でも最小権限からスタート
             organization_id: 1,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
