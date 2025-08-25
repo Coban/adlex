@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 成功レスポンス（バイナリファイル）
-    return new NextResponse(result.data.buffer, {
+    return new NextResponse(result.data.buffer as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': result.data.contentType,

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * 辞書作成APIのリクエストスキーマ
@@ -8,7 +8,7 @@ export const CreateDictionaryRequestSchema = z.object({
     .min(1, '語句は1文字以上である必要があります')
     .max(200, '語句は200文字以下である必要があります'),
   category: z.enum(['NG', 'ALLOW'], {
-    errorMap: () => ({ message: 'カテゴリは "NG" または "ALLOW" である必要があります' })
+    message: 'カテゴリは "NG" または "ALLOW" である必要があります'
   }),
   reasoning: z.string()
     .max(1000, '理由は1000文字以下である必要があります')
@@ -42,7 +42,7 @@ export const BulkUpdateDictionariesRequestSchema = z.object({
     patch: z.object({
       phrase: z.string().min(1, 'フレーズは1文字以上である必要があります').optional(),
       category: z.enum(['NG', 'ALLOW'], {
-        errorMap: () => ({ message: 'カテゴリは "NG" または "ALLOW" である必要があります' })
+        message: 'カテゴリは "NG" または "ALLOW" である必要があります'
       }).optional(),
       notes: z.string().nullable().optional()
     })
@@ -135,8 +135,8 @@ export function validateCreateDictionaryRequest(data: unknown): ValidationResult
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -160,8 +160,8 @@ export function validateGetDictionariesQuery(data: unknown): ValidationResult<Ge
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -185,8 +185,8 @@ export function validateBulkUpdateDictionariesRequest(data: unknown): Validation
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -210,8 +210,8 @@ export function validateImportDictionariesRequest(data: unknown): ValidationResu
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -235,8 +235,8 @@ export function validateExportDictionariesQuery(data: unknown): ValidationResult
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

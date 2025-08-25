@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * カスタムレポート生成APIのリクエストスキーマ
@@ -7,7 +7,7 @@ export const GenerateCustomReportRequestSchema = z.object({
   checkIds: z.array(z.number().positive('チェックIDは正の数である必要があります'))
     .min(1, 'チェックIDが必要です'),
   format: z.enum(['pdf', 'excel'], {
-    errorMap: () => ({ message: 'フォーマットは \"pdf\" または \"excel\" である必要があります' })
+    message: 'フォーマットは "pdf" または "excel" である必要があります'
   }),
   template: z.string().optional(),
   includeStats: z.boolean().default(true),
@@ -39,8 +39,8 @@ export function validateGenerateCustomReportRequest(data: unknown): ValidationRe
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

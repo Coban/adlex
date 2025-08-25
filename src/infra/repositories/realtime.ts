@@ -42,11 +42,6 @@ export class SupabaseRealtimeRepository implements RealtimeRepository {
         filter: `id=eq.${params.checkId}`
       }, (payload: { new: unknown; old: unknown; eventType: string }) => {
         const updatedCheck = payload.new as Database['public']['Tables']['checks']['Row']
-        console.log(`[Realtime] Received update for check ${params.checkId}:`, {
-          status: updatedCheck.status,
-          completed_at: updatedCheck.completed_at,
-          error_message: updatedCheck.error_message
-        })
         
         // CheckUpdateData形式に変換
         const updateData: CheckUpdateData = {
@@ -58,18 +53,19 @@ export class SupabaseRealtimeRepository implements RealtimeRepository {
           error_message: updatedCheck.error_message
         }
 
-        console.log(`[Realtime] Calling onUpdate with status: ${updateData.status}`)
         params.onUpdate(updateData)
       })
       .subscribe(async (status, err) => {
         if (err) {
           console.error(`[Realtime] Subscription error for check ${params.checkId}:`, err)
-          params.onError({
-            message: 'リアルタイム更新の購読に失敗しました',
-            code: 'SUBSCRIPTION_ERROR'
-          })
-        } else if (status === 'SUBSCRIBED') {
-          console.log(`[Realtime] Successfully subscribed to check ${params.checkId} updates`)
+          // 開発環境では警告に留め、実運用でエラー処理する
+          if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+          } else {
+            params.onError({
+              message: 'リアルタイム更新の購読に失敗しました',
+              code: 'SUBSCRIPTION_ERROR'
+            })
+          }
         }
       })
 

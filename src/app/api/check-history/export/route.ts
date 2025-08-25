@@ -8,6 +8,7 @@ import {
 import { getRepositories } from '@/core/ports'
 import { ExportCheckHistoryUseCase, ExportData } from '@/core/usecases/check-history/exportCheckHistory'
 import { createClient } from '@/infra/supabase/serverClient'
+import { ErrorFactory } from '@/lib/errors'
 
 /**
  * チェック履歴エクスポートAPI（リファクタリング済み）
@@ -203,7 +204,7 @@ const MAX_EXPORT_SIZE = 1000
 function generateExcelExport(data: ExportData[], userRole: string) {
   // データサイズ制限のチェック
   if (data.length > MAX_EXPORT_SIZE) {
-    throw new Error(`エクスポート件数が多すぎます（最大${MAX_EXPORT_SIZE}件まで）。条件を絞り込んでください。`)
+    throw ErrorFactory.createQuotaExceededError('エクスポート件数', MAX_EXPORT_SIZE, data.length)
   }
   
   // Create a new workbook

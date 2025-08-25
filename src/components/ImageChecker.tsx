@@ -5,12 +5,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { APP_CONFIG, TIMEOUTS } from '@/constants'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/infra/supabase/clientClient'
+import { authFetch } from '@/lib/api-client'
+import { logger } from '@/lib/logger'
 
 type UploadState = 'idle' | 'ready' | 'validating' | 'uploading' | 'uploaded' | 'starting_check' | 'processing' | 'completed' | 'failed'
 
-const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
+const MAX_SIZE_BYTES = APP_CONFIG.FILE_SIZE_LIMITS.IMAGE
 const ACCEPT_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 /**
@@ -101,7 +104,7 @@ export default function ImageChecker() {
       const headers: Record<string, string> = {}
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
 
-      const uploadRes = await fetch('/api/images/upload', { method: 'POST', body: form, headers })
+      const uploadRes = await authFetch('/api/images/upload', { method: 'POST', body: form, headers })
       if (!uploadRes.ok) {
         const err = await uploadRes.json().catch(() => ({}))
         throw new Error(err.error ?? `アップロードエラー: ${uploadRes.status}`)
@@ -112,7 +115,7 @@ export default function ImageChecker() {
       // input_type=imageでチェック開始
       setState('starting_check')
       setStatusMessage('画像チェックを開始しています...')
-      const checksRes = await fetch('/api/checks', {
+      const checksRes = await authFetch('/api/checks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,8 +163,12 @@ export default function ImageChecker() {
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
             if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
           }
-        } catch {
-          // noop: フォールバックなので失敗しても継続
+        } catch (error) {
+          logger.warn('Database status update fallback failed', {
+            operation: 'updateCheckStatus',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            checkId: checkData.id
+          })
         }
         if (pollCount >= maxPolls) {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
@@ -170,7 +177,7 @@ export default function ImageChecker() {
           setError('処理がタイムアウトしました')
           if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
         }
-      }, 1000)
+      }, TIMEOUTS.POLLING_INTERVAL.IMAGE_CHECK)
       es.onmessage = async (event) => {
         try {
           if (event.data.startsWith(': heartbeat')) return
@@ -198,8 +205,12 @@ export default function ImageChecker() {
             es.close()
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
           }
-        } catch {
-          // SSE 解析失敗はフォールバックに任せる（失敗扱いにしない）
+        } catch (error) {
+          logger.warn('SSE message parsing failed, falling back to polling', {
+            operation: 'parseSSEMessage',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            eventData: event.data
+          })
           setStatusMessage('SSEの受信解析に失敗しました。ポーリングで継続します…')
           es.close()
         }

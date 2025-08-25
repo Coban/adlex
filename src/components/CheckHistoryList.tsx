@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { authFetch } from '@/lib/api-client'
 
 interface CheckHistory {
   id: number
@@ -116,7 +117,7 @@ export default function CheckHistoryList() {
       if (dateFilter && dateFilter !== 'all') params.append('dateFilter', dateFilter)
       if (userFilter) params.append('userId', userFilter)
 
-      const response = await fetch(`/api/check-history?${params}`)
+      const response = await authFetch(`/api/check-history?${params}`)
       
       if (!response.ok) {
         throw new Error('履歴の取得に失敗しました')
@@ -247,7 +248,7 @@ export default function CheckHistoryList() {
       if (dateFilter && dateFilter !== 'all') params.append('dateFilter', dateFilter)
       if (userFilter) params.append('userId', userFilter)
 
-      const response = await fetch(`/api/check-history/export?${params}`)
+      const response = await authFetch(`/api/check-history/export?${params}`)
       
       if (!response.ok) {
         throw new Error('エクスポートに失敗しました')

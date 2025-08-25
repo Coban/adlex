@@ -1,0 +1,224 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+/**
+ * テスト専用ログインAPI エンドポイント
+ * 
+ * 目的:
+ * - Playwright E2Eテスト用のstorageState生成
+ * - UIログインフローの完全廃止
+ * - テスト実行時間の大幅短縮
+ * 
+ * セキュリティ:
+ * - 本番環境では完全に無効化（404応答）
+ * - テスト環境でのみ動作
+ */
+
+// 本番環境での安全なハンドラー
+function productionHandler() {
+  return NextResponse.json(
+    { error: 'Test endpoints are not available in production' },
+    { status: 404 }
+  );
+}
+
+// セキュリティチェック: fail-secure原則に基づく厳格な環境確認
+function isTestEnvironmentSafe() {
+  // 本番環境の複数指標をチェック（どれか一つでも本番なら拒否）
+  const isProduction = process.env.NODE_ENV === 'production' ||
+                      process.env.VERCEL_ENV === 'production' ||
+                      process.env.NODE_ENV === undefined ||
+                      process.env.VERCEL === '1' && process.env.VERCEL_ENV !== 'development' &&
+                      process.env.VERCEL_ENV !== 'preview';
+  
+  // テスト機能の明示的な有効化が必要
+  const isTestingExplicitlyEnabled = process.env.ENABLE_TEST_ENDPOINTS === 'true';
+  
+  // 開発環境の確認（NODE_ENVが明示的にdevelopmentまたはtest）
+  const isDevelopmentEnvironment = process.env.NODE_ENV === 'development' || 
+                                  process.env.NODE_ENV === 'test';
+  
+  // fail-secure: 本番環境の疑いがある場合、または明示的な許可がない場合は拒否
+  return !isProduction && isTestingExplicitlyEnabled && isDevelopmentEnvironment;
+}
+
+/**
+ * テストユーザーとしてログイン
+ * POST /api/test/login-as
+ */
+export async function POST(request: NextRequest) {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
+    return productionHandler();
+  }
+
+  try {
+    const body = await request.json();
+    const { email, role } = body;
+
+    // パラメータ検証
+    if (!email || !role) {
+      return NextResponse.json(
+        { error: 'Email and role are required', example: { email: 'admin@test.com', role: 'admin' } },
+        { status: 400 }
+      );
+    }
+
+    if (!['admin', 'user'].includes(role)) {
+      return NextResponse.json(
+        { error: 'Role must be either "admin" or "user"' },
+        { status: 400 }
+      );
+    }
+
+    // テスト用のシンプルなセッション情報を作成
+    const userId = role === 'admin' ? 'test-admin-1' : 'test-user-1';
+    const sessionData = {
+      access_token: `test-token-${userId}-${Date.now()}`,
+      refresh_token: `test-refresh-${userId}-${Date.now()}`,
+      expires_at: Math.floor(Date.now() / 1000) + 3600, // 1時間後
+      expires_in: 3600
+    };
+
+    // 成功レスポンス準備
+    const responseData = {
+      success: true,
+      message: 'Test login successful',
+      user: {
+        id: userId,
+        email: email,
+        role: role,
+        organization_id: role === 'admin' ? 'test-org-admin' : 'test-org-user'
+      },
+      session: {
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token,
+        expires_at: sessionData.expires_at,
+        expires_in: sessionData.expires_in
+      }
+    };
+
+    const response = NextResponse.json(responseData);
+
+    // テスト用認証Cookie設定
+    response.cookies.set('sb-access-token', sessionData.access_token, {
+      httpOnly: true,
+      secure: false, // テスト環境では false
+      sameSite: 'lax',
+      maxAge: sessionData.expires_in,
+      path: '/'
+    });
+
+    response.cookies.set('sb-refresh-token', sessionData.refresh_token, {
+      httpOnly: true,
+      secure: false, // テスト環境では false
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7日間
+      path: '/'
+    });
+
+    // フロントエンド用セッション情報
+    response.cookies.set('sb-session', JSON.stringify({
+      access_token: sessionData.access_token,
+      refresh_token: sessionData.refresh_token,
+      expires_at: sessionData.expires_at,
+      user: {
+        id: userId,
+        email: email,
+        role: role
+      }
+    }), {
+      httpOnly: false, // JavaScriptからアクセス可能
+      secure: false, // テスト環境では false
+      sameSite: 'lax',
+      maxAge: sessionData.expires_in,
+      path: '/'
+    });
+
+    return response;
+
+  } catch (error) {
+    console.error('Test login API error:', error);
+    return NextResponse.json(
+      { 
+        error: 'Internal server error during test login',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * テストログアウト
+ * DELETE /api/test/login-as
+ */
+export async function DELETE() {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
+    return productionHandler();
+  }
+
+  try {
+    const response = NextResponse.json({ 
+      success: true, 
+      message: 'Test logout successful' 
+    });
+    
+    // 全認証Cookieをクリア
+    const cookiesToClear = ['sb-access-token', 'sb-refresh-token', 'sb-session'];
+    
+    cookiesToClear.forEach(cookieName => {
+      response.cookies.set(cookieName, '', {
+        httpOnly: cookieName !== 'sb-session',
+        secure: false, // テスト環境では false
+        sameSite: 'lax',
+        maxAge: 0,
+        expires: new Date(0),
+        path: '/'
+      });
+    });
+
+    return response;
+
+  } catch (error) {
+    console.error('Test logout API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to logout test user' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * エンドポイント情報取得（開発時のデバッグ用）
+ * GET /api/test/login-as
+ */
+export async function GET() {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
+    return productionHandler();
+  }
+
+  return NextResponse.json({
+    endpoint: '/api/test/login-as',
+    description: 'Test-only login API for Playwright E2E tests',
+    methods: {
+      POST: {
+        description: 'Login as test user',
+        body: {
+          email: 'admin@test.com',
+          role: 'admin | user'
+        },
+        response: 'Sets authentication cookies and returns session info'
+      },
+      DELETE: {
+        description: 'Logout test user',
+        response: 'Clears authentication cookies'
+      },
+      GET: {
+        description: 'Get endpoint information'
+      }
+    },
+    security: 'Only available when ENABLE_TEST_ENDPOINTS=true and NODE_ENV!=production, completely disabled in production'
+  });
+}

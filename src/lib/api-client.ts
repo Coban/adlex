@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 
 import { clearAuthData, createSignInUrl } from '@/lib/auth-redirect'
+import { ErrorFactory } from '@/lib/errors'
 
 /**
  * API リクエストのインターセプターを提供するクラス
@@ -36,7 +37,7 @@ export class ApiClient {
       // 401エラーの場合、サインインページにリダイレクト
       if (response.status === 401) {
         this.handleUnauthorized()
-        throw new Error('認証が必要です。サインインページに遷移します。')
+        throw ErrorFactory.createAuthenticationError('認証が必要です。サインインページに遷移します。')
       }
       
       return response

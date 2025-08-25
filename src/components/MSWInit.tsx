@@ -1,27 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
-
-// E2Eテスト時にMSWを初期化するコンポーネント
+// MSW init component - disabled due to removed test infrastructure
 export default function MSWInit() {
-  useEffect(() => {
-    // E2Eテスト環境の場合のみMSWを起動
-    if (
-      process.env.NODE_ENV === 'development' && 
-      (process.env.NEXT_PUBLIC_MSW_ENABLED === 'true' || 
-       typeof window !== 'undefined' && window.location.search.includes('msw=true'))
-    ) {
-      // 動的インポートでブラウザー環境でのみMSWを読み込み
-      import('../../tests/mocks/browser').then(({ worker }) => {
-        worker.start({
-          onUnhandledRequest: 'bypass',
-        });
-        // MSW worker started
-      }).catch((error) => {
-        console.warn('MSW: モックワーカーの開始に失敗しました', error);
-      });
-    }
-  }, []);
-
+  // MSW functionality has been disabled since test files were removed
+  // If you need MSW in the future, recreate the mocks/browser.ts file
   return null;
 } 
