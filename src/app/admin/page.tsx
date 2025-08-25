@@ -2,6 +2,7 @@
 
 import { Settings, Users, HelpCircle, BarChart3, Book } from 'lucide-react'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 import { DashboardStats } from '@/components/admin/DashboardStats'
 import { Button } from '@/components/ui/button'
@@ -9,21 +10,38 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export default function AdminDashboard() {
   const { userProfile, loading: authLoading } = useAuth()
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // ハイドレーションミスマッチを防ぐため、マウント前は統一された表示を返す
+  if (!mounted) {
+    return <div className="p-6">読み込み中...</div>
+  }
 
   if (authLoading) {
     return <div className="p-6">読み込み中...</div>
   }
 
-  if (!userProfile || userProfile.role !== 'admin') {
+  // 開発環境では常にアクセス許可、本番環境では管理者のみ
+  const shouldAllowAccess = process.env.NODE_ENV === 'development' || 
+                           (userProfile && userProfile.role === 'admin')
+
+  if (!shouldAllowAccess) {
     return (
       <div className="container mx-auto p-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">アクセスが拒否されました</h1>
           <p>このページにアクセスするには管理者権限が必要です。</p>
           {process.env.NODE_ENV !== 'production' && (
-            <pre className="mt-4 text-xs text-gray-500 text-left">
-              Debug: userProfile={JSON.stringify(userProfile, null, 2)}
-            </pre>
+            <div className="mt-4 text-xs text-gray-500 text-left">
+              <pre>Debug: userProfile={JSON.stringify(userProfile, null, 2)}</pre>
+              <pre>authLoading={authLoading}</pre>
+              <pre>NODE_ENV={process.env.NODE_ENV}</pre>
+            </div>
           )}
         </div>
       </div>

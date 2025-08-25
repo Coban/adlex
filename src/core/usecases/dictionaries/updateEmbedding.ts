@@ -1,5 +1,6 @@
 import { RepositoryContainer } from '@/core/ports'
 import { createEmbedding } from '@/lib/ai-client'
+import { ErrorFactory } from '@/lib/errors'
 
 export interface UpdateEmbeddingInput {
   dictionaryId: number
@@ -35,8 +36,13 @@ export class UpdateEmbeddingUseCase {
       }
 
       // 埋め込みベクトル生成
-      const embeddingResult = await createEmbedding(phrase)
-      const vector = embeddingResult.data[0].embedding
+      const embedding = await createEmbedding(phrase)
+      
+      if (!embedding || !Array.isArray(embedding)) {
+        throw ErrorFactory.createAIServiceError('AI', 'embedding generation', 'Failed to generate embedding vector')
+      }
+      
+      const vector = embedding
       
       // ベクトル更新
       const updated = await this.repositories.dictionaries.updateVector(dictionaryId, vector)

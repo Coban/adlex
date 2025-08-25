@@ -1,5 +1,6 @@
 import { createClient } from '@/infra/supabase/serverClient'
 import { cache, CacheUtils } from '@/lib/cache'
+import { ErrorFactory } from '@/lib/errors'
 import { LegacyCombinedPhrase as CombinedPhrase, LegacyViolationData as ViolationData } from '@/types'
 
 /**
@@ -40,7 +41,7 @@ async function completeCheck(
 
     if (violationError) {
       console.error(`[CHECK] Error inserting violations for check ${checkId}:`, violationError)
-      throw new Error(`違反データの挿入に失敗しました: ${violationError.message}`)
+      throw ErrorFactory.createDatabaseError('違反データの挿入', 'violations', violationError)
     }
   }
 
@@ -56,7 +57,7 @@ async function completeCheck(
 
   if (updateError) {
     console.error(`[CHECK] チェック ${checkId} のステータス更新でエラーが発生しました:`, updateError)
-    throw new Error(`チェックのステータス更新に失敗しました: ${updateError.message}`)
+    throw ErrorFactory.createDatabaseError('ステータス更新', 'checks', updateError)
   }
 
   // 組織の使用量を増加
@@ -92,7 +93,7 @@ async function getCheckOrganizationId(
     .single()
 
   if (error || !data) {
-    throw new Error(`チェック${checkId}のorganization_id取得に失敗しました`)
+    throw ErrorFactory.createDatabaseError('チェック情報取得', 'checks')
   }
 
   return data.organization_id
@@ -144,7 +145,7 @@ export async function processCheck(
     // より具体的なエラーメッセージを生成
     let errorMessage = 'チェック処理中にエラーが発生しました'
     if (error instanceof Error) {
-      const msg = error.message || ''
+      const msg = error.message ?? ''
       if (msg.includes('処理がタイムアウトしました')) {
         errorMessage = inputType === 'image' 
           ? '画像処理がタイムアウトしました。もう一度お試しください。'
@@ -346,10 +347,10 @@ async function performActualCheck(
     try {
       const { extractTextFromImageWithLLM, estimateOcrConfidence } = await import('@/lib/ai-client')
       const start = Date.now()
-      const ocr = await extractTextFromImageWithLLM(imageUrl)
-      processedText = (ocr.text ?? '').trim()
+      const ocrText = await extractTextFromImageWithLLM(Buffer.from(imageUrl), 'この画像に含まれるテキストを日本語で正確に抽出してください。')
+      processedText = ocrText.trim()
       if (!processedText) {
-        throw new Error('OCR結果が空です')
+        throw ErrorFactory.createFileProcessingError('OCR処理', 'image')
       }
       const confidence = estimateOcrConfidence(processedText)
 
@@ -360,8 +361,8 @@ async function performActualCheck(
           extracted_text: processedText,
           ocr_status: 'completed',
           ocr_metadata: {
-            provider: ocr.provider,
-            model: ocr.model,
+            provider: 'llm',
+            model: 'vision-model',
             language: 'ja',
             processing_time_ms: Date.now() - start,
             confidence
@@ -382,7 +383,7 @@ async function performActualCheck(
         })
         .eq('id', checkId)
         
-      throw new Error('OCR処理に失敗しました')
+      throw ErrorFactory.createFileProcessingError('OCR処理', 'image')
     }
   }
 
@@ -409,8 +410,8 @@ async function performActualCheck(
         const embeddingText = processedText.length > 1000 
           ? processedText.substring(0, 1000) + '...'
           : processedText
-        const embeddingResult = await createEmbedding(embeddingText)
-        embedding = embeddingResult.data[0].embedding
+        const embeddingResponse = await createEmbedding(embeddingText)
+        embedding = Array.isArray(embeddingResponse) ? embeddingResponse : null
         cache.set(embeddingKey, embedding, 15 * 60 * 1000) // 15分TTL（長い文章用に延長）
       } catch (embeddingError) {
         console.error(`[CHECK] チェック ${checkId} の埋め込み生成に失敗しました:`, embeddingError)
@@ -529,7 +530,7 @@ async function performActualCheck(
       }
 
       if (!argsJson?.trim()) {
-        throw new Error('OpenAI/OpenRouterの応答に期待したfunction/tool callが含まれていません')
+        throw ErrorFactory.createAIServiceError('OpenAI/OpenRouter', '関数呼び出し', '応答に期待したfunction/tool callが含まれていません')
       }
 
       const analysisResult = JSON.parse(argsJson) as {
@@ -554,6 +555,6 @@ async function performActualCheck(
       
   } catch (aiError) {
     console.error(`[CHECK] チェック ${checkId} のAI処理に失敗しました:`, aiError)
-    throw new Error(`チャット補完の作成に失敗しました: ${aiError}`)
+    throw ErrorFactory.createAIServiceError('AI', 'チャット補完', `チャット補完の作成に失敗しました: ${aiError}`)
   }
 }

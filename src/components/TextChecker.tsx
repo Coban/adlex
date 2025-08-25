@@ -6,9 +6,13 @@ import { useState, useEffect, useId, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { APP_CONFIG } from '@/constants'
+import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constants/timeouts'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/infra/supabase/clientClient'
+import { authFetch } from '@/lib/api-client'
+import { logger } from '@/lib/logger'
 import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
 
 /**
@@ -20,6 +24,7 @@ export default function TextChecker() {
   const { toast } = useToast()
   const componentId = useId()
   const checkCounter = useRef(0)
+  const [mounted, setMounted] = useState(false) // ハイドレーション対策
   const [text, setText] = useState('')
   const [checks, setChecks] = useState<CheckItem[]>([])
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null)
@@ -51,6 +56,12 @@ export default function TextChecker() {
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [dictionaryInfo, setDictionaryInfo] = useState<{ [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }>({})
   const originalTextRef = useRef<HTMLDivElement | null>(null)
+  
+  // ハイドレーション対策のマウント管理
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
   // EventSource を安全にクローズするユーティリティ（テスト環境で close が未実装の場合に備える）
   function safeCloseEventSource(source: EventSource | null | undefined) {
     try {
@@ -58,8 +69,12 @@ export default function TextChecker() {
       if (typeof maybeClose === 'function') {
         maybeClose.call(source)
       }
-    } catch {
-      // ignore errors in cleanup
+    } catch (error) {
+      logger.warn('EventSource cleanup failed', {
+        operation: 'safeCloseEventSource',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        readyState: source instanceof EventSource ? source.readyState : 'N/A'
+      })
     }
   }
   // キャンセル機能用のref
@@ -73,8 +88,9 @@ export default function TextChecker() {
   // キューステータス監視用SSE接続
   const globalStreamRef = useRef<EventSource | null>(null)
 
-  // キューステータス監視を開始
+  // キューステータス監視を開始（マウント後のみ）
   useEffect(() => {
+    if (!mounted) return // マウント前はSSE接続しない
     if (globalStreamRef.current) {
       safeCloseEventSource(globalStreamRef.current)
     }
@@ -113,7 +129,7 @@ export default function TextChecker() {
         globalStreamRef.current = null
       }
     })
-    }, 100) // 100ms遅延でSSE接続を開始
+    }, TIMEOUTS.DEBOUNCE_INPUT) // 遅延でSSE接続を開始
 
     return () => {
       clearTimeout(timer)
@@ -122,7 +138,7 @@ export default function TextChecker() {
       }
       globalStreamRef.current = null
     }
-  }, [supabase])
+  }, [supabase, mounted]) // mountedを依存配列に追加
 
   const handlePdfExport = async () => {
     setPdfError(null)
@@ -185,7 +201,7 @@ export default function TextChecker() {
         // Show fallback message for manual copy
         setCopySuccess('手動でコピーしてください')
       }
-      setTimeout(() => setCopySuccess(null), 2000)
+      setTimeout(() => setCopySuccess(null), APP_CONFIG.UI.TOAST_DURATION)
     } catch (error) {
       console.error('Copy failed:', error)
       // In test environment, still show success to avoid test failures
@@ -194,7 +210,7 @@ export default function TextChecker() {
       } else {
         setCopySuccess('コピーに失敗しました')
       }
-      setTimeout(() => setCopySuccess(null), 2000)
+      setTimeout(() => setCopySuccess(null), APP_CONFIG.UI.TOAST_DURATION)
     }
   }
 
@@ -205,8 +221,8 @@ export default function TextChecker() {
   const handleCheck = async () => {
     if (!text.trim()) return
     
-    if (text.length > 10000) {
-      setErrorMessage('テキストは10,000文字以内で入力してください。')
+    if (text.length > APP_CONFIG.TEXT_LIMITS.MAX_LENGTH) {
+      setErrorMessage(`テキストは${APP_CONFIG.TEXT_LIMITS.MAX_LENGTH.toLocaleString()}文字以内で入力してください。`)
       return
     }
 
@@ -288,7 +304,7 @@ export default function TextChecker() {
               ? { ...check, result: mockResult, status: 'completed', statusMessage: 'チェック完了' }
               : check
           ))
-        }, 300)
+        }, TIMEOUTS.DEBOUNCE_INPUT)
 
         return
       }
@@ -302,7 +318,7 @@ export default function TextChecker() {
       const sessionResult = await Promise.race([
         supabase.auth.getSession(),
         new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 200)
+          setTimeout(() => resolve({ data: { session: null } }), TIMEOUTS.SESSION_CHECK)
         ),
       ])
       const session = (sessionResult as { data?: { session?: { access_token?: string } } })?.data?.session
@@ -322,7 +338,7 @@ export default function TextChecker() {
       
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
 
-      const response = await fetch('/api/checks', {
+      const response = await authFetch('/api/checks', {
         method: 'POST',
         headers,
         credentials: 'same-origin', // Include cookies in the request
@@ -358,15 +374,23 @@ export default function TextChecker() {
       
       // 最適化されたポーリング: 処理タイプに応じたタイムアウト
       let pollCount = 0
-      // デフォルトはテキスト処理用、画像処理は動的に調整
-      const maxPolls = 90 // 1.5分（テキスト処理）
-      const pollIntervalMs = 1000 // 1秒間隔
       
-      // TODO: 将来的には画像処理の場合はより長いタイムアウトを設定
-      // if (isImageCheck) {
-      //   maxPolls = 180 // 3分（画像処理）
-      //   pollIntervalMs = 2000 // 2秒間隔
-      // }
+      // 処理タイプの判定（リクエストボディから画像URLの有無で判断）
+      const isImageCheck = JSON.stringify({ text: newCheckItem.originalText }).includes('image_url')
+      
+      // 処理タイプに応じた動的タイムアウト設定
+      const timeoutConfig = getProcessingTimeouts(isImageCheck)
+      const { maxPolls, pollIntervalMs, totalTimeoutMs, description } = timeoutConfig
+      
+      logger.info('Check processing started', {
+        operation: 'handleCheck',
+        checkId,
+        isImageCheck,
+        maxPolls,
+        pollIntervalMs,
+        totalTimeoutMinutes: getTimeoutInMinutes(totalTimeoutMs),
+        processingType: description
+      })
       
       const pollingIntervalId = setInterval(async () => {
         pollCount++
@@ -506,7 +530,7 @@ export default function TextChecker() {
                 }
               : check
           ))
-          setErrorMessage('処理がタイムアウトしました。もう一度お試しください。')
+          setErrorMessage(`${description}がタイムアウトしました（${getTimeoutInMinutes(totalTimeoutMs)}分）。もう一度お試しください。`)
         }
       }, pollIntervalMs) // 最適化されたポーリング間隔
       
@@ -524,7 +548,7 @@ export default function TextChecker() {
               }
             : check
         ))
-        setErrorMessage(`処理がタイムアウトしました（${Math.round(timeoutMs/60000)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
+        setErrorMessage(`${description}がタイムアウトしました（${getTimeoutInMinutes(totalTimeoutMs)}分）。AIの応答が遅い可能性があります。もう一度お試しください。`)
       }, timeoutMs)
 
       // キャンセル機能用のcontrollerを登録
@@ -694,7 +718,7 @@ export default function TextChecker() {
       try {
         const dbCheckId = checkId.split('-').pop() // extract database ID if needed
         if (dbCheckId && !isNaN(Number(dbCheckId))) {
-          await fetch(`/api/checks/${dbCheckId}/cancel`, {
+          await authFetch(`/api/checks/${dbCheckId}/cancel`, {
             method: 'POST',
             credentials: 'same-origin'
           })
@@ -894,6 +918,17 @@ export default function TextChecker() {
     )
   }
 
+  // ハイドレーションミスマッチを防ぐため、マウント前は統一された表示を返す
+  if (!mounted) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="text-center">
+          <div>読み込み中...</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
@@ -917,7 +952,7 @@ export default function TextChecker() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="min-h-[400px] resize-none"
-              maxLength={10000}
+              maxLength={APP_CONFIG.TEXT_LIMITS.MAX_LENGTH}
               aria-label="薬機法チェック用テキスト入力"
             />
             <div className="flex justify-between items-center mt-2">
@@ -1182,7 +1217,7 @@ export default function TextChecker() {
                                 <Button size="sm" variant="ghost" onClick={() => setSelectedViolationId(null)}>閉じる</Button>
                               </div>
                               <div className="mt-2 space-y-1 text-sm text-gray-900">
-                                <div><span className="text-gray-600">該当:</span> 「{text || '不明'}」</div>
+                                <div><span className="text-gray-600">該当:</span> 「{text ?? '不明'}」</div>
                                 <div><span className="text-gray-600">位置:</span> {v.startPos} - {v.endPos}</div>
                                 <div><span className="text-gray-600">理由:</span> {v.reason}</div>
                                 {dict && (
@@ -1252,7 +1287,7 @@ export default function TextChecker() {
                                 }
                               }
                               
-                              return `違反箇所 ${i + 1}\n位置: ${startPos} - ${endPos}\n該当テキスト: "${violationText || '不明'}"\n理由: ${v.reason}`
+                              return `違反箇所 ${i + 1}\n位置: ${startPos} - ${endPos}\n該当テキスト: "${violationText ?? '不明'}"\n理由: ${v.reason}`
                             }).join('\n\n')
                             
                             navigator.clipboard.writeText(violationText)
@@ -1280,7 +1315,7 @@ export default function TextChecker() {
                           <div className="text-base mb-2 leading-relaxed text-gray-900">
                             <strong>該当テキスト:</strong>{' '}
                             &ldquo;{(() => {
-                              return extractViolationText(activeCheck.result!.original_text, violation) || '不明'
+                              return extractViolationText(activeCheck.result!.original_text, violation) ?? '不明'
                             })()}&rdquo;
                           </div>
                           <div className="text-base leading-relaxed text-gray-900">

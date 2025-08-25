@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/hooks/use-toast'
+import { authFetch } from '@/lib/api-client'
 import { getAllTemplates, getTemplate } from '@/lib/report-templates'
 
 interface CustomReportGeneratorProps {
@@ -58,7 +59,7 @@ export default function CustomReportGenerator({ selectedCheckIds, onClose }: Cus
 
     setGenerating(true)
     try {
-      const response = await fetch('/api/reports/custom', {
+      const response = await authFetch('/api/reports/custom', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

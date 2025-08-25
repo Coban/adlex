@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * 組織取得APIのパラメータスキーマ
@@ -23,7 +23,7 @@ export const UpdateOrganizationRequestSchema = z.object({
     .max(100, '組織名は100文字以下である必要があります')
     .optional(),
   plan: z.enum(['trial', 'basic'], {
-    errorMap: () => ({ message: 'プランは "trial" または "basic" である必要があります' })
+    message: 'プランは "trial" または "basic" である必要があります'
   }).optional(),
   max_users: z.number()
     .int('最大ユーザー数は整数である必要があります')
@@ -73,8 +73,8 @@ export function validateGetOrganizationParams(data: unknown): ValidationResult<G
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -98,8 +98,8 @@ export function validateUpdateOrganizationParams(data: unknown): ValidationResul
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -123,8 +123,8 @@ export function validateUpdateOrganizationRequest(data: unknown): ValidationResu
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

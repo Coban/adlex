@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * チェック作成APIのリクエストスキーマ
@@ -8,7 +8,7 @@ export const CreateCheckRequestSchema = z.object({
     .min(1, 'テキストは1文字以上である必要があります')
     .max(10000, 'テキストは10,000文字以下である必要があります'),
   inputType: z.enum(['text', 'image'], {
-    errorMap: () => ({ message: '入力タイプは "text" または "image" である必要があります' })
+    message: '入力タイプは "text" または "image" である必要があります'
   }),
   fileName: z.string().optional()
 })
@@ -93,8 +93,8 @@ export function validateCreateCheckRequest(data: unknown): ValidationResult<Crea
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -118,8 +118,8 @@ export function validateGenerateCheckPdfParams(data: unknown): ValidationResult<
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

@@ -1,6 +1,10 @@
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Output file tracing root to fix workspace warnings
+  outputFileTracingRoot: __dirname,
+  
   // Server external packages for better compatibility
   serverExternalPackages: [
     '@supabase/node-fetch', 
@@ -31,7 +35,7 @@ const nextConfig: NextConfig = {
     
     // Externalize problematic packages for server
     if (isServer) {
-      config.externals = config.externals || [];
+      config.externals = config.externals ?? [];
       config.externals.push('@supabase/node-fetch');
     }
     

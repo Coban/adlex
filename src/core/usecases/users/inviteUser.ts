@@ -1,5 +1,7 @@
 import { AuthenticationError, ValidationError, ConflictError } from '@/core/domain/errors'
 import { RepositoryContainer } from '@/core/ports'
+import { emailService } from '@/lib/email'
+import { logger } from '@/lib/logger'
 
 /**
  * ユーザー招待のユースケース入力
@@ -111,8 +113,72 @@ export class InviteUserUseCase {
         }
       }
 
-      // TODO: メール送信処理を追加
-      // await emailService.sendInvitation(invitation)
+      // 招待者と組織の情報を取得
+      const inviterUser = await this.repositories.users.findById(input.currentUserId)
+      if (!inviterUser) {
+        logger.error('Current user not found for invitation', {
+          operation: 'inviteUser',
+          currentUserId: input.currentUserId,
+          inviteeEmail: input.email
+        })
+        return {
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: '招待者の情報が見つかりません' }
+        }
+      }
+
+      const organization = await this.repositories.organizations.findById(inviterUser.organization_id!)
+      if (!organization) {
+        logger.error('Organization not found for invitation', {
+          operation: 'inviteUser',
+          organizationId: inviterUser.organization_id?.toString(),
+          inviteeEmail: input.email
+        })
+        return {
+          success: false,
+          error: { code: 'ORGANIZATION_NOT_FOUND', message: '組織の情報が見つかりません' }
+        }
+      }
+
+      // メール送信処理を実行
+      try {
+        await emailService.sendInvitation({
+          to: invitation.email,
+          invitationId: invitation.id.toString(),
+          organizationName: organization.name,
+          inviterName: inviterUser.email ?? 'Unknown', // プロフィール名があれば使用
+          role: invitation.role ?? 'user'
+        })
+
+        logger.info('Invitation email sent successfully', {
+          operation: 'inviteUser',
+          inviteeEmail: input.email,
+          organizationName: organization.name,
+          role: invitation.role
+        })
+      } catch (emailError) {
+        logger.error('Failed to send invitation email', {
+          operation: 'inviteUser',
+          inviteeEmail: input.email,
+          error: emailError instanceof Error ? emailError.message : 'Unknown error'
+        })
+        
+        // メール送信失敗時は招待レコードを削除（整合性保持）
+        try {
+          await this.repositories.userInvitations.delete(invitation.id)
+        } catch (deleteError) {
+          logger.error('Failed to cleanup invitation after email failure', {
+            operation: 'inviteUser',
+            invitationId: invitation.id,
+            error: deleteError instanceof Error ? deleteError.message : 'Unknown error'
+          })
+        }
+
+        return {
+          success: false,
+          error: { code: 'EMAIL_SEND_FAILED', message: 'メール送信に失敗しました' }
+        }
+      }
 
       return {
         success: true,

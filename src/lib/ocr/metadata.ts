@@ -368,3 +368,94 @@ export class OcrMetadataManager {
 
 // デフォルトのメタデータマネージャーインスタンス
 export const defaultOcrMetadataManager = new OcrMetadataManager()
+
+/**
+ * シンプルなOCRメタデータインターface（後方互換性）
+ * 軽量バージョンとの互換性を保つための簡易インターface
+ */
+export interface SimpleOcrMetadata {
+  /** 処理開始時刻 */
+  startTime: number
+  /** 処理完了時刻 */
+  endTime: number
+  /** 使用プロバイダー */
+  provider: string
+  /** 使用モデル */
+  model: string
+  /** 信頼度スコア */
+  confidenceScore: number
+  /** エラーフラグ */
+  hasError: boolean
+}
+
+/**
+ * 軽量メタデータキャッシュ（統計用）
+ */
+const metadataCache = new Map<string, SimpleOcrMetadata>()
+
+/**
+ * 軽量メタデータ記録（main ブランチからの機能）
+ */
+export function recordOcrSession(
+  provider: string,
+  model: string, 
+  performance: {
+    startTime: number
+    endTime: number
+    confidenceScore: number
+    hasError: boolean
+  }
+): void {
+  const sessionId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  metadataCache.set(sessionId, {
+    startTime: performance.startTime,
+    endTime: performance.endTime,
+    provider,
+    model,
+    confidenceScore: performance.confidenceScore,
+    hasError: performance.hasError
+  })
+}
+
+/**
+ * 軽量統計情報取得（main ブランチからの機能）
+ */
+export function getOcrStatistics() {
+  if (metadataCache.size === 0) {
+    return {
+      totalSessions: 0,
+      avgProcessingTime: 0,
+      avgConfidenceScore: 0,
+      providerDistribution: {},
+      errorRate: 0
+    }
+  }
+
+  const sessions = Array.from(metadataCache.values())
+  const totalTime = sessions.reduce((sum, session) => {
+    return sum + (session.endTime - session.startTime)
+  }, 0)
+  const avgProcessingTime = totalTime / sessions.length
+
+  const totalConfidence = sessions.reduce((sum, session) => {
+    return sum + (session.confidenceScore || 0)
+  }, 0)
+  const avgConfidenceScore = totalConfidence / sessions.length
+
+  const providerDistribution = sessions.reduce((dist, session) => {
+    const provider = session.provider
+    dist[provider] = (dist[provider] || 0) + 1
+    return dist
+  }, {} as Record<string, number>)
+
+  const errorCount = sessions.filter(session => session.hasError).length
+  const errorRate = errorCount / sessions.length
+
+  return {
+    totalSessions: metadataCache.size,
+    avgProcessingTime,
+    avgConfidenceScore,
+    providerDistribution,
+    errorRate
+  }
+}

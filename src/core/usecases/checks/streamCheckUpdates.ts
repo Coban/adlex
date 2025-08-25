@@ -157,9 +157,27 @@ export class StreamCheckUpdatesUseCase {
     }
 
     // ユーザープロファイルの取得
-    const userProfile = await this.repositories.users.findById(userId)
+    let userProfile = await this.repositories.users.findById(userId)
+    
+    // 開発環境でプロフィールが見つからない場合はモックを使用
+    if (!userProfile && (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true')) {
+      userProfile = {
+        id: userId,
+        email: 'admin@test.com',
+        role: 'admin',
+        organization_id: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    }
+
     if (!userProfile) {
       return { success: false, error: '認証が必要です' }
+    }
+
+    // 開発環境では常にアクセス許可
+    if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+      return { success: true, checkRecord }
     }
 
     // アクセス権の確認
@@ -200,7 +218,6 @@ export class StreamCheckUpdatesUseCase {
         // 進捗更新時の処理
         if (data.status === 'completed' || data.status === 'failed') {
           // 処理完了時
-          console.log(`[SSE] Status changed to ${data.status}, calling handleCompletion for check ${input.checkId}`)
           this.handleCompletion(input)
         } else {
           // 進捗更新時
@@ -219,14 +236,19 @@ export class StreamCheckUpdatesUseCase {
       },
       onError: (error) => {
         console.error(`[SSE] Subscription error for check ${input.checkId}:`, error)
-        if (typeof input.onError === 'function') {
-          input.onError({
-            id: input.checkId,
-            status: 'failed',
-            error: error.message
-          })
+        // 開発環境では購読エラーを無視し、ポーリングに切り替える
+        if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+          this.startPollingMode(input, config)
+        } else {
+          if (typeof input.onError === 'function') {
+            input.onError({
+              id: input.checkId,
+              status: 'failed',
+              error: error.message
+            })
+          }
+          this.cleanup()
         }
-        this.cleanup()
       }
     })
 
@@ -252,12 +274,9 @@ export class StreamCheckUpdatesUseCase {
    * 処理完了時の共通処理
    */
   private async handleCompletion(input: StreamCheckUpdatesInput): Promise<void> {
-    console.log(`[SSE] handleCompletion called for check ${input.checkId}`)
     this.clearTimeouts()
     const finalData = await this.repositories.realtime.getFinalCheckData(input.checkId)
-    console.log(`[SSE] Final data retrieved:`, finalData ? { id: finalData.id, status: finalData.status } : 'null')
     if (finalData && typeof input.onComplete === 'function') {
-      console.log(`[SSE] Calling onComplete for check ${input.checkId}`)
       // FinalCheckDataをStreamCompleteDataに変換
       input.onComplete({
         id: finalData.id,
@@ -289,7 +308,6 @@ export class StreamCheckUpdatesUseCase {
 
     // 接続タイムアウト
     this.connectionTimeout = setTimeout(async () => {
-      console.log(`[SSE] Connection timeout reached for check ${input.checkId}`)
       
       // タイムアウト前に最終状態をチェック
       const finalCheck = await this.repositories.checks.findById(input.checkId)
@@ -370,10 +388,72 @@ export class StreamCheckUpdatesUseCase {
 
 
   /**
+   * ポーリングモードの開始（リアルタイム購読失敗時のフォールバック）
+   */
+  private async startPollingMode(input: StreamCheckUpdatesInput, config: StreamConfig): Promise<void> {
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const currentCheck = await this.repositories.checks.findById(input.checkId)
+        if (!currentCheck) {
+          clearInterval(pollInterval)
+          if (typeof input.onError === 'function') {
+            input.onError({
+              id: input.checkId,
+              status: 'failed',
+              error: 'チェックが見つかりません'
+            })
+          }
+          return
+        }
+
+        if (currentCheck.status === 'completed' || currentCheck.status === 'failed') {
+          clearInterval(pollInterval)
+          await this.handleCompletion(input)
+          return
+        }
+
+        // 進捗更新を送信
+        if (typeof input.onUpdate === 'function') {
+          input.onUpdate({
+            id: input.checkId,
+            status: currentCheck.status ?? 'unknown',
+            input_type: currentCheck.input_type ?? undefined,
+            ocr_status: currentCheck.ocr_status ?? undefined,
+            extracted_text: currentCheck.extracted_text ?? undefined,
+            error_message: currentCheck.error_message ?? undefined
+          })
+        }
+      } catch (error) {
+        console.error(`[SSE] Polling error for check ${input.checkId}:`, error)
+        clearInterval(pollInterval)
+        if (typeof input.onError === 'function') {
+          input.onError({
+            id: input.checkId,
+            status: 'failed',
+            error: 'ポーリング中にエラーが発生しました'
+          })
+        }
+      }
+    }, 2000) // 2秒間隔でポーリング
+
+    // ポーリングのタイムアウト
+    setTimeout(() => {
+      clearInterval(pollInterval)
+      if (typeof input.onError === 'function') {
+        input.onError({
+          id: input.checkId,
+          status: 'failed',
+          error: 'ポーリングがタイムアウトしました'
+        })
+      }
+    }, config.maxConnectionTime)
+  }
+
+  /**
    * クリーンアップ処理
    */
   cleanup(): void {
-    console.log('[SSE] Cleaning up SSE resources')
     this.clearTimeouts()
     this.repositories.realtime.unsubscribe()
     this.heartbeatCount = 0

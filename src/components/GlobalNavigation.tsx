@@ -84,6 +84,8 @@ export default function GlobalNavigation() {
     if (!mounted) {
       return !item.requireAuth
     }
+    
+    
     if (item.requireAuth && !user) return false
     if (item.requireRole && userProfile?.role !== item.requireRole) return false
     return true
@@ -91,6 +93,9 @@ export default function GlobalNavigation() {
 
   const visibleItems = navigationItems.filter(shouldShowItem)
   const mobileVisibleItems = visibleItems.filter(item => item.showInMobile !== false)
+
+  // ハイドレーションミスマッチを防ぐために組織名を安定化
+  const displayOrgName = mounted ? (organization?.name ?? 'AdLex') : 'AdLex'
 
   return (
     <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
@@ -100,7 +105,7 @@ export default function GlobalNavigation() {
           <div className="flex items-center space-x-8">
             {/* ロゴ */}
             <Link href="/" className="flex items-center space-x-2">
-              {organization?.icon_url ? (
+              {mounted && organization?.icon_url ? (
                 <Image
                   src={organization.icon_url}
                   alt={`${organization.name}のアイコン`}
@@ -113,7 +118,7 @@ export default function GlobalNavigation() {
                   <FileText className="w-5 h-5 text-white" />
                 </div>
               )}
-              {organization?.logo_url ? (
+              {mounted && organization?.logo_url ? (
                 <Image
                   src={organization.logo_url}
                   alt={`${organization.name}のロゴ`}
@@ -123,7 +128,7 @@ export default function GlobalNavigation() {
                 />
               ) : (
                 <span className="text-xl font-bold text-gray-900">
-                  {organization?.name ?? 'AdLex'}
+                  {displayOrgName}
                 </span>
               )}
             </Link>

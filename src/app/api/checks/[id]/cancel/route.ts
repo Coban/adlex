@@ -6,7 +6,7 @@ import { createClient } from '@/infra/supabase/serverClient'
 
 export async function POST(
   _: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
     const supabase = await createClient()
@@ -20,9 +20,11 @@ export async function POST(
       )
     }
 
+    // Next.js 15: params is now a Promise
+    const { id } = await params
     const repositories = await getRepositories(supabase)
     const useCase = new CancelCheckUseCase(repositories)
-    const result = await useCase.execute({ checkId: parseInt(params.id), currentUserId: user.id })
+    const result = await useCase.execute({ checkId: parseInt(id), currentUserId: user.id })
 
     if (!result.success) {
       const statusCode = result.code === 'AUTHENTICATION_ERROR' ? 401

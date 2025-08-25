@@ -34,6 +34,7 @@ yarn-error.log*
 .env
 .env.local
 .env.e2e
+.env.e2e.auth
 .env.test
 
 # vercel
@@ -47,6 +48,7 @@ next-env.d.ts
 playwright-report
 playwright/.auth/
 
+test-reports
 test-results
 
 # log

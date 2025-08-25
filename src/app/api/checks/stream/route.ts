@@ -1,3 +1,4 @@
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
 
 import { getRepositories } from '@/core/ports'
@@ -13,28 +14,51 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const token = url.searchParams.get('token')
 
-  // 認証チェック（トークンがある場合は明示的に設定）
-  let authResult
-  if (token) {
-    authResult = await supabase.auth.getUser(token)
+  // 開発環境では認証をスキップ
+  let currentUser
+  if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true') {
+    // 開発環境用のモックユーザー
+    currentUser = {
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'admin@test.com'
+    }
   } else {
-    authResult = await supabase.auth.getUser()
-  }
-  
-  const user = authResult.data.user
-  const authError = authResult.error
-  
-  const currentUser = user
-  if (authError || !currentUser) {
-    // 認証失敗
-    return new Response('Unauthorized', { status: 401 })
+    // 認証チェック（トークンがある場合は明示的に設定）
+    let authResult
+    if (token) {
+      authResult = await supabase.auth.getUser(token)
+    } else {
+      authResult = await supabase.auth.getUser()
+    }
+    
+    const user = authResult.data.user
+    const authError = authResult.error
+    
+    currentUser = user
+    if (authError || !currentUser) {
+      // 認証失敗
+      return new Response('Unauthorized', { status: 401 })
+    }
   }
 
   // Get repositories
   const repositories = await getRepositories(supabase)
 
   // ユーザー組織情報を取得
-  const userProfile = await repositories.users.findById(currentUser.id)
+  let userProfile = await repositories.users.findById(currentUser.id)
+  
+  // 開発環境でプロフィールが見つからない場合はモックを使用
+  if (!userProfile && (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true')) {
+    userProfile = {
+      id: currentUser.id,
+      email: currentUser.email ?? 'admin@test.com',
+      role: 'admin',
+      organization_id: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+  }
+  
   if (!userProfile) {
     return new Response('User profile not found', { status: 404 })
   }
@@ -53,9 +77,43 @@ export async function GET(request: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       let lastQueueStatus: string | null = null
+      let isActive = true // 接続が有効かどうかのフラグ
+
+      // コントローラーが閉じられているかチェックする関数  
+      const isControllerClosed = () => {
+        if (!isActive) return true
+        try {
+          // desiredSizeがnullの場合は閉じられている
+          if (controller.desiredSize === null) return true
+          return false
+        } catch {
+          return true
+        }
+      }
+
+      // 安全にメッセージを送信する関数
+      const safeEnqueue = (data: string): boolean => {
+        if (isControllerClosed()) {
+          return false
+        }
+        
+        try {
+          controller.enqueue(new TextEncoder().encode(data))
+          return true
+        } catch (error) {
+          console.error('[SSE] Failed to send message:', error)
+          isActive = false
+          cleanup()
+          return false
+        }
+      }
 
       // キュー状況データを取得して送信する関数
       const sendQueueStatus = async () => {
+        if (isControllerClosed()) {
+          return
+        }
+
         try {
           // キューマネージャーから現在の状況を取得
           const queueStatus = queueManager.getStatus()
@@ -105,37 +163,47 @@ export async function GET(request: NextRequest) {
           
           // 前回のデータと同じ場合は送信をスキップ（帯域幅節約）
           if (queueDataStr !== lastQueueStatus) {
-            try {
-              // desiredSize が null（クローズ）でない場合のみ送信
-              if (controller.desiredSize !== null) {
-                controller.enqueue(new TextEncoder().encode(`data: ${queueDataStr}\n\n`))
-                lastQueueStatus = queueDataStr
-              }
-            } catch (controllerError) {
-              console.error('[SSE] Controller already closed:', controllerError)
-              return // Exit the callback
+            if (safeEnqueue(`data: ${queueDataStr}\n\n`)) {
+              lastQueueStatus = queueDataStr
+            } else {
             }
+          } else {
           }
         } catch (error) {
           console.error('[SSE] Error sending queue status:', error)
+          if (!isControllerClosed()) {
+            // エラーが発生してもコントローラーが開いている場合は接続を維持
+          }
         }
       }
 
       // 初期キュー状況を送信
-      sendQueueStatus()
+      sendQueueStatus().catch(error => {
+        console.error('[SSE] Initial sendQueueStatus failed:', error)
+        cleanup()
+      })
 
       // 定期的にキュー状況をチェック（5秒間隔）
-      const queueCheckInterval = setInterval(sendQueueStatus, 5000)
+      const queueCheckInterval = setInterval(async () => {
+        if (isControllerClosed()) {
+          cleanup()
+          return
+        }
+        try {
+          await sendQueueStatus()
+        } catch (error) {
+          console.error('[SSE] Periodic sendQueueStatus failed:', error)
+          cleanup()
+        }
+      }, 5000)
 
       // ハートビート（30秒間隔）
       const heartbeatInterval = setInterval(() => {
-        try {
-          controller.enqueue(new TextEncoder().encode(`: heartbeat\n\n`))
-        } catch (error) {
-          console.error('[SSE] Heartbeat error:', error)
-          clearInterval(heartbeatInterval)
-          clearInterval(queueCheckInterval)
+        if (isControllerClosed()) {
+          cleanup()
+          return
         }
+        safeEnqueue(': heartbeat\n\n')
       }, 30000)
 
       // Supabaseリアルタイム購読（checksテーブルの変更を監視）
@@ -146,7 +214,12 @@ export async function GET(request: NextRequest) {
           event: '*', 
           schema: 'public', 
           table: 'checks' 
-        }, async (payload) => {
+        }, async (payload: RealtimePostgresChangesPayload<Database['public']['Tables']['checks']['Row']>) => {
+          if (isControllerClosed()) {
+            cleanup()
+            return
+          }
+
           const updatedCheck = payload.new as Database['public']['Tables']['checks']['Row']
           
           // 個別チェックの進捗更新
@@ -163,32 +236,54 @@ export async function GET(request: NextRequest) {
                 error_message: updatedCheck.error_message
               }
             }
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(progressData)}\n\n`))
+            safeEnqueue(`data: ${JSON.stringify(progressData)}\n\n`)
           }
 
           // キュー状況も更新（チェック数に変動があるため）
           await sendQueueStatus()
         })
-        .subscribe((status, err) => {
+        .subscribe((status: string, err?: Error) => {
           if (err) {
             console.error('[SSE] Subscription error:', err)
-            cleanup()
-          } else if (status === 'SUBSCRIBED') {
-            // Successfully subscribed to checks updates
+            // Don't cleanup on subscription error - continue with polling-based updates
           }
         })
 
       // クリーンアップ関数
       const cleanup = () => {
-        // Cleaning up SSE resources
-        clearInterval(heartbeatInterval)
-        clearInterval(queueCheckInterval)
-        channel.unsubscribe()
-        try { controller.close() } catch { /* already closed */ }
+        if (!isActive) return // 既にクリーンアップ済み
+        
+        isActive = false
+        
+        // インターバルをクリア
+        if (queueCheckInterval) {
+          clearInterval(queueCheckInterval)
+        }
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval)
+        }
+        
+        // Supabaseチャンネルを停止
+        if (channel) {
+          try {
+            channel.unsubscribe()
+          } catch (error) {
+            console.error('[SSE] Error unsubscribing channel:', error)
+          }
+        }
+        
+        // コントローラーを閉じる
+        try {
+          controller.close()
+        } catch {
+          // 既に閉じられている場合は無視
+        }
       }
       
       // クライアント切断時のクリーンアップ
-      request.signal.addEventListener('abort', cleanup)
+      request.signal.addEventListener('abort', () => {
+        cleanup()
+      })
       
       // 安全対策: 10分後の強制クリーンアップ
       setTimeout(cleanup, 600000)

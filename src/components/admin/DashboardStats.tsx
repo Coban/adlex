@@ -159,22 +159,22 @@ export function DashboardStats() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">ステータス</p>
-              <p className={`text-2xl font-bold ${getHealthColor(performanceData.systemHealth.status)}`}>
-                {performanceData.systemHealth.status === 'healthy' ? '正常' : 
-                 performanceData.systemHealth.status === 'warning' ? '警告' : 'クリティカル'}
+              <p className={`text-2xl font-bold ${getHealthColor(performanceData?.systemHealth?.status ?? 'critical')}`}>
+                {performanceData?.systemHealth?.status === 'healthy' ? '正常' : 
+                 performanceData?.systemHealth?.status === 'warning' ? '警告' : 'クリティカル'}
               </p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">稼働率</p>
-              <p className="text-2xl font-bold">{performanceData.systemHealth.uptime}</p>
+              <p className="text-2xl font-bold">{performanceData?.systemHealth?.uptime ?? 'N/A'}</p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">成功率</p>
-              <p className="text-2xl font-bold text-green-600">{performanceData.performance.successRate}%</p>
+              <p className="text-2xl font-bold text-green-600">{performanceData?.performance?.successRate ?? '0'}%</p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">エラー率</p>
-              <p className="text-2xl font-bold text-red-600">{performanceData.performance.errorRate}%</p>
+              <p className="text-2xl font-bold text-red-600">{performanceData?.performance?.errorRate ?? '0'}%</p>
             </div>
           </div>
         </CardContent>
@@ -218,9 +218,9 @@ export function DashboardStats() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{performanceData.performance.avgProcessingTime}秒</div>
+            <div className="text-2xl font-bold">{performanceData?.performance?.avgProcessingTime ?? 'N/A'}秒</div>
             <p className="text-xs text-muted-foreground">
-              最小: {performanceData.performance.minProcessingTime}秒 / 最大: {performanceData.performance.maxProcessingTime}秒
+              最小: {performanceData?.performance?.minProcessingTime ?? 'N/A'}秒 / 最大: {performanceData?.performance?.maxProcessingTime ?? 'N/A'}秒
             </p>
           </CardContent>
         </Card>
@@ -284,7 +284,7 @@ export function DashboardStats() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {Object.entries(performanceData.statusBreakdown).map(([status, count]) => (
+                {Object.entries(performanceData?.statusBreakdown ?? {}).map(([status, count]) => (
                   <div key={status} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {status === 'completed' && <CheckCircle className="h-4 w-4 text-green-600" />}
@@ -295,7 +295,7 @@ export function DashboardStats() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{count}件</span>
                       <Progress 
-                        value={(count / performanceData.performance.totalChecks24h) * 100} 
+                        value={performanceData?.performance?.totalChecks24h ? (count / performanceData.performance.totalChecks24h) * 100 : 0} 
                         className="w-24 h-2"
                       />
                     </div>
@@ -312,7 +312,7 @@ export function DashboardStats() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {performanceData.hourlyActivity.slice(-12).map((hour) => (
+                {(performanceData?.hourlyActivity ?? []).slice(-12).map((hour) => (
                   <div key={hour.hour} className="flex items-center justify-between text-sm">
                     <span className="w-12">{hour.hour}</span>
                     <div className="flex-1 mx-2">

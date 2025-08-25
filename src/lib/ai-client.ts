@@ -26,7 +26,7 @@ export {
   createEmbedding,
   extractTextFromImageWithLLM,
   extractTextFromImage,
-  getEmbeddingDimension,
+  getEmbeddingDimensions,
   estimateOcrConfidence
 } from './ai-client/main'
 

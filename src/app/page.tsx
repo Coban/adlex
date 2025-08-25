@@ -1,12 +1,29 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function Home() {
   const { user, loading, userProfile } = useAuth()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // 「hydration mismatch」を防ぐため、クライアントサイドでの初回レンダリングまで待機
+  if (!mounted) {
+    return (
+      <div className="max-w-4xl mx-auto p-4">
+        <div className="text-center py-8">
+          <div>読み込み中...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-4">

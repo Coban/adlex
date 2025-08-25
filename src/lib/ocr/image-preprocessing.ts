@@ -47,6 +47,29 @@ export interface ProcessedImage {
 }
 
 /**
+ * 軽量版の画像前処理結果（後方互換性）
+ */
+export interface ImageProcessingResult {
+  originalSize: number
+  processedSize: number
+  dimensions: {
+    width: number
+    height: number
+  }
+  format: string
+  processingTimeMs: number
+}
+
+// デフォルトオプション
+const DEFAULT_OPTIONS: Required<ImageProcessingOptions> = {
+  maxWidth: 2048,
+  maxHeight: 2048,
+  quality: 85,
+  format: 'jpeg',
+  asDataUrl: true
+}
+
+/**
  * Base64文字列から画像サイズを計算する
  */
 function calculateBase64Size(base64: string): number {
@@ -96,6 +119,26 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onload = () => resolve(img)
     img.onerror = reject
     img.src = src
+  })
+}
+
+/**
+ * ブラウザ環境での画像前処理
+ */
+async function loadImageFromFile(imageFile: File | Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    
+    img.onload = () => {
+      URL.revokeObjectURL(img.src)
+      resolve(img)
+    }
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image'))
+    }
+
+    img.src = URL.createObjectURL(imageFile)
   })
 }
 
@@ -248,6 +291,66 @@ export async function preprocessImage(
 }
 
 /**
+ * 画像を前処理する（Node.js環境用）
+ * Sharp が利用できない場合の基本的な処理
+ */
+export async function preprocessImageNode(
+  imageBuffer: Buffer,
+  options: ImageProcessingOptions = {}
+): Promise<ImageProcessingResult> {
+  const opts = { ...DEFAULT_OPTIONS, ...options }
+  const startTime = Date.now()
+
+  // Node.js環境では基本的な処理のみ
+  const base64 = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`
+  
+  // モック処理（実際の画像処理はブラウザ環境で行う）
+  return {
+    originalSize: imageBuffer.length,
+    processedSize: imageBuffer.length,
+    dimensions: {
+      width: opts.maxWidth || 1024,
+      height: opts.maxHeight || 768
+    },
+    format: opts.format,
+    processingTimeMs: Date.now() - startTime
+  }
+}
+
+/**
+ * ブラウザ環境での画像前処理
+ */
+export async function preprocessImageBrowser(
+  imageFile: File | Blob,
+  options: ImageProcessingOptions = {}
+): Promise<ImageProcessingResult> {
+  const opts = { ...DEFAULT_OPTIONS, ...options }
+  const startTime = Date.now()
+
+  const img = await loadImageFromFile(imageFile)
+  
+  // リサイズ計算
+  const scale = Math.min(
+    (opts.maxWidth || 2048) / img.naturalWidth,
+    (opts.maxHeight || 2048) / img.naturalHeight,
+    1
+  )
+
+  const processedDimensions = {
+    width: Math.floor(img.naturalWidth * scale),
+    height: Math.floor(img.naturalHeight * scale)
+  }
+
+  return {
+    originalSize: imageFile.size,
+    processedSize: Math.floor(imageFile.size * scale * scale), // 概算
+    dimensions: processedDimensions,
+    format: opts.format,
+    processingTimeMs: Date.now() - startTime
+  }
+}
+
+/**
  * 画像形式を検出する
  * 
  * @param imageData Base64またはBlob形式の画像データ
@@ -352,5 +455,23 @@ export function resetProcessingStats(): void {
     averageProcessingTime: 0,
     averageCompressionRatio: 0,
     totalSizeSaved: 0
+  }
+}
+
+/**
+ * 環境に応じた画像前処理（統合インターface）
+ */
+export async function processImage(
+  input: File | Blob | Buffer, 
+  options: ImageProcessingOptions = {}
+): Promise<ImageProcessingResult> {
+  if (typeof window !== 'undefined' && (input instanceof File || input instanceof Blob)) {
+    // ブラウザ環境
+    return preprocessImageBrowser(input, options)
+  } else if (Buffer.isBuffer(input)) {
+    // Node.js環境
+    return preprocessImageNode(input, options)
+  } else {
+    throw new Error('Unsupported input type or environment')
   }
 }
