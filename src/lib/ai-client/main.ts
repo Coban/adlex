@@ -121,7 +121,7 @@ function detectTextLanguage(text: string): string {
 /**
  * OCRエラーを分類
  */
-function categorizeOcrError(error: Error): OcrMetadata['error']['type'] {
+function categorizeOcrError(error: Error): NonNullable<OcrMetadata['error']>['type'] {
   const message = error.message.toLowerCase()
   
   if (message.includes('timeout')) return 'timeout'

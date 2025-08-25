@@ -35,7 +35,8 @@ export class UpdateEmbeddingUseCase {
       }
 
       // 埋め込みベクトル生成
-      const vector = await createEmbedding(phrase)
+      const embeddingResult = await createEmbedding(phrase)
+      const vector = embeddingResult.data[0].embedding
       
       // ベクトル更新
       const updated = await this.repositories.dictionaries.updateVector(dictionaryId, vector)

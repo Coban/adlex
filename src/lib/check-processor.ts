@@ -387,7 +387,7 @@ async function performActualCheck(
   }
 
   // 処理済みテキストを使用して通常のテキスト処理を継続
-  let referenceEntries: Array<{ id: number; phrase: string; category: string; similarity?: number }> = []
+  let referenceEntries: Array<{ id: number; phrase: string; category: 'NG' | 'ALLOW'; similarity?: number }> = []
   
   // 組織+テキストハッシュごとの類似フレーズキャッシュキー
   const textHash = CacheUtils.hashText(processedText)
@@ -409,7 +409,8 @@ async function performActualCheck(
         const embeddingText = processedText.length > 1000 
           ? processedText.substring(0, 1000) + '...'
           : processedText
-        embedding = await createEmbedding(embeddingText)
+        const embeddingResult = await createEmbedding(embeddingText)
+        embedding = embeddingResult.data[0].embedding
         cache.set(embeddingKey, embedding, 15 * 60 * 1000) // 15分TTL（長い文章用に延長）
       } catch (embeddingError) {
         console.error(`[CHECK] チェック ${checkId} の埋め込み生成に失敗しました:`, embeddingError)
@@ -468,7 +469,7 @@ async function performActualCheck(
       .map(entry => ({
         id: entry.id,
         phrase: entry.phrase,
-        category: entry.category,
+        category: entry.category as 'NG' | 'ALLOW',
         similarity: entry.combined_score // 関連性には統合スコアを使用
       }))
       .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))

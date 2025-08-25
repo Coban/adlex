@@ -138,10 +138,11 @@ describe('AIクライアント', () => {
       it('テストモードでモック埋め込みを返すこと', async () => {
         const result = await actualAIClient.createEmbedding('Test text')
 
-        expect(result).toEqual(expect.any(Array))
-        expect(result).toHaveLength(384)
-        expect(result.every(val => typeof val === 'number')).toBe(true)
-        expect(result.every(val => val >= -0.5 && val <= 0.5)).toBe(true)
+        expect(result.data).toEqual(expect.any(Array))
+        expect(result.data).toHaveLength(1)
+        expect(result.data[0].embedding).toHaveLength(1536)
+        expect(result.data[0].embedding.every(val => typeof val === 'number')).toBe(true)
+        expect(result.data[0].embedding.every(val => val >= -0.5 && val <= 0.5)).toBe(true)
 
         expect(mockFetch).not.toHaveBeenCalled()
       })

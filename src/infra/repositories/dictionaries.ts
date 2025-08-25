@@ -200,7 +200,8 @@ export class SupabaseDictionariesRepository
       // Embedding生成
       let vector: number[] | null = null
       try {
-        vector = await createEmbedding(data.phrase.trim())
+        const embeddingResult = await createEmbedding(data.phrase.trim())
+        vector = embeddingResult.data[0].embedding
       } catch (embeddingError) {
         console.warn('Embedding生成に失敗しました:', embeddingError)
         // Embedding生成に失敗してもアイテム作成は続行
