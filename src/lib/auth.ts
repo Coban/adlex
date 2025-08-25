@@ -609,23 +609,34 @@ export async function inviteUserToOrganization(email: string, organizationId: nu
   
   const supabase = createClient();
   
-  // 現在のユーザーIDを取得
+  // 現在のユーザーIDを取得 - セキュリティ上必須
   let currentUserId = '';
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError) {
-      logger.warn('Failed to get current user for invitation', {
+      logger.error('Failed to get current user for invitation', {
         operation: 'inviteUserToOrganization',
         error: userError.message
       });
-    } else if (user) {
-      currentUserId = user.id;
+      throw ErrorFactory.createAuthenticationError('Authentication required for user invitation');
     }
+    
+    if (!user) {
+      throw ErrorFactory.createAuthenticationError('No authenticated user found for invitation');
+    }
+    
+    currentUserId = user.id;
   } catch (error) {
     logger.error('Exception while getting current user for invitation', {
       operation: 'inviteUserToOrganization',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
+    
+    // 認証エラーを再スローし、招待処理を中止
+    if (error instanceof Error && error.message.includes('Authentication')) {
+      throw error;
+    }
+    throw ErrorFactory.createAuthenticationError('Authentication verification failed for user invitation');
   }
   
   const { data, error } = await supabase.from('user_invitations').insert({
@@ -633,7 +644,7 @@ export async function inviteUserToOrganization(email: string, organizationId: nu
     organization_id: organizationId,
     role,
     token: 'invite-token-' + Date.now(),
-    invited_by: currentUserId || 'system'
+    invited_by: currentUserId // 必ず有効なユーザーIDを使用
   }).select().single();
   
   if (error) {

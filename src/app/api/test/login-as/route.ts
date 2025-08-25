@@ -21,13 +21,29 @@ function productionHandler() {
   );
 }
 
+// セキュリティチェック: 複数の環境変数で二重確認
+function isTestEnvironmentSafe() {
+  // 本番環境では絶対に無効
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  
+  // Vercel本番環境での追加チェック
+  if (process.env.VERCEL_ENV === 'production') {
+    return false;
+  }
+  
+  // 明示的にテストエンドポイントが有効化されている場合のみ許可
+  return process.env.ENABLE_TEST_ENDPOINTS === 'true';
+}
+
 /**
  * テストユーザーとしてログイン
  * POST /api/test/login-as
  */
 export async function POST(request: NextRequest) {
-  // 本番環境チェック - 最優先でセキュリティを確保
-  if (process.env.NODE_ENV === 'production') {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
     return productionHandler();
   }
 
@@ -133,8 +149,8 @@ export async function POST(request: NextRequest) {
  * DELETE /api/test/login-as
  */
 export async function DELETE() {
-  // 本番環境チェック
-  if (process.env.NODE_ENV === 'production') {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
     return productionHandler();
   }
 
@@ -174,8 +190,8 @@ export async function DELETE() {
  * GET /api/test/login-as
  */
 export async function GET() {
-  // 本番環境チェック
-  if (process.env.NODE_ENV === 'production') {
+  // セキュリティチェック - 複数の環境変数で二重確認
+  if (!isTestEnvironmentSafe()) {
     return productionHandler();
   }
 
@@ -199,6 +215,6 @@ export async function GET() {
         description: 'Get endpoint information'
       }
     },
-    security: 'Only available in NODE_ENV=test, completely disabled in production'
+    security: 'Only available when ENABLE_TEST_ENDPOINTS=true and NODE_ENV!=production, completely disabled in production'
   });
 }

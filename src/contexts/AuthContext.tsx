@@ -58,11 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (userResult.error) {
         console.error('[AuthContext] User query error:', userResult.error)
-        // エラーでも続行して、モックデータを設定
+        // セキュリティ上、エラー時は最小権限（user）を設定
         const mockProfile = {
           id: userId,
-          email: 'admin@test.com',
-          role: 'admin',
+          email: user?.email || 'unknown@test.com',
+          role: 'user', // セキュリティ: デフォルトは一般ユーザー
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -85,11 +85,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!userResult.data) {
-        // データベースにユーザーが見つからない場合、モック管理者プロファイルを作成
+        // データベースにユーザーが見つからない場合、最小権限プロファイルを作成
         const mockProfile = {
           id: userId,
-          email: 'admin@test.com',
-          role: 'admin',
+          email: user?.email || 'unknown@test.com',
+          role: 'user', // セキュリティ: デフォルトは一般ユーザー
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -145,12 +145,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         errorStack: error instanceof Error ? error.stack : undefined
       })
       
-      // エラーの場合でも開発環境では管理者プロファイルを設定
+      // エラーの場合、開発環境でも最小権限プロファイルを設定
       if (process.env.NODE_ENV === 'development') {
         const fallbackProfile = {
           id: userId,
-          email: 'admin@test.com',
-          role: 'admin',
+          email: user?.email || 'dev@test.com',
+          role: 'user', // セキュリティ: エラー時は最小権限
           organization_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -174,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrganization(null)
       }
     }
-  }, [supabase])
+  }, [supabase, user])
 
   useEffect(() => {
     if (!mounted) return
@@ -246,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const mockProfile = {
         id: mockUser.id,
         email: mockUser.email,
-        role: 'admin',
+        role: 'admin', // E2Eテスト用の明示的な管理者権限
         organization_id: 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -286,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const mockProfile = {
             id: '11111111-1111-1111-1111-111111111111',
             email: 'admin@test.com',
-            role: 'admin',
+            role: 'admin', // 開発環境での明示的な管理者権限
             organization_id: 1,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -391,7 +391,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [supabase.auth, fetchUserProfile, mounted])
+  }, [supabase.auth, fetchUserProfile, mounted, user])
 
   const refresh = useCallback(async () => {
     if (user) {
