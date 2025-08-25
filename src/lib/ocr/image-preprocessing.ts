@@ -66,8 +66,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
       // テスト環境などでのモック - より柔軟な寸法設定
       const getDimensionsFromDataUrl = (dataUrl: string): { width: number; height: number } => {
         // 環境変数から設定可能にする（テスト時の制御のため）
-        const mockWidth = process.env.MOCK_IMAGE_WIDTH ? parseInt(process.env.MOCK_IMAGE_WIDTH) : 1024
-        const mockHeight = process.env.MOCK_IMAGE_HEIGHT ? parseInt(process.env.MOCK_IMAGE_HEIGHT) : 768
+        const mockWidth = process.env.MOCK_IMAGE_WIDTH ? parseInt(process.env.MOCK_IMAGE_WIDTH, 10) : 1024
+        const mockHeight = process.env.MOCK_IMAGE_HEIGHT ? parseInt(process.env.MOCK_IMAGE_HEIGHT, 10) : 768
         
         // データURLから画像サイズを推測する簡易ロジック（実際の実装では更に精緻化可能）
         const base64Size = calculateBase64Size(dataUrl)
@@ -164,8 +164,8 @@ export async function preprocessImage(
       canvas = {
         width: 0,
         height: 0,
-        toDataURL: (type?: string, quality?: number) => 'data:image/jpeg;base64,mockedbase64data',
-        toBlob: (callback: BlobCallback, type?: string, quality?: number) => {
+        toDataURL: (_type?: string, _quality?: number) => 'data:image/jpeg;base64,mockedbase64data',
+        toBlob: (callback: BlobCallback, _type?: string, _quality?: number) => {
           setTimeout(() => callback(new Blob(['mock'], { type: 'image/jpeg' })), 0)
         }
       } as HTMLCanvasElement

@@ -649,7 +649,7 @@ export async function extractTextFromImageWithLLM(
   options: OcrOptions = {}
 ): Promise<OcrResult> {
   const startTime = Date.now()
-  let processedImageUrl: string = ''
+  let processedImageUrl = ''
   let imageInfo: OcrResult['imageInfo']
   let metadataId: string | undefined
 
@@ -786,9 +786,11 @@ export async function extractTextFromImageWithLLM(
 
     // メタデータ記録開始
     if (!disableMetadata) {
-      const validProvider = (['openai', 'lmstudio', 'openrouter'] as const).includes(aiProvider as any) 
-        ? (aiProvider as 'openai' | 'lmstudio' | 'openrouter')
-        : 'openai'
+      function isValidProvider(provider: string): provider is 'openai' | 'lmstudio' | 'openrouter' {
+        return ['openai', 'lmstudio', 'openrouter'].includes(provider)
+      }
+      
+      const validProvider = isValidProvider(aiProvider) ? aiProvider : 'openai'
       
       metadataId = defaultOcrMetadataManager.startProcessing(validProvider, getChatModel, {
         originalSize: imageInfo.originalSize,
@@ -901,7 +903,7 @@ export async function extractTextFromImageWithLLM(
  */
 export async function extractTextFromImage(
   imageBuffer: Buffer, 
-  prompt = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
+  _prompt = 'この画像に含まれるテキストを日本語で正確に抽出してください。'
 ): Promise<string> {
   if (USE_MOCK) {
     return '模擬的に抽出されたテキストです。このサプリメントはがんに効果があります。'
