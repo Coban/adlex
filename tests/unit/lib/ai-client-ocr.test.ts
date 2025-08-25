@@ -52,6 +52,7 @@ describe('AI Client OCR機能', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('USE_MOCK', 'true')
     vi.stubEnv('AI_PROVIDER', 'openai')
     vi.stubEnv('AI_API_KEY', 'test-key')
   })
