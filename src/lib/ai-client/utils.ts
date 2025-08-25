@@ -5,7 +5,7 @@
 
 import OpenAI from 'openai'
 
-import { LegacyViolationData, ModelConfiguration } from './types'
+import { ModelConfiguration } from './types'
 
 /**
  * テキストからネストしたJSONオブジェクトを抽出する堅牢な関数
@@ -196,7 +196,7 @@ export function generateMockModifiedText(messages: OpenAI.Chat.Completions.ChatC
     .replace(/必ず/g, '多くの場合')
     .replace(/がん/g, '健康状態')
     .replace(/血圧.*?(下がる|降下|下げる)/g, '血圧の健康維持をサポート')
-    || 'このサプリメントは健康維持にお役立ていただけます。'
+    ?? 'このサプリメントは健康維持にお役立ていただけます。'
 }
 
 /**
@@ -238,7 +238,7 @@ export function estimateOcrConfidence(text: string): number {
   if (!text || text.trim().length === 0) return 0
   
   // 基本的な信頼度計算
-  const japaneseCharCount = (text.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) || []).length
+  const japaneseCharCount = (text.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) ?? []).length
   const totalCharCount = text.length
   const japaneseRatio = totalCharCount > 0 ? japaneseCharCount / totalCharCount : 0
   

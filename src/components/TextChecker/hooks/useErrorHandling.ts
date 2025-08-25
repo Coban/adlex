@@ -18,7 +18,7 @@ export interface UseErrorHandlingReturn {
   
   // Methods
   clearAllErrors: () => void
-  handleError: (error: unknown, operation: string, context?: Record<string, any>) => void
+  handleError: (error: unknown, operation: string, context?: Record<string, unknown>) => void
   handlePdfError: (error: unknown) => void
 }
 
@@ -36,7 +36,7 @@ export function useErrorHandling(): UseErrorHandlingReturn {
   const handleError = useCallback((
     error: unknown, 
     operation: string, 
-    context: Record<string, any> = {}
+    context: Record<string, unknown> = {}
   ) => {
     const errorMsg = error instanceof Error ? error.message : '予期しないエラーが発生しました'
     

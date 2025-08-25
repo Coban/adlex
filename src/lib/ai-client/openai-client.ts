@@ -119,7 +119,7 @@ export class OpenAIProvider implements AIProvider {
       }
 
       return {
-        content: choice.message.content || '',
+        content: choice.message.content ?? '',
         function_call: choice.message.function_call ? {
           name: choice.message.function_call.name,
           arguments: choice.message.function_call.arguments

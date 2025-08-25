@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * ユーザー一覧取得のクエリパラメータスキーマ
@@ -16,7 +16,7 @@ export const InviteUserRequestSchema = z.object({
   email: z.string()
     .email('有効なメールアドレスを入力してください'),
   role: z.enum(['admin', 'user'], {
-    errorMap: () => ({ message: 'ロールは "admin" または "user" である必要があります' })
+    message: 'ロールは "admin" または "user" である必要があります'
   })
 })
 
@@ -32,7 +32,7 @@ export const UpdateUserRoleParamsSchema = z.object({
  */
 export const UpdateUserRoleRequestSchema = z.object({
   role: z.enum(['admin', 'user'], {
-    errorMap: () => ({ message: '役割は "admin" または "user" である必要があります' })
+    message: '役割は "admin" または "user" である必要があります'
   })
 })
 
@@ -130,8 +130,8 @@ export function validateGetUsersQuery(data: unknown): ValidationResult<GetUsersQ
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -155,8 +155,8 @@ export function validateInviteUserRequest(data: unknown): ValidationResult<Invit
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -180,8 +180,8 @@ export function validateUpdateUserRoleParams(data: unknown): ValidationResult<Up
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -205,8 +205,8 @@ export function validateUpdateUserRoleRequest(data: unknown): ValidationResult<U
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -230,8 +230,8 @@ export function validateAcceptInvitationRequest(data: unknown): ValidationResult
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

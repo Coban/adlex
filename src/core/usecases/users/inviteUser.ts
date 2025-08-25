@@ -146,7 +146,7 @@ export class InviteUserUseCase {
           to: invitation.email,
           invitationId: invitation.id.toString(),
           organizationName: organization.name,
-          inviterName: inviterUser.email || 'Unknown', // プロフィール名があれば使用
+          inviterName: inviterUser.email ?? 'Unknown', // プロフィール名があれば使用
           role: invitation.role ?? 'user'
         })
 

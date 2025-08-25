@@ -2,6 +2,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Output file tracing root to fix workspace warnings
+  outputFileTracingRoot: __dirname,
+  
   // Server external packages for better compatibility
   serverExternalPackages: [
     '@supabase/node-fetch', 

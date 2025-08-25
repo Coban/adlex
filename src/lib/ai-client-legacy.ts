@@ -346,7 +346,7 @@ function generateMockModifiedText(messages: OpenAI.Chat.Completions.ChatCompleti
     .replace(/血圧.*?(下がる|降下|下げる)/g, '血圧の健康維持をサポート')
     .replace(/糖尿病.*?(治る|治療|改善)/g, '健康的な生活をサポート')
     .replace(/ダイエット.*?(痩せる|減量|効果)/g, '健康的な体型維持をサポート')
-    || '健康維持にお役立ていただけます。'
+    ?? '健康維持にお役立ていただけます。'
 }
 
 /**

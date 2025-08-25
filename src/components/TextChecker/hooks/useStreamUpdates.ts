@@ -5,9 +5,8 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 
-import { authFetch } from '@/lib/api-client'
 import { TIMEOUTS } from '@/constants/timeouts'
-import { createClient } from '@/infra/supabase/clientClient'
+import { authFetch } from '@/lib/api-client'
 import { logger } from '@/lib/logger'
 import { CheckStreamData, QueueStatus, OrganizationStatus, SystemStatus } from '@/types'
 
@@ -36,14 +35,14 @@ export interface UseStreamUpdatesReturn {
 }
 
 export function useStreamUpdates({
-  activeCheckId,
+  activeCheckId: _activeCheckId,
   updateCheck,
   setQueueStatus,
   setOrganizationStatus,
   setSystemStatus,
-  setDictionaryInfo
+  setDictionaryInfo: _setDictionaryInfo
 }: UseStreamUpdatesProps): UseStreamUpdatesReturn {
-  const supabase = createClient()
+  // const _supabase = createClient() // Removed: not used in this hook
   const globalStreamRef = useRef<EventSource | null>(null)
   const cancelControllers = useRef<Map<string, { 
     eventSource: EventSource
@@ -267,10 +266,11 @@ export function useStreamUpdates({
 
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
+    const controllers = cancelControllers.current
     return () => {
       stopGlobalStream()
       // 全ての個別ストリームを停止
-      cancelControllers.current.forEach((_, checkId) => {
+      controllers.forEach((_, checkId) => {
         cancelCheck(checkId)
       })
     }

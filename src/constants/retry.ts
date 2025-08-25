@@ -89,12 +89,12 @@ export function calculateBackoffDelay(
  * HTTPステータスコードがリトライ可能かチェック
  */
 export function isRetryableStatusCode(statusCode: number): boolean {
-  return RETRY_CONFIG.RETRYABLE_STATUS_CODES.includes(statusCode as any)
+  return (RETRY_CONFIG.RETRYABLE_STATUS_CODES as readonly number[]).includes(statusCode)
 }
 
 /**
  * エラーがリトライ可能かチェック
  */
 export function isRetryableError(errorCode: string): boolean {
-  return RETRY_CONFIG.RETRYABLE_ERRORS.includes(errorCode as any)
+  return (RETRY_CONFIG.RETRYABLE_ERRORS as readonly string[]).includes(errorCode)
 }

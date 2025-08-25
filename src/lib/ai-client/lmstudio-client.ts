@@ -87,7 +87,7 @@ export class LMStudioProvider implements AIProvider {
         throw ErrorFactory.createAIServiceError('LM Studio', 'chat completion', 'No response received from LM Studio')
       }
 
-      let content = choice.message.content || ''
+      let content = choice.message.content ?? ''
       
       // LM Studio用JSON解析フォールバック
       if (request.functions && !choice.message.function_call) {

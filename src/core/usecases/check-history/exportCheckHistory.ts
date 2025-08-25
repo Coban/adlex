@@ -147,7 +147,7 @@ export class ExportCheckHistoryUseCase {
           completedAt: check.completed_at,
           status: check.status,
           inputType: check.input_type === 'image' ? '画像' : 'テキスト',
-          originalText: displayText || '',
+          originalText: displayText ?? '',
           modifiedText: check.modified_text ?? '',
           violationCount: check.violations?.length ?? 0,
           userEmail: currentUser.role === 'admin' ? (check.users?.email ?? '') : '',

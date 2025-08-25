@@ -20,7 +20,7 @@ export interface ChatCompletionRequest {
   functions?: Array<{
     name: string
     description: string
-    parameters: any
+    parameters: Record<string, unknown>
   }>
 }
 

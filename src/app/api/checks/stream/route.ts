@@ -1,3 +1,4 @@
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
 
 import { getRepositories } from '@/core/ports'
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   if (!userProfile && (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' || process.env.SKIP_AUTH === 'true')) {
     userProfile = {
       id: currentUser.id,
-      email: currentUser.email || 'admin@test.com',
+      email: currentUser.email ?? 'admin@test.com',
       role: 'admin',
       organization_id: 1,
       created_at: new Date().toISOString(),
@@ -77,9 +78,6 @@ export async function GET(request: NextRequest) {
     start(controller) {
       let lastQueueStatus: string | null = null
       let isActive = true // 接続が有効かどうかのフラグ
-      let queueCheckInterval: NodeJS.Timeout
-      let heartbeatInterval: NodeJS.Timeout
-      let channel: any
 
       // コントローラーが閉じられているかチェックする関数  
       const isControllerClosed = () => {
@@ -186,7 +184,7 @@ export async function GET(request: NextRequest) {
       })
 
       // 定期的にキュー状況をチェック（5秒間隔）
-      queueCheckInterval = setInterval(async () => {
+      const queueCheckInterval = setInterval(async () => {
         if (isControllerClosed()) {
           cleanup()
           return
@@ -200,7 +198,7 @@ export async function GET(request: NextRequest) {
       }, 5000)
 
       // ハートビート（30秒間隔）
-      heartbeatInterval = setInterval(() => {
+      const heartbeatInterval = setInterval(() => {
         if (isControllerClosed()) {
           cleanup()
           return
@@ -209,14 +207,14 @@ export async function GET(request: NextRequest) {
       }, 30000)
 
       // Supabaseリアルタイム購読（checksテーブルの変更を監視）
-      channel = supabase.channel('checks-updates')
+      const channel = supabase.channel('checks-updates')
       
       channel
         .on('postgres_changes', { 
           event: '*', 
           schema: 'public', 
           table: 'checks' 
-        }, async (payload) => {
+        }, async (payload: RealtimePostgresChangesPayload<Database['public']['Tables']['checks']['Row']>) => {
           if (isControllerClosed()) {
             cleanup()
             return
@@ -244,7 +242,7 @@ export async function GET(request: NextRequest) {
           // キュー状況も更新（チェック数に変動があるため）
           await sendQueueStatus()
         })
-        .subscribe((status, err) => {
+        .subscribe((status: string, err?: Error) => {
           if (err) {
             console.error('[SSE] Subscription error:', err)
             // Don't cleanup on subscription error - continue with polling-based updates
@@ -277,7 +275,7 @@ export async function GET(request: NextRequest) {
         // コントローラーを閉じる
         try {
           controller.close()
-        } catch (error) {
+        } catch {
           // 既に閉じられている場合は無視
         }
       }

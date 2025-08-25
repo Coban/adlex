@@ -1,4 +1,4 @@
-import { AppError, ErrorCode } from './types'
+import { AppError } from './types'
 
 /**
  * 標準化されたエラー生成ファクトリー

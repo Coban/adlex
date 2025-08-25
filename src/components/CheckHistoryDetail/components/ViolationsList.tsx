@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { CheckDetail, Violation } from '../types'
+import { CheckDetail } from '../types'
 import { extractViolationText } from '../utils/violationHighlighting'
 
 interface ViolationsListProps {

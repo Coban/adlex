@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * 招待情報取得のクエリパラメータスキーマ
@@ -40,8 +40,8 @@ export function validateGetInvitationInfoQuery(data: unknown): ValidationResult<
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

@@ -3,7 +3,6 @@
 import { Loader2, Copy, Download } from 'lucide-react'
 import { useState, useEffect, useId, useRef, useMemo } from 'react'
 
-import { authFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,6 +11,7 @@ import { getProcessingTimeouts, getTimeoutInMinutes, TIMEOUTS } from '@/constant
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/infra/supabase/clientClient'
+import { authFetch } from '@/lib/api-client'
 import { logger } from '@/lib/logger'
 import { CheckItem, QueueStatus, OrganizationStatus, SystemStatus, Violation, CheckStreamData, CheckResult } from '@/types'
 
@@ -1217,7 +1217,7 @@ export default function TextChecker() {
                                 <Button size="sm" variant="ghost" onClick={() => setSelectedViolationId(null)}>閉じる</Button>
                               </div>
                               <div className="mt-2 space-y-1 text-sm text-gray-900">
-                                <div><span className="text-gray-600">該当:</span> 「{text || '不明'}」</div>
+                                <div><span className="text-gray-600">該当:</span> 「{text ?? '不明'}」</div>
                                 <div><span className="text-gray-600">位置:</span> {v.startPos} - {v.endPos}</div>
                                 <div><span className="text-gray-600">理由:</span> {v.reason}</div>
                                 {dict && (
@@ -1287,7 +1287,7 @@ export default function TextChecker() {
                                 }
                               }
                               
-                              return `違反箇所 ${i + 1}\n位置: ${startPos} - ${endPos}\n該当テキスト: "${violationText || '不明'}"\n理由: ${v.reason}`
+                              return `違反箇所 ${i + 1}\n位置: ${startPos} - ${endPos}\n該当テキスト: "${violationText ?? '不明'}"\n理由: ${v.reason}`
                             }).join('\n\n')
                             
                             navigator.clipboard.writeText(violationText)
@@ -1315,7 +1315,7 @@ export default function TextChecker() {
                           <div className="text-base mb-2 leading-relaxed text-gray-900">
                             <strong>該当テキスト:</strong>{' '}
                             &ldquo;{(() => {
-                              return extractViolationText(activeCheck.result!.original_text, violation) || '不明'
+                              return extractViolationText(activeCheck.result!.original_text, violation) ?? '不明'
                             })()}&rdquo;
                           </div>
                           <div className="text-base leading-relaxed text-gray-900">

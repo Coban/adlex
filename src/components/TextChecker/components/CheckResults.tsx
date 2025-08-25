@@ -8,7 +8,7 @@ import React, { useRef, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CheckItem } from '@/types'
+import { CheckItem, Violation } from '@/types'
 
 export interface CheckResultsProps {
   check: CheckItem
@@ -16,7 +16,7 @@ export interface CheckResultsProps {
   onExport: () => void
   copySuccess: string | null
   pdfError: string | null
-  highlightText: (text: string, violations: any[], selectedId: number | null) => string
+  highlightText: (text: string, violations: Violation[], selectedId: number | null) => string
   selectedViolationId: number | null
   onViolationSelect: (id: number | null) => void
   dictionaryInfo: { [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }
@@ -176,7 +176,7 @@ export const CheckResults: React.FC<CheckResultsProps> = ({
                       <span className="ml-2 text-sm">{violation.reason}</span>
                     </div>
 
-                    {dict && dict.notes && (
+                    {dict?.notes && (
                       <div>
                         <span className="text-sm text-gray-600">補足:</span>
                         <span className="ml-2 text-sm text-gray-700">{dict.notes}</span>

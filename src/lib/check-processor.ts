@@ -145,7 +145,7 @@ export async function processCheck(
     // より具体的なエラーメッセージを生成
     let errorMessage = 'チェック処理中にエラーが発生しました'
     if (error instanceof Error) {
-      const msg = error.message || ''
+      const msg = error.message ?? ''
       if (msg.includes('処理がタイムアウトしました')) {
         errorMessage = inputType === 'image' 
           ? '画像処理がタイムアウトしました。もう一度お試しください。'

@@ -20,7 +20,7 @@ function generateMockModifiedText(messages: OpenAI.Chat.Completions.ChatCompleti
     .replace(/必ず/g, '多くの場合')
     .replace(/がん/g, '健康状態')
     .replace(/血圧.*?(下がる|降下|下げる)/g, '血圧の健康維持をサポート')
-    || 'このサプリメントは健康維持にお役立ていただけます。'
+    ?? 'このサプリメントは健康維持にお役立ていただけます。'
 }
 
 /**

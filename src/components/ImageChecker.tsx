@@ -3,12 +3,12 @@
 import { Loader2, UploadCloud } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { authFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { APP_CONFIG, TIMEOUTS } from '@/constants'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/infra/supabase/clientClient'
+import { authFetch } from '@/lib/api-client'
 import { logger } from '@/lib/logger'
 
 type UploadState = 'idle' | 'ready' | 'validating' | 'uploading' | 'uploaded' | 'starting_check' | 'processing' | 'completed' | 'failed'

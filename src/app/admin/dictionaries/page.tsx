@@ -24,9 +24,6 @@ import { useDictionaries } from './hooks/useDictionaries'
 import { useDictionaryDelete } from './hooks/useDictionaryDelete'
 import { useDictionaryForm } from './hooks/useDictionaryForm'
 import { useEmbeddingOperations } from './hooks/useEmbeddingOperations'
-
-// モジュール化されたコンポーネント群
-
 // ユーティリティ関数
 import { CategoryFilter, SortOption } from './types'
 import { matchesAdvancedQuery } from './utils/search'

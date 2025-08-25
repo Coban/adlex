@@ -12,7 +12,6 @@ import { TextTabs } from './CheckHistoryDetail/components/TextTabs'
 import { ViolationsList } from './CheckHistoryDetail/components/ViolationsList'
 import { useCheckActions } from './CheckHistoryDetail/hooks/useCheckActions'
 import { useCheckDetail } from './CheckHistoryDetail/hooks/useCheckDetail'
-
 // 型定義
 import { CheckHistoryDetailProps } from './CheckHistoryDetail/types'
 

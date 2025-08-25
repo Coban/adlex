@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 
 import CustomReportGenerator from '@/components/CustomReportGenerator'
-import { authFetch } from '@/lib/api-client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { authFetch } from '@/lib/api-client'
 
 interface CheckHistory {
   id: number

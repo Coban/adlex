@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // セキュリティ上、エラー時は最小権限（user）を設定
         const mockProfile = {
           id: userId,
-          email: user?.email || 'unknown@test.com',
+          email: user?.email ?? 'unknown@test.com',
           role: 'user', // セキュリティ: デフォルトは一般ユーザー
           organization_id: 1,
           created_at: new Date().toISOString(),
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // データベースにユーザーが見つからない場合、最小権限プロファイルを作成
         const mockProfile = {
           id: userId,
-          email: user?.email || 'unknown@test.com',
+          email: user?.email ?? 'unknown@test.com',
           role: 'user', // セキュリティ: デフォルトは一般ユーザー
           organization_id: 1,
           created_at: new Date().toISOString(),
@@ -112,21 +112,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // 組織情報を別途取得
-      const orgResult = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', userResult.data.organization_id)
-        .maybeSingle()
+      let orgResult = null
+      if (userResult.data.organization_id) {
+        orgResult = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', userResult.data.organization_id)
+          .maybeSingle()
+      }
 
       
       setUserProfile(userResult.data)
       
       // Set organization data
-      if (orgResult.data) {
+      if (orgResult?.data) {
         setOrganization(orgResult.data)
       } else {
         const mockOrg = {
-          id: userResult.data.organization_id,
+          id: userResult.data.organization_id ?? 1,
           name: 'テスト組織',
           plan: 'trial',
           created_at: new Date().toISOString(),
@@ -149,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (process.env.NODE_ENV === 'development') {
         const fallbackProfile = {
           id: userId,
-          email: user?.email || 'dev@test.com',
+          email: user?.email ?? 'dev@test.com',
           role: 'user', // セキュリティ: エラー時は最小権限
           organization_id: 1,
           created_at: new Date().toISOString(),
@@ -193,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const sessionData = JSON.parse(decodedSession)
             
             // Check if this is a test token
-            if (sessionData.access_token && sessionData.access_token.startsWith('test-token-')) {
+            if (sessionData?.access_token?.startsWith?.('test-token-')) {
               const testUser = {
                 id: sessionData.user.id,
                 email: sessionData.user.email,

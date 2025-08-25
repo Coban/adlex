@@ -7,7 +7,7 @@ import OpenAI from 'openai'
 
 import { ErrorFactory } from '@/lib/errors'
 
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider } from './config'
+import { aiProvider, getApiKey, getChatModel, getEmbeddingModel } from './config'
 import { AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse } from './types'
 import { getSanitizedReferer } from './utils'
 
@@ -62,7 +62,7 @@ export class OpenRouterProvider implements AIProvider {
       }
 
       return {
-        content: choice.message.content || '',
+        content: choice.message.content ?? '',
         function_call: choice.message.function_call ? {
           name: choice.message.function_call.name,
           arguments: choice.message.function_call.arguments
@@ -79,7 +79,7 @@ export class OpenRouterProvider implements AIProvider {
     }
   }
 
-  async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+  async createEmbedding(_request: EmbeddingRequest): Promise<EmbeddingResponse> {
     // OpenRouterは埋め込みAPIをサポートしていないため、エラーを投げる
     // 実際の埋め込み処理は main.ts の createEmbedding で適切なプロバイダーが選択される
     throw ErrorFactory.createValidationError('OpenRouter does not support embeddings directly. Use createEmbedding function instead.')

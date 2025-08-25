@@ -11,6 +11,17 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  // Global ignores
+  {
+    ignores: [
+      ".next/**/*",
+      "node_modules/**/*",
+      "dist/**/*",
+      "build/**/*",
+      "out/**/*",
+      "next-env.d.ts"
+    ]
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     ignores: [
@@ -25,13 +36,13 @@ const eslintConfig = [
       "eqeqeq": "error",
       "no-duplicate-imports": "error",
       "no-unused-expressions": "error",
-      
+
       // React specific rules
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "react/jsx-no-useless-fragment": "error",
       "react/jsx-curly-brace-presence": ["error", { "props": "never", "children": "never" }],
-      
+
       // Import rules
       "import/order": ["warn", {
         "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
@@ -57,7 +68,19 @@ const eslintConfig = [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "@typescript-eslint/no-non-null-assertion": "off", // 開発中は許可
-      "@typescript-eslint/prefer-nullish-coalescing": "warn", // warningに変更
+
+      /**
+       * 基本は ?? を強制（error）
+       * ただし以下の“例外”では || を許可:
+       *  - 条件式（if, while, 三項演算子など）→ ignoreConditionalTests
+       *  - && と混在する複合論理式 → ignoreMixedLogicalExpressions
+       * また fixer を suggestion 扱いに（誤修正の抑止）
+       */
+      "@typescript-eslint/prefer-nullish-coalescing": ["error", {
+        ignoreConditionalTests: true,
+        ignoreMixedLogicalExpressions: true
+      }],
+
       "@typescript-eslint/prefer-optional-chain": "error",
       "@typescript-eslint/strict-boolean-expressions": "off", // Next.jsではfalsy値が多用されるため
       "@typescript-eslint/no-unnecessary-condition": "off", // 開発中は無効化

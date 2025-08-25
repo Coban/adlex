@@ -41,7 +41,7 @@ ${data.inviterName}さんから${data.organizationName}への招待が届きま�
 招待ID: ${data.invitationId}
 
 以下のリンクから登録を完了してください：
-${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/invite?token=${data.invitationId}
+${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/auth/invite?token=${data.invitationId}
 =====================================
       `)
     }

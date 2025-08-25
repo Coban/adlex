@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodIssue } from 'zod'
 
 /**
  * チェック履歴取得のクエリパラメータスキーマ
@@ -146,8 +146,8 @@ export function validateGetCheckHistoryQuery(data: unknown): ValidationResult<Ge
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -171,8 +171,8 @@ export function validateGetCheckHistoryStatsQuery(data: unknown): ValidationResu
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }
@@ -196,8 +196,8 @@ export function validateExportCheckHistoryQuery(data: unknown): ValidationResult
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: error.errors.map(e => e.message).join(', '),
-          details: error.errors
+          message: error.issues.map((e: ZodIssue) => e.message).join(', '),
+          details: error.issues
         }
       }
     }

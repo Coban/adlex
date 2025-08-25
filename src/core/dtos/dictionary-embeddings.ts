@@ -84,7 +84,7 @@ export function validateRefreshEmbeddingsBody(data: unknown): {
         error: {
           code: 'VALIDATION_ERROR',
           message: '不正なリクエストボディです',
-          details: error.errors
+          details: error.issues
         }
       }
     }
@@ -115,7 +115,7 @@ export function validateEmbeddingStatsQuery(data: unknown): {
         error: {
           code: 'VALIDATION_ERROR',
           message: '不正なクエリパラメータです',
-          details: error.errors
+          details: error.issues
         }
       }
     }

@@ -7,12 +7,16 @@ import OpenAI from 'openai'
 
 import { ErrorFactory } from '@/lib/errors'
 
-import { aiProvider, getApiKey, getChatModel, getEmbeddingModel, getEmbeddingProvider, AI_MODELS, USE_MOCK, getAIClientInfo } from './config'
+import { aiProvider as configAiProvider, getChatModel, getEmbeddingModel, getEmbeddingProvider } from './config'
 import { createAIProvider, aiClient } from './factory'
 import { createLMStudioEmbedding } from './lmstudio-client'
-import { ensureOpenAIEmbeddingClient, createOpenAIEmbedding } from './openai-client'
+import { createOpenAIEmbedding } from './openai-client'
 import { LegacyDictionaryEntry, LegacyViolationData } from './types'
-import { extractCompleteJSON, generateJSONFromPlainText, sanitizePlainText, estimateOcrConfidence, validateModelConfiguration } from './utils'
+import { extractCompleteJSON, generateJSONFromPlainText, sanitizePlainText } from './utils'
+
+// Module-level constants
+const aiProvider = configAiProvider
+const USE_MOCK = process.env.USE_MOCK === 'true'
 
 /**
  * AIクライアントを使用してチャット完了を作成する
@@ -111,7 +115,7 @@ export async function createChatCompletion(params: {
     // LM Studio用の特別処理
     if (aiProvider === 'lmstudio' && params.tools && completion.choices[0]) {
       const choice = completion.choices[0]
-      let content = choice.message.content || ''
+      let content = choice.message.content ?? ''
       
       // ファンクション呼び出しが期待されているが、返されていない場合
       if (!choice.message.tool_calls && params.tools.length > 0) {
@@ -123,11 +127,12 @@ export async function createChatCompletion(params: {
         }
         
         // tool_callsを手動で構築
+        const tool = params.tools[0] as { function?: { name?: string } }
         completion.choices[0].message.tool_calls = [{
           id: 'lm_studio_fallback',
           type: 'function',
           function: {
-            name: params.tools[0].function.name,
+            name: tool.function?.name ?? 'unknown',
             arguments: content
           }
         }]
@@ -243,19 +248,24 @@ ${dictionaryReference}
       })
 
       const toolCall = completion.choices[0]?.message?.tool_calls?.[0]
-      if (toolCall?.function) {
+      if (toolCall && 'function' in toolCall && toolCall.function) {
         const result = JSON.parse(toolCall.function.arguments)
         return {
           type: aiProvider as 'openai' | 'openrouter',
           response: completion,
-          violations: (result.violations || []).map((v: any) => ({
+          violations: (result.violations ?? []).map((v: {
+            start_pos: number;
+            end_pos: number;
+            reason: string;
+            dictionary_id?: number;
+          }) => ({
             id: Math.random(),
             start_pos: v.start_pos,
             end_pos: v.end_pos,
             reason: v.reason,
-            dictionary_id: v.dictionary_id || null
+            dictionary_id: v.dictionary_id ?? null
           })),
-          modified: result.modified || text
+          modified: result.modified ?? text
         }
       }
     }
@@ -268,7 +278,7 @@ ${dictionaryReference}
       max_tokens: 4000
     })
 
-    const content = completion.choices[0]?.message?.content || ''
+    const content = completion.choices[0]?.message?.content ?? ''
     const extractedJson = extractCompleteJSON(content)
     
     if (extractedJson) {
@@ -276,14 +286,19 @@ ${dictionaryReference}
       return {
         type: aiProvider as 'openai' | 'lmstudio' | 'openrouter',
         response: completion,
-        violations: (result.violations || []).map((v: any) => ({
+        violations: (result.violations ?? []).map((v: {
+          start_pos: number;
+          end_pos: number;
+          reason: string;
+          dictionary_id?: number;
+        }) => ({
           id: Math.random(),
           start_pos: v.start_pos,
           end_pos: v.end_pos,
           reason: v.reason,
-          dictionary_id: v.dictionary_id || null
+          dictionary_id: v.dictionary_id ?? null
         })),
-        modified: result.modified || text
+        modified: result.modified ?? text
       }
     } else {
       // JSON抽出失敗時は生成フォールバック
@@ -292,14 +307,19 @@ ${dictionaryReference}
       return {
         type: aiProvider as 'openai' | 'lmstudio' | 'openrouter',
         response: completion,
-        violations: (result.violations || []).map((v: any) => ({
+        violations: (result.violations ?? []).map((v: {
+          start_pos: number;
+          end_pos: number;
+          reason: string;
+          dictionary_id?: number;
+        }) => ({
           id: Math.random(),
           start_pos: v.start_pos,
           end_pos: v.end_pos,
           reason: v.reason,
-          dictionary_id: v.dictionary_id || null
+          dictionary_id: v.dictionary_id ?? null
         })),
-        modified: result.modified || text
+        modified: result.modified ?? text
       }
     }
 
@@ -409,7 +429,7 @@ export async function extractTextFromImageWithLLM(
       max_tokens: 1000
     })
 
-    const extractedText = completion.choices[0]?.message?.content || ''
+    const extractedText = completion.choices[0]?.message?.content ?? ''
     return sanitizePlainText(extractedText)
     
   } catch (error) {
