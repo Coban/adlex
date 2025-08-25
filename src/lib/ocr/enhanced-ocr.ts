@@ -117,11 +117,12 @@ export async function enhancedExtractTextFromImageWithLLM(
         if (!opts.disableMetadata) {
           updateOcrMetadata(sessionId, {
             imageInfo: {
+              originalSizeBytes: imageBuffer.length,
               processedSizeBytes: processingResult.processedMetadata.sizeBytes,
               mimeType: processingResult.processedMetadata.format,
               width: processingResult.processedMetadata.width,
               height: processingResult.processedMetadata.height
-            } as Partial<OcrMetadata['imageInfo']>
+            }
           })
         }
       } catch (processingError) {

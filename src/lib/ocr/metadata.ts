@@ -144,7 +144,7 @@ export function finishOcrMetadataRecording(
   metadataCache.set(sessionId, finalMetadata)
 
   // ログ出力（本番環境では無効化可能）
-  if (process.env.NODE_ENV !== 'production' ?? process.env.LOG_OCR_METADATA === 'true') {
+  if (process.env.NODE_ENV !== 'production' || process.env.LOG_OCR_METADATA === 'true') {
     console.log(`[OCR Metadata] ${sessionId}:`, {
       provider: finalMetadata.provider,
       model: finalMetadata.model,

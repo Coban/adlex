@@ -225,7 +225,7 @@ function calculateStructuralQuality(text: string): number {
   }
 
   // 単語間スペースの適切な使用
-  const spaceCount = (text.match(/\s/g) || []).length
+  const spaceCount = (text.match(/\s/g) ?? []).length
   const spaceRatio = spaceCount / text.length
   
   if (spaceRatio > 0.05 && spaceRatio < 0.3) {
