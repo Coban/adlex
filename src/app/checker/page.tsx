@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 import TextChecker from '@/components/TextChecker'
 import { Button } from '@/components/ui/button'
@@ -8,8 +9,15 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export default function CheckerPage() {
   const { user, loading } = useAuth()
+  const [mounted, setMounted] = useState(false)
 
-  if (loading) {
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // ハイドレーションミスマッチを防ぐため、マウント前は統一された表示を返す
+  if (!mounted || loading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">

@@ -1,3 +1,4 @@
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -31,7 +32,7 @@ const nextConfig: NextConfig = {
     
     // Externalize problematic packages for server
     if (isServer) {
-      config.externals = config.externals || [];
+      config.externals = config.externals ?? [];
       config.externals.push('@supabase/node-fetch');
     }
     

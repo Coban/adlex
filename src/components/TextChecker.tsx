@@ -23,6 +23,7 @@ export default function TextChecker() {
   const { toast } = useToast()
   const componentId = useId()
   const checkCounter = useRef(0)
+  const [mounted, setMounted] = useState(false) // ハイドレーション対策
   const [text, setText] = useState('')
   const [checks, setChecks] = useState<CheckItem[]>([])
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null)
@@ -54,6 +55,12 @@ export default function TextChecker() {
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [dictionaryInfo, setDictionaryInfo] = useState<{ [key: number]: { phrase: string; category: 'NG' | 'ALLOW'; notes: string | null } }>({})
   const originalTextRef = useRef<HTMLDivElement | null>(null)
+  
+  // ハイドレーション対策のマウント管理
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
   // EventSource を安全にクローズするユーティリティ（テスト環境で close が未実装の場合に備える）
   function safeCloseEventSource(source: EventSource | null | undefined) {
     try {
@@ -80,8 +87,9 @@ export default function TextChecker() {
   // キューステータス監視用SSE接続
   const globalStreamRef = useRef<EventSource | null>(null)
 
-  // キューステータス監視を開始
+  // キューステータス監視を開始（マウント後のみ）
   useEffect(() => {
+    if (!mounted) return // マウント前はSSE接続しない
     if (globalStreamRef.current) {
       safeCloseEventSource(globalStreamRef.current)
     }
@@ -129,7 +137,7 @@ export default function TextChecker() {
       }
       globalStreamRef.current = null
     }
-  }, [supabase])
+  }, [supabase, mounted]) // mountedを依存配列に追加
 
   const handlePdfExport = async () => {
     setPdfError(null)
@@ -905,6 +913,17 @@ export default function TextChecker() {
             </div>
           ))
         }
+      </div>
+    )
+  }
+
+  // ハイドレーションミスマッチを防ぐため、マウント前は統一された表示を返す
+  if (!mounted) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="text-center">
+          <div>読み込み中...</div>
+        </div>
       </div>
     )
   }
