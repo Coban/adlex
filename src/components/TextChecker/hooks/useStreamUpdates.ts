@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 
+import { authFetch } from '@/lib/api-client'
 import { TIMEOUTS } from '@/constants/timeouts'
 import { createClient } from '@/infra/supabase/clientClient'
 import { logger } from '@/lib/logger'
@@ -242,7 +243,7 @@ export function useStreamUpdates({
       try {
         const dbCheckId = checkId.split('-').pop()
         if (dbCheckId && !isNaN(Number(dbCheckId))) {
-          await fetch(`/api/checks/${dbCheckId}/cancel`, {
+          await authFetch(`/api/checks/${dbCheckId}/cancel`, {
             method: 'POST',
             credentials: 'same-origin'
           })

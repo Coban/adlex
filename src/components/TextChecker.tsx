@@ -3,6 +3,7 @@
 import { Loader2, Copy, Download } from 'lucide-react'
 import { useState, useEffect, useId, useRef, useMemo } from 'react'
 
+import { authFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -337,7 +338,7 @@ export default function TextChecker() {
       
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
 
-      const response = await fetch('/api/checks', {
+      const response = await authFetch('/api/checks', {
         method: 'POST',
         headers,
         credentials: 'same-origin', // Include cookies in the request
@@ -717,7 +718,7 @@ export default function TextChecker() {
       try {
         const dbCheckId = checkId.split('-').pop() // extract database ID if needed
         if (dbCheckId && !isNaN(Number(dbCheckId))) {
-          await fetch(`/api/checks/${dbCheckId}/cancel`, {
+          await authFetch(`/api/checks/${dbCheckId}/cancel`, {
             method: 'POST',
             credentials: 'same-origin'
           })

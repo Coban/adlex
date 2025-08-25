@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 
+import { authFetch } from '@/lib/api-client'
 import { ErrorFactory } from '@/lib/errors'
 
 import { CheckDetail } from '../types'
@@ -16,7 +17,7 @@ export function useCheckDetail(checkId: number) {
     const fetchCheckDetail = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/checks/${checkId}`)
+        const response = await authFetch(`/api/checks/${checkId}`)
         
         if (!response.ok) {
           if (response.status === 404) {

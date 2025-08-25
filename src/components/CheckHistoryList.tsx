@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 
 import CustomReportGenerator from '@/components/CustomReportGenerator'
+import { authFetch } from '@/lib/api-client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -116,7 +117,7 @@ export default function CheckHistoryList() {
       if (dateFilter && dateFilter !== 'all') params.append('dateFilter', dateFilter)
       if (userFilter) params.append('userId', userFilter)
 
-      const response = await fetch(`/api/check-history?${params}`)
+      const response = await authFetch(`/api/check-history?${params}`)
       
       if (!response.ok) {
         throw new Error('履歴の取得に失敗しました')
@@ -247,7 +248,7 @@ export default function CheckHistoryList() {
       if (dateFilter && dateFilter !== 'all') params.append('dateFilter', dateFilter)
       if (userFilter) params.append('userId', userFilter)
 
-      const response = await fetch(`/api/check-history/export?${params}`)
+      const response = await authFetch(`/api/check-history/export?${params}`)
       
       if (!response.ok) {
         throw new Error('エクスポートに失敗しました')

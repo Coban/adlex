@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer } from 'recharts'
 
+import { authFetch } from '@/lib/api-client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -56,7 +57,7 @@ export default function CheckHistoryStats() {
   const fetchStats = async (selectedPeriod: string) => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/check-history/stats?period=${selectedPeriod}`)
+      const response = await authFetch(`/api/check-history/stats?period=${selectedPeriod}`)
       
       if (!response.ok) {
         throw new Error('統計データの取得に失敗しました')

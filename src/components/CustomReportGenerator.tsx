@@ -3,6 +3,7 @@
 import { Download, FileText, Table } from 'lucide-react'
 import { useState } from 'react'
 
+import { authFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -58,7 +59,7 @@ export default function CustomReportGenerator({ selectedCheckIds, onClose }: Cus
 
     setGenerating(true)
     try {
-      const response = await fetch('/api/reports/custom', {
+      const response = await authFetch('/api/reports/custom', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

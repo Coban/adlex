@@ -1,4 +1,5 @@
 import { toast } from '@/hooks/use-toast'
+import { authFetch } from '@/lib/api-client'
 import { ErrorFactory } from '@/lib/errors'
 
 import { CheckDetail } from '../types'
@@ -42,7 +43,7 @@ export function useCheckActions(check: CheckDetail | null) {
     
     if (confirm('このチェックを再実行しますか？')) {
       try {
-        const response = await fetch('/api/checks', {
+        const response = await authFetch('/api/checks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -69,7 +70,7 @@ export function useCheckActions(check: CheckDetail | null) {
     if (!check) return
     
     try {
-      const res = await fetch(`/api/checks/${check.id}/pdf`)
+      const res = await authFetch(`/api/checks/${check.id}/pdf`)
       if (!res.ok) {
         throw ErrorFactory.createFileProcessingError('PDF生成', 'PDF')
       }
@@ -96,7 +97,7 @@ export function useCheckActions(check: CheckDetail | null) {
     
     if (confirm('このチェック履歴を削除しますか？この操作は取り消せません。')) {
       try {
-        const response = await fetch(`/api/checks/${check.id}`, {
+        const response = await authFetch(`/api/checks/${check.id}`, {
           method: 'DELETE'
         })
         if (response.ok) {

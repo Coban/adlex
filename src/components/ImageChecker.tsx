@@ -3,6 +3,7 @@
 import { Loader2, UploadCloud } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { authFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { APP_CONFIG, TIMEOUTS } from '@/constants'
@@ -103,7 +104,7 @@ export default function ImageChecker() {
       const headers: Record<string, string> = {}
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
 
-      const uploadRes = await fetch('/api/images/upload', { method: 'POST', body: form, headers })
+      const uploadRes = await authFetch('/api/images/upload', { method: 'POST', body: form, headers })
       if (!uploadRes.ok) {
         const err = await uploadRes.json().catch(() => ({}))
         throw new Error(err.error ?? `アップロードエラー: ${uploadRes.status}`)
@@ -114,7 +115,7 @@ export default function ImageChecker() {
       // input_type=imageでチェック開始
       setState('starting_check')
       setStatusMessage('画像チェックを開始しています...')
-      const checksRes = await fetch('/api/checks', {
+      const checksRes = await authFetch('/api/checks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
