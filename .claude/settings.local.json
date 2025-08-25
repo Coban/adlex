@@ -96,7 +96,9 @@
       "Bash(npm update)",
       "Bash(npm audit:*)",
       "Bash(npm info:*)",
-      "Bash(npm view:*)"
+      "Bash(npm view:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
